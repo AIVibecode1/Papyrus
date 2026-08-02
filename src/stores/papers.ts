@@ -5,6 +5,10 @@ import type { Paper } from "@/lib/types";
 const DEFAULT_CATEGORY = "cs.AI";
 const PAGE_SIZE = 20;
 
+// Monotonic token: a refresh() result is only applied if no newer refresh
+// has started since (guards against stale responses clobbering newer state).
+let requestSeq = 0;
+
 interface PapersState {
   category: string;
   papers: Paper[];
@@ -29,12 +33,15 @@ export const usePapersStore = create<PapersState>((set, get) => ({
   },
 
   refresh: async () => {
+    const seq = ++requestSeq;
     const { category } = get();
     set({ loading: true, error: null });
     try {
       const papers = await fetchPapers(category, PAGE_SIZE);
+      if (seq !== requestSeq) return;
       set({ papers, loading: false, lastUpdated: Date.now() });
     } catch (err) {
+      if (seq !== requestSeq) return;
       set({
         loading: false,
         error: err instanceof Error ? err.message : String(err),

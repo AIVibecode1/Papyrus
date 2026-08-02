@@ -15,7 +15,7 @@ STOP conditions, and update your row when done.
 | 019 | Rust edition 2021 → 2024 | P2 | S | — | DONE |
 | 007 | Remove unused `keyring:default` capability | P1 | S | — | DONE |
 | 002 | Frontend test runner (Vitest) | P1 | M | — | DONE |
-| 003 | Papers-store stale-response race | P1 | S | 002 | TODO |
+| 003 | Papers-store stale-response race | P1 | S | 002 | DONE |
 | 004 | Characterization tests (stores + SSE parser) | P1 | M | 002 | DONE |
 | 005 | Typed cancellation (stop race + marker contract) | P1 | S | 002, 004 | TODO |
 | 006 | Keychain-delete failure surfaced in UI | P1 | S | — | DONE |
