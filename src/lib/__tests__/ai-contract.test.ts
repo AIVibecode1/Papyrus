@@ -41,6 +41,29 @@ describe("shared AI resource (src-tauri/prompts.json)", () => {
     expect(CANCELLED_MARKER).toBe(prompts.cancelledMarker);
     expect(CANCELLED_MARKER).toBe("\u{1F6D1}PAPYRUS_CANCELLED");
   });
+
+  it("system prompts follow the research-mentor methodology", () => {
+    // Mentor persona, natural-language style and researcher thinking must
+    // be present in both languages (user mandate).
+    const en = prompts.systemPromptEn;
+    const ar = prompts.systemPromptAr;
+    expect(en).toContain("research mentor");
+    expect(en).toContain("delve");
+    expect(en).toContain("250");
+    expect(en).toContain("markdown tables");
+    expect(ar).toContain("مرشد بحثي");
+    expect(ar).toContain("حشو");
+    expect(ar).toContain("٢٥٠");
+    expect(ar).toContain("جداول ماركداون");
+  });
+
+  it("provides the full-paper mentor structure for the reader feature", () => {
+    // Saved now as the single source for the upcoming whole-PDF reader.
+    expect(prompts.fullPaperStructureEn).toContain("research mentor");
+    expect(prompts.fullPaperStructureEn).toContain("Equations");
+    expect(prompts.fullPaperStructureAr).toContain("المعادلات");
+    expect(prompts.fullPaperStructureAr).toContain("مرشدي البحثي");
+  });
 });
 
 describe("cross-language contract checks", () => {
