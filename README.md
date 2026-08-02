@@ -76,6 +76,12 @@ dev/                Dev-only tools (mock AI server)
 
 - API keys are written to and read from the OS keychain by the Rust backend only — they never enter the webview.
 - The webview runs with a restricted capability set (`core:default`, `opener:default`, `keyring:default`).
+- The webview ships without a Content-Security-Policy (`"csp": null` in
+  `src-tauri/tauri.conf.json`) by design: the UI loads only local bundled
+  assets, AI responses are rendered as plain text (never HTML), and users
+  configure arbitrary provider base URLs, which a static `connect-src`
+  whitelist cannot express. Script execution is limited by the capability
+  set (see above). Revisit if HTML rendering (e.g. markdown) is ever added.
 - AI responses are rendered as plain text (no HTML), so no sanitizer is needed.
 - arXiv's rate limit (≥ 1 request per 3 s) is enforced in the Rust fetcher.
 

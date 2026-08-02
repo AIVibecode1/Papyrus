@@ -32,7 +32,7 @@ STOP conditions, and update your row when done.
 | 018 | Lint, format, hooks, typecheck-in-dev, CI | P2 | M | 014 | TODO |
 | 020 | README: document pnpm prerequisite | P3 | S | — | DONE |
 | 022 | Archive REF1/REF2 research artifacts | P2 | S | — | DONE |
-| 023 | Document the null-CSP decision | P3 | S | 007 | TODO |
+| 023 | Document the null-CSP decision | P3 | S | 007 | DONE |
 | 021 | README screenshots (EN/AR, light/dark) | P3 | S | — | TODO |
 | 024 | Keyring dependency posture (vendor `keyring` crate) | P2 | S-M | — | TODO |
 | 025 | Keyword search (DIR-1) | P2 | S-M | 002, 003 | TODO |
