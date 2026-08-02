@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import {
   deleteBrowserKey,
-  getBrowserKey,
   hasBrowserKey,
   isTauri,
   setBrowserKey,
@@ -106,8 +105,3 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     return testProviderBrowser(p);
   },
 }));
-
-/** Convenience for the explain flow (browser fallback reads the dev key). */
-export function getKeyForProvider(providerId: string): string {
-  return getBrowserKey(providerId);
-}

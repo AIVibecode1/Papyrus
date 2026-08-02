@@ -66,10 +66,11 @@ export function SettingsPage() {
     }
   };
 
+  const providerIds = providers.map((p) => p.id).join(",");
+
   useEffect(() => {
     refreshKeyStates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providers.length]);
+  }, [providerIds]);
 
   const applyPreset = (key: string) => {
     setPreset(key);
