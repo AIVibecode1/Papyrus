@@ -33,7 +33,8 @@
     "clearSelection": "Clear selection",
     "emptyChat": "Ask anything about the paper, or select a passage and ask about it.",
     "thinking": "Thinking…",
-    "askPlaceholder": "Ask about the paper…"
+    "askPlaceholder": "Ask about the paper…",
+    "send": "Send"
   },
   "markdown": {
     "diagramError": "Diagram could not be rendered"
@@ -87,6 +88,7 @@
   },
   "settings": {
     "title": "Settings",
+    "back": "Back to papers",
     "securityNote": "API keys are stored in your OS keychain (Windows Credential Manager / macOS Keychain). Papyrus only sends them to the provider you configured — never to anyone else.",
     "providers": "AI Providers",
     "addProvider": "Add provider",

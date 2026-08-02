@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Plus, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Plus, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { ProviderConfig } from "@/lib/types";
 import { useSettingsStore } from "@/stores/settings";
+import { useUiStore } from "@/stores/ui";
 import { ProviderCard } from "./provider-card";
 import { ProviderForm } from "./provider-form";
 
@@ -11,6 +12,7 @@ const emptyForm = { name: "", baseUrl: "", model: "", key: "" };
 
 export function SettingsPage() {
   const { t } = useTranslation();
+  const setView = useUiStore((s) => s.setView);
   const { providers, activeProviderId, removeProvider, setActiveProvider, deleteKey, hasKey } =
     useSettingsStore();
 
@@ -63,7 +65,18 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 p-6">
-      <h1 className="text-xl font-semibold">{t("settings.title")}</h1>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setView("papers")}
+          aria-label={t("settings.back")}
+          title={t("settings.back")}
+        >
+          <ArrowLeft className="size-4 rtl:rotate-180" />
+        </Button>
+        <h1 className="text-xl font-semibold">{t("settings.title")}</h1>
+      </div>
 
       <div className="mt-4 flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
         <ShieldCheck className="size-4 shrink-0" />

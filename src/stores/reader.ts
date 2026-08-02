@@ -150,7 +150,16 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       const { sections } = get();
       if (sections.length === 0) return;
       set({ sectionEntries: [], synthesis: null, sectionIndex: 0 });
-      await get().continueWalkthrough(provider, language);
+      try {
+        await get().continueWalkthrough(provider, language);
+      } catch (err) {
+        // Belt and braces: any unexpected failure becomes a visible error
+        // card instead of a silent no-op.
+        const message = err instanceof Error ? err.message : String(err);
+        set((s) => ({
+          sectionEntries: [...s.sectionEntries, { text: "", status: "error", error: message }],
+        }));
+      }
     },
 
     continueWalkthrough: async (provider, language) => {
@@ -180,7 +189,9 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           if (buf.length === 0) return;
           set((s) => {
             const entry = s.sectionEntries[i];
-            if (!entry || entry.status !== "loading") return s;
+            // Apply to loading AND streaming entries: the first flush flips
+            // the status, and later flushes must keep appending.
+            if (!entry || (entry.status !== "loading" && entry.status !== "streaming")) return s;
             const entries = [...s.sectionEntries];
             entries[i] = { ...entry, text: entry.text + buf.join(""), status: "streaming" };
             return { sectionEntries: entries };
@@ -249,7 +260,9 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           if (buf.length === 0) return;
           set((s) => {
             const cur = s.synthesis;
-            if (!cur || cur.status !== "loading") return s;
+            // loading OR streaming: the first flush flips the status and
+            // later flushes must keep appending (same rule as sections).
+            if (!cur || (cur.status !== "loading" && cur.status !== "streaming")) return s;
             return { synthesis: { ...cur, text: cur.text + buf.join(""), status: "streaming" } };
           });
         };
@@ -334,7 +347,9 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         set((s) => {
           const list = [...s.chat];
           const msg = list.find((m) => m.id === id + 1);
-          if (!msg || msg.status !== "loading") return s;
+          // loading OR streaming: the first flush flips the status and
+          // later flushes must keep appending (same rule as sections).
+          if (!msg || (msg.status !== "loading" && msg.status !== "streaming")) return s;
           msg.text += buf.join("");
           msg.status = "streaming";
           return { chat: list };

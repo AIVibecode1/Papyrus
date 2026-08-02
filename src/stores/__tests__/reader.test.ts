@@ -175,6 +175,39 @@ describe("reader store", () => {
     expect(s.sectionEntries[0].status).toBe("stopped");
   });
 
+  it("keeps appending chunks across multiple flushes", async () => {
+    // Regression test: the first flush flips the entry to "streaming" and
+    // later flushes must keep appending. Streaming slowly (20ms per chunk,
+    // flush interval 50ms) forces several flush cycles.
+    await useReaderStore.getState().open(paper);
+    vi.mocked(streamSectionExplanation).mockImplementation(async (opts) => {
+      for (const c of ["# ", "Mock ", "explanation", "\n\nMore ", "text"]) {
+        await new Promise((r) => setTimeout(r, 20));
+        opts.onChunk(c);
+      }
+    });
+
+    await useReaderStore.getState().startWalkthrough(provider, "en");
+    const s = useReaderStore.getState();
+    expect(s.sectionEntries[0].status).toBe("done");
+    expect(s.sectionEntries[0].text).toBe("# Mock explanation\n\nMore text");
+  });
+
+  it("appends ask answers across multiple flushes too", async () => {
+    await useReaderStore.getState().open(paper);
+    vi.mocked(streamAsk).mockImplementation(async (opts) => {
+      for (const c of ["First ", "part", " then ", "rest"]) {
+        await new Promise((r) => setTimeout(r, 20));
+        opts.onChunk(c);
+      }
+    });
+
+    await useReaderStore.getState().ask("Explain?", provider, "en");
+    const s = useReaderStore.getState();
+    expect(s.chat[1].status).toBe("done");
+    expect(s.chat[1].text).toBe("First part then rest");
+  });
+
   it("ask appends a user message and streams the answer", async () => {
     await useReaderStore.getState().open(paper);
     vi.mocked(streamAsk).mockImplementation(chunkStream(["answer!"]));
