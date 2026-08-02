@@ -12,6 +12,20 @@ import type { ProviderConfig } from "@/lib/types";
 const STORAGE_KEY = "papyrus-providers";
 const ACTIVE_KEY = "papyrus-active-provider";
 
+// Mirrors the Rust validate_provider limits (ai.rs): id <= 64, name 1-64,
+// model non-empty, baseUrl non-empty. Keeps corrupted/legacy localStorage
+// from leaking malformed providers into explain requests.
+function isProviderConfig(value: unknown): value is ProviderConfig {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.id === "string" && v.id.length > 0 && v.id.length <= 64 &&
+    typeof v.name === "string" && v.name.length > 0 && v.name.length <= 64 &&
+    typeof v.baseUrl === "string" && v.baseUrl.length > 0 &&
+    typeof v.model === "string" && v.model.length > 0
+  );
+}
+
 interface SettingsState {
   providers: ProviderConfig[];
   activeProviderId: string | null;
@@ -35,10 +49,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   load: () => {
     if (get().loaded) return;
     try {
-      const providers = JSON.parse(
+      const parsed = JSON.parse(
         localStorage.getItem(STORAGE_KEY) ?? "[]",
-      ) as ProviderConfig[];
-      const activeProviderId = localStorage.getItem(ACTIVE_KEY);
+      ) as unknown;
+      const providers = Array.isArray(parsed)
+        ? parsed.filter(isProviderConfig)
+        : [];
+      let activeProviderId = localStorage.getItem(ACTIVE_KEY);
+      if (
+        typeof activeProviderId === "string" &&
+        !providers.some((p) => p.id === activeProviderId)
+      ) {
+        activeProviderId = providers[0]?.id ?? null;
+      }
       set({ providers, activeProviderId, loaded: true });
     } catch {
       set({ loaded: true });

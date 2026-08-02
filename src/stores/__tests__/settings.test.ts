@@ -93,6 +93,46 @@ describe("settings store", () => {
     expect(s.loaded).toBe(true);
   });
 
+  it("load drops malformed provider entries", () => {
+    localStorageMock.setItem(
+      "papyrus-providers",
+      JSON.stringify([
+        { id: "a", name: "A", baseUrl: "https://x", model: "m" },
+        null,
+        { id: "b" },
+        "garbage",
+      ]),
+    );
+    useSettingsStore.getState().load();
+    const s = useSettingsStore.getState();
+    expect(s.providers).toEqual([
+      { id: "a", name: "A", baseUrl: "https://x", model: "m" },
+    ]);
+  });
+
+  it("load with non-array JSON yields empty", () => {
+    localStorageMock.setItem("papyrus-providers", "{}");
+    expect(() => useSettingsStore.getState().load()).not.toThrow();
+    const s = useSettingsStore.getState();
+    expect(s.providers).toEqual([]);
+    expect(s.loaded).toBe(true);
+  });
+
+  it("activeProviderId dangling id is repaired", () => {
+    const validA: ProviderConfig = {
+      id: "a",
+      name: "A",
+      baseUrl: "https://x",
+      model: "m",
+    };
+    localStorageMock.setItem("papyrus-providers", JSON.stringify([validA]));
+    localStorageMock.setItem("papyrus-active-provider", "ghost");
+    useSettingsStore.getState().load();
+    const s = useSettingsStore.getState();
+    expect(s.providers).toEqual([validA]);
+    expect(s.activeProviderId).toBe("a");
+  });
+
   it("saveKey then hasKey is true (browser path)", async () => {
     await useSettingsStore.getState().saveKey(provider.id, "sk-test");
     expect(await useSettingsStore.getState().hasKey(provider.id)).toBe(true);

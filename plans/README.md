@@ -23,7 +23,7 @@ STOP conditions, and update your row when done.
 | 009 | Shared reqwest client | P2 | S | — | DONE |
 | 010 | Rust test gaps (fragmented streams, cancel, units) | P2 | S | 001 | DONE (cancel test deferred to plan 005) |
 | 011 | Browser-preview Stop via AbortController | P2 | S | 002, 004, 005 | TODO |
-| 012 | localStorage provider shape validation | P2 | S | 002 | TODO |
+| 012 | localStorage provider shape validation | P2 | S | 002 | DONE |
 | 013 | Redact token-shaped strings from error bodies | P2 | S | — | TODO |
 | 014 | Remove dead code + dangling lint suppression | P2 | S | — | DONE |
 | 015 | Chunk coalescing in explanation store | P2 | S | 004, 005 | TODO |
