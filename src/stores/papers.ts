@@ -12,18 +12,22 @@ let requestSeq = 0;
 interface PapersState {
   category: string;
   query: string;
+  /** YYYY-MM-DD of the browsed day, or null for the latest papers. */
+  date: string | null;
   papers: Paper[];
   loading: boolean;
   error: string | null;
   lastUpdated: number | null;
   setCategory: (category: string) => void;
   setQuery: (query: string) => void;
+  setDate: (date: string | null) => void;
   refresh: () => Promise<void>;
 }
 
 export const usePapersStore = create<PapersState>((set, get) => ({
   category: DEFAULT_CATEGORY,
   query: "",
+  date: null,
   papers: [],
   loading: false,
   error: null,
@@ -41,12 +45,23 @@ export const usePapersStore = create<PapersState>((set, get) => ({
     void get().refresh();
   },
 
+  setDate: (date) => {
+    if (date === get().date) return;
+    set({ date, papers: [], error: null });
+    void get().refresh();
+  },
+
   refresh: async () => {
     const seq = ++requestSeq;
-    const { category, query } = get();
+    const { category, query, date } = get();
     set({ loading: true, error: null });
     try {
-      const papers = await fetchPapers(category, PAGE_SIZE, query.trim() || undefined);
+      const papers = await fetchPapers(
+        category,
+        PAGE_SIZE,
+        query.trim() || undefined,
+        date ?? undefined,
+      );
       if (seq !== requestSeq) return;
       set({ papers, loading: false, lastUpdated: Date.now() });
     } catch (err) {

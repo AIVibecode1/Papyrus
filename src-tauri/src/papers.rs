@@ -53,15 +53,26 @@ async fn rate_limit() {
     }
 }
 
-/// Builds the arXiv API query URL for a category browse or a free-text
-/// search. A search query replaces the category term entirely with
-/// arXiv's `all:` field (title + abstract + authors).
+/// Builds the arXiv API query URL for a category browse, a free-text
+/// search, and/or a single submission day.
 ///
-/// Both inputs are validated here so malformed `search_query` grammar
-/// never reaches arXiv: categories must look like `cat:` codes, and query
+/// - A search query replaces the category term with arXiv's `all:` field
+///   (title + abstract + authors).
+/// - A `date` (YYYY-MM-DD) narrows the result to papers submitted on that
+///   day using arXiv's `submittedDate` range syntax. The range is
+///   `[YYYYMMDD TO YYYYMMDD]` where the upper bound is the next day, so
+///   the whole 24-hour window is captured.
+///
+/// All inputs are validated here so malformed `search_query` grammar
+/// never reaches arXiv: categories must look like `cat:` codes, query
 /// strings reject the characters arXiv's query parser treats as operators
-/// (`"`, `(`, `)`, `:`, `&`) plus over-long or empty terms.
-fn build_fetch_url(category: &str, query: Option<&str>, max: usize) -> Result<String, String> {
+/// (`"`, `(`, `)`, `:`, `&`), and dates must be real calendar dates.
+fn build_fetch_url(
+    category: &str,
+    query: Option<&str>,
+    date: Option<&str>,
+    max: usize,
+) -> Result<String, String> {
     let category = category.trim();
     let valid_category = !category.is_empty()
         && category.len() <= 32
@@ -72,7 +83,7 @@ fn build_fetch_url(category: &str, query: Option<&str>, max: usize) -> Result<St
         return Err("Invalid category".into());
     }
 
-    if let Some(query) = query {
+    let mut term = if let Some(query) = query {
         let query = query.trim();
         let valid_query = !query.is_empty()
             && query.len() <= 200
@@ -82,28 +93,84 @@ fn build_fetch_url(category: &str, query: Option<&str>, max: usize) -> Result<St
         if !valid_query {
             return Err("Invalid search query".into());
         }
-        return Ok(format!(
-            "{ARXIV_API}?search_query=all:{query}&sortBy=submittedDate&sortOrder=descending&max_results={max}"
+        format!("all:{query}")
+    } else {
+        format!("cat:{category}")
+    };
+
+    if let Some(date) = date {
+        let (y, m, d) = parse_date(date)?;
+        let (ny, nm, nd) = next_day(y, m, d);
+        // arXiv's range syntax wants compact YYYYMMDD bounds. The upper
+        // bound is the following day so the whole day is included.
+        term.push_str(&format!(
+            "+AND+submittedDate:[{y:04}{m:02}{d:02} TO {ny:04}{nm:02}{nd:02}]"
         ));
     }
 
     Ok(format!(
-        "{ARXIV_API}?search_query=cat:{category}&sortBy=submittedDate&sortOrder=descending&max_results={max}"
+        "{ARXIV_API}?search_query={term}&sortBy=submittedDate&sortOrder=descending&max_results={max}"
     ))
+}
+
+/// Parses and validates a `YYYY-MM-DD` calendar date.
+fn parse_date(date: &str) -> Result<(u32, u32, u32), String> {
+    let date = date.trim();
+    let parts: Vec<&str> = date.split('-').collect();
+    if parts.len() != 3
+        || parts
+            .iter()
+            .any(|p| p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return Err("Invalid date".into());
+    }
+    let y: u32 = parts[0].parse().map_err(|_| "Invalid date".to_string())?;
+    let m: u32 = parts[1].parse().map_err(|_| "Invalid date".to_string())?;
+    let d: u32 = parts[2].parse().map_err(|_| "Invalid date".to_string())?;
+    if !(1900..=2100).contains(&y) || !(1..=12).contains(&m) || d == 0 || d > days_in_month(y, m) {
+        return Err("Invalid date".into());
+    }
+    Ok((y, m, d))
+}
+
+/// Days in a Gregorian month, leap years included.
+fn days_in_month(y: u32, m: u32) -> u32 {
+    match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            let leap = y.is_multiple_of(4) && !y.is_multiple_of(100) || y.is_multiple_of(400);
+            if leap { 29 } else { 28 }
+        }
+        _ => 0,
+    }
+}
+
+/// The calendar day after `(y, m, d)`, with month and year rollover.
+fn next_day(y: u32, m: u32, d: u32) -> (u32, u32, u32) {
+    if d < days_in_month(y, m) {
+        (y, m, d + 1)
+    } else if m < 12 {
+        (y, m + 1, 1)
+    } else {
+        (y + 1, 1, 1)
+    }
 }
 
 /// Fetches the latest papers for an arXiv category, newest first. When
 /// `query` is given, the category is ignored and arXiv's `all:` field
-/// (title + abstract + authors) is searched instead.
+/// (title + abstract + authors) is searched instead. When `date`
+/// (YYYY-MM-DD) is given, only papers submitted on that day are returned.
 #[tauri::command]
 pub async fn fetch_papers(
     category: String,
     max_results: Option<usize>,
     query: Option<String>,
+    date: Option<String>,
 ) -> Result<Vec<Paper>, String> {
     // Validate input before hitting the network.
     let max = max_results.unwrap_or(20).clamp(1, MAX_RESULTS_LIMIT);
-    let url = build_fetch_url(&category, query.as_deref(), max)?;
+    let url = build_fetch_url(&category, query.as_deref(), date.as_deref(), max)?;
 
     rate_limit().await;
 
@@ -325,21 +392,21 @@ mod tests {
 
     #[test]
     fn fetch_url_without_query_uses_category() {
-        let url = build_fetch_url("cs.AI", None, 20).expect("category URL should build");
+        let url = build_fetch_url("cs.AI", None, None, 20).expect("category URL should build");
         assert!(url.contains("search_query=cat:cs.AI"));
         assert!(!url.contains("search_query=all:"));
         assert!(url.contains("sortBy=submittedDate&sortOrder=descending&max_results=20"));
         // Invalid categories are still rejected at the same boundary.
         assert_eq!(
-            build_fetch_url("cs.AI; DROP TABLE", None, 20),
+            build_fetch_url("cs.AI; DROP TABLE", None, None, 20),
             Err("Invalid category".into())
         );
     }
 
     #[test]
     fn fetch_url_with_query_uses_all_field() {
-        let url =
-            build_fetch_url("cs.AI", Some("transformer"), 20).expect("query URL should build");
+        let url = build_fetch_url("cs.AI", Some("transformer"), None, 20)
+            .expect("query URL should build");
         assert!(url.contains("search_query=all:transformer"));
         // The category term is replaced, not combined.
         assert!(!url.contains("cat:cs.AI"));
@@ -347,11 +414,30 @@ mod tests {
     }
 
     #[test]
+    fn fetch_url_with_date_adds_submitted_range() {
+        let url =
+            build_fetch_url("cs.AI", None, Some("2026-08-01"), 20).expect("date URL should build");
+        // The range covers the whole day: [20260801 TO 20260802].
+        assert!(url.contains("search_query=cat:cs.AI+AND+submittedDate:[20260801 TO 20260802]"));
+        assert!(url.contains("sortBy=submittedDate&sortOrder=descending&max_results=20"));
+    }
+
+    #[test]
+    fn fetch_url_combines_query_and_date() {
+        let url = build_fetch_url("cs.AI", Some("transformer"), Some("2026-08-01"), 20)
+            .expect("combined URL should build");
+        assert!(
+            url.contains("search_query=all:transformer+AND+submittedDate:[20260801 TO 20260802]")
+        );
+        assert!(!url.contains("cat:cs.AI"));
+    }
+
+    #[test]
     fn fetch_url_rejects_invalid_queries() {
         // Characters arXiv's query grammar treats as operators must be
         // rejected before they reach the API.
         for bad in ['"', '(', ')', ':', '&'] {
-            let url = build_fetch_url("cs.AI", Some(&format!("transformer{bad}")), 20);
+            let url = build_fetch_url("cs.AI", Some(&format!("transformer{bad}")), None, 20);
             assert_eq!(
                 url,
                 Err("Invalid search query".into()),
@@ -360,17 +446,46 @@ mod tests {
         }
         // Over-long and blank queries are rejected too…
         assert_eq!(
-            build_fetch_url("cs.AI", Some(&"a".repeat(201)), 20),
+            build_fetch_url("cs.AI", Some(&"a".repeat(201)), None, 20),
             Err("Invalid search query".into())
         );
         assert_eq!(
-            build_fetch_url("cs.AI", Some("   "), 20),
+            build_fetch_url("cs.AI", Some("   "), None, 20),
             Err("Invalid search query".into())
         );
         // …but surrounding whitespace is trimmed before validation.
-        let url = build_fetch_url("cs.AI", Some("  attention  "), 20)
+        let url = build_fetch_url("cs.AI", Some("  attention  "), None, 20)
             .expect("trimmed query should build");
         assert!(url.contains("search_query=all:attention"));
+    }
+
+    #[test]
+    fn fetch_url_rejects_invalid_dates() {
+        for bad in [
+            "2026-13-01", // month 13
+            "2026-00-10", // month 0
+            "2026-02-30", // February has no 30th
+            "2026-04-31", // April has no 31st
+            "2026-02-29", // 2026 is not a leap year
+            "20260801",   // wrong format (needs dashes)
+            "abc",        // garbage
+            "",           // empty
+        ] {
+            let url = build_fetch_url("cs.AI", None, Some(bad), 20);
+            assert_eq!(url, Err("Invalid date".into()), "must reject {bad:?}");
+        }
+    }
+
+    #[test]
+    fn next_day_rolls_over_months_and_years() {
+        assert_eq!(next_day(2026, 8, 1), (2026, 8, 2));
+        assert_eq!(next_day(2026, 8, 31), (2026, 9, 1));
+        assert_eq!(next_day(2026, 12, 31), (2027, 1, 1));
+        assert_eq!(next_day(2026, 2, 28), (2026, 3, 1));
+        // Leap year: 2028 has a February 29th.
+        assert_eq!(next_day(2028, 2, 28), (2028, 2, 29));
+        assert_eq!(next_day(2028, 2, 29), (2028, 3, 1));
+        assert_eq!(next_day(2026, 4, 30), (2026, 5, 1));
     }
 
     #[test]
@@ -384,7 +499,7 @@ mod tests {
     fn live_fetch_from_arxiv() {
         let papers = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(fetch_papers("cs.AI".into(), Some(5), None))
+            .block_on(fetch_papers("cs.AI".into(), Some(5), None, None))
             .expect("live fetch should succeed");
         assert!(!papers.is_empty(), "expected at least one paper");
         let p = &papers[0];

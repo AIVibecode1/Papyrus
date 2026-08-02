@@ -33,7 +33,14 @@
     "save": "Save",
     "saved": "Saved",
     "savedOnly": "Saved",
-    "noFavorites": "No saved papers yet. Tap the bookmark on any paper."
+    "noFavorites": "No saved papers yet. Tap the bookmark on any paper.",
+    "latest": "Latest",
+    "today": "Today",
+    "prevDay": "Previous day",
+    "nextDay": "Next day",
+    "browseByDay": "Browse by day",
+    "noPapersOnDay": "No papers found for this day.",
+    "historyLoading": "Collecting history… {{done}}/{{total}}"
   },
   "presets": {
     "openai": "OpenAI",

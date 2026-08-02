@@ -37,6 +37,7 @@ describe("papers store", () => {
     usePapersStore.setState({
       category: "cs.MATH",
       query: "",
+      date: null,
       papers: [],
       loading: false,
       error: null,
@@ -91,13 +92,40 @@ describe("papers store", () => {
     usePapersStore.getState().setQuery("transformer");
 
     // refresh() calls fetchPapers synchronously; the query must reach it.
-    expect(fetchMock).toHaveBeenCalledWith("cs.MATH", 20, "transformer");
+    expect(fetchMock).toHaveBeenCalledWith("cs.MATH", 20, "transformer", undefined);
     await Promise.resolve();
 
     const state = usePapersStore.getState();
     expect(state.query).toBe("transformer");
     expect(state.papers).toEqual([aiPaper]);
     expect(state.loading).toBe(false);
+  });
+
+  it("setDate triggers refresh for that day", async () => {
+    const fetchMock = vi.mocked(fetchPapers).mockResolvedValue([aiPaper]);
+
+    usePapersStore.getState().setDate("2026-08-01");
+
+    // The date must reach the fetch layer as the 4th argument.
+    expect(fetchMock).toHaveBeenCalledWith("cs.MATH", 20, undefined, "2026-08-01");
+    await Promise.resolve();
+
+    const state = usePapersStore.getState();
+    expect(state.date).toBe("2026-08-01");
+    expect(state.papers).toEqual([aiPaper]);
+    expect(state.loading).toBe(false);
+  });
+
+  it("setDate(null) returns to the latest view", async () => {
+    const fetchMock = vi.mocked(fetchPapers).mockResolvedValue([aiPaper]);
+
+    usePapersStore.getState().setDate("2026-08-01");
+    usePapersStore.getState().setDate(null);
+
+    expect(fetchMock).toHaveBeenLastCalledWith("cs.MATH", 20, undefined, undefined);
+    await Promise.resolve();
+
+    expect(usePapersStore.getState().date).toBeNull();
   });
 
   it("drops stale search responses", async () => {

@@ -1,12 +1,28 @@
-import { AlertCircle, Bookmark, BookOpenText, RefreshCw } from "lucide-react";
+import {
+  AlertCircle,
+  Bookmark,
+  BookOpenText,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFavoritesStore } from "@/stores/favorites";
 import { usePapersStore } from "@/stores/papers";
+import { useDigestStore, addDays, todayStr } from "@/stores/digest";
 import { PaperCard } from "@/features/papers/paper-card";
 
 function PaperSkeleton() {
@@ -29,14 +45,39 @@ function PaperSkeleton() {
   );
 }
 
+function formatDay(date: string, language: string): string {
+  return new Intl.DateTimeFormat(language, { month: "short", day: "numeric" }).format(
+    new Date(`${date}T00:00:00Z`),
+  );
+}
+
 export function PaperList() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { papers, loading, error, refresh, lastUpdated } = usePapersStore();
+  const category = usePapersStore((s) => s.category);
+  const date = usePapersStore((s) => s.date);
+  const setDate = usePapersStore((s) => s.setDate);
   const setQuery = usePapersStore((s) => s.setQuery);
   const savedIds = useFavoritesStore((s) => s.ids);
   const savedBy = useFavoritesStore((s) => s.byId);
+  // Select the stable byCategory reference and derive below. Calling a
+  // store method inside the selector (e.g. s.days(category)) would return
+  // a fresh array every render and trip React's getSnapshot loop guard.
+  const byCategory = useDigestStore((s) => s.byCategory);
+  const ensureHistory = useDigestStore((s) => s.ensureHistory);
+  const progress = useDigestStore((s) => s.progress);
+  const digestDays = Object.keys(byCategory[category] ?? {})
+    .sort()
+    .reverse();
+  const dayCount = (d: string) => byCategory[category]?.[d]?.length ?? 0;
   const [savedOnly, setSavedOnly] = useState(false);
   const [searchInput, setSearchInput] = useState("");
+
+  // Auto-aggregator: backfill recent days for the current field so the
+  // day list is populated. ensureHistory is concurrency-guarded.
+  useEffect(() => {
+    void ensureHistory(category);
+  }, [category, ensureHistory]);
 
   // Debounce the search box: typing updates local state immediately, but the
   // store only refreshes 400 ms after the user stops typing. The cleanup
@@ -45,6 +86,19 @@ export function PaperList() {
     const handle = setTimeout(() => setQuery(searchInput), 400);
     return () => clearTimeout(handle);
   }, [searchInput, setQuery]);
+
+  const today = todayStr();
+  const backfillActive = progress !== null && progress.category === category;
+
+  const goPrevDay = () => {
+    const prev = date ? addDays(date, -1) : addDays(today, -1);
+    setDate(prev);
+  };
+
+  const goNextDay = () => {
+    if (!date || date >= today) return;
+    setDate(addDays(date, 1));
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -79,6 +133,59 @@ export function PaperList() {
             {t("papers.refresh")}
           </Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={goPrevDay}
+          disabled={loading}
+          aria-label={t("papers.prevDay")}
+          className="rtl:rotate-180"
+        >
+          <ChevronLeft className="size-4" />
+        </Button>
+        <Select value={date ?? "latest"} onValueChange={(v) => setDate(v === "latest" ? null : v)}>
+          <SelectTrigger className="h-8 w-auto gap-2 text-xs" aria-label={t("papers.browseByDay")}>
+            <CalendarDays className="size-3.5" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="latest">{t("papers.latest")}</SelectItem>
+            {digestDays
+              .slice(0, 14)
+              .filter((d) => dayCount(d) > 0)
+              .map((d) => (
+                <SelectItem key={d} value={d}>
+                  {formatDay(d, i18n.language)} ({dayCount(d)})
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={goNextDay}
+          disabled={loading || !date || date >= today}
+          aria-label={t("papers.nextDay")}
+          className="rtl:rotate-180"
+        >
+          <ChevronRight className="size-4" />
+        </Button>
+        {date && (
+          <Button variant="ghost" size="sm" onClick={() => setDate(null)}>
+            {t("papers.today")}
+          </Button>
+        )}
+        {backfillActive && (
+          <span className="text-xs text-muted-foreground">
+            {t("papers.historyLoading", {
+              done: progress.done,
+              total: progress.total,
+            })}
+          </span>
+        )}
       </div>
 
       {loading && (
@@ -124,7 +231,9 @@ export function PaperList() {
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <BookOpenText className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium text-muted-foreground">{t("papers.empty")}</p>
+            <p className="text-sm font-medium text-muted-foreground">
+              {date ? t("papers.noPapersOnDay") : t("papers.empty")}
+            </p>
           </CardContent>
         </Card>
       )}
