@@ -1,3 +1,7 @@
+> **ARCHIVED (2026-08-02)** — early design-phase research notes. Decisions
+> have since settled: see AGENTS.md. Some content here (Python sidecar,
+> alternative names, provider lists) is outdated and must not be followed.
+
 **Yes**, there are several solid free APIs that give you the latest research papers in AI, Tech, and Computer Science.
 
 Here are the best ones (ranked by usefulness for *latest* AI/CS papers):

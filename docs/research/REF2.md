@@ -1,3 +1,7 @@
+> **ARCHIVED (2026-08-02)** — early design-phase research notes. Decisions
+> have since settled: see AGENTS.md. Some content here (Python sidecar,
+> alternative names, provider lists) is outdated and must not be followed.
+
 **Yes, this is a very doable and useful open-source project.**  
 Here's a clear, practical guide to design and build it from zero.
 
