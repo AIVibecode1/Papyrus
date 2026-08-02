@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { streamExplanation } from "@/lib/ai";
+import { CANCELLED_MARKER, stopExplanation, streamExplanation } from "@/lib/ai";
 import type { Paper, ProviderConfig } from "@/lib/types";
 
 // isTauri() checks "__TAURI_INTERNALS__" in window; node has no window, so
@@ -121,5 +121,50 @@ describe("streamExplanation (browser SSE parser)", () => {
       streamExplanation({ provider, paper, language: "en", onChunk }),
     ).resolves.toBeUndefined();
     expect(onChunk).toHaveBeenCalledWith("Bye");
+  });
+});
+
+describe("stopExplanation (browser abort)", () => {
+  it("stop aborts the in-flight browser stream and surfaces the cancellation marker", async () => {
+    const encoder = new TextEncoder();
+    let chunkDelivered: () => void;
+    const chunkPromise = new Promise<void>((resolve) => {
+      chunkDelivered = resolve;
+    });
+    const onChunk = vi.fn(() => chunkDelivered());
+
+    let fetchInit: RequestInit | undefined;
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      fetchInit = init;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode('data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n'),
+          );
+          // Never end the stream; a stop must abort the fetch signal, which
+          // errors the body reader with AbortError (as real fetch does).
+          init?.signal?.addEventListener("abort", () => {
+            controller.error(
+              new DOMException("The operation was aborted.", "AbortError"),
+            );
+          });
+        },
+      });
+      return Promise.resolve(new Response(body, { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const promise = streamExplanation({
+      provider,
+      paper,
+      language: "en",
+      onChunk,
+    });
+    await chunkPromise; // stream is in flight and delivered its first chunk
+    await stopExplanation();
+
+    await expect(promise).rejects.toThrow(CANCELLED_MARKER);
+    expect(fetchInit?.signal).toBeInstanceOf(AbortSignal);
+    expect(onChunk).toHaveBeenCalledTimes(1); // nothing streams after the stop
   });
 });

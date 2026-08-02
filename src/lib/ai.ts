@@ -6,6 +6,10 @@ import type { Paper, ProviderConfig } from "@/lib/types";
 // and the store classifies a stop by matching it as a prefix.
 export const CANCELLED_MARKER = "\u{1F6D1}PAPYRUS_CANCELLED";
 
+// Registry of the in-flight browser stream so stopExplanation() can abort it.
+// Assumes a single active stream (matches the MVP single-stream design).
+let activeController: AbortController | null = null;
+
 // ---------------------------------------------------------------------------
 // Dev-only key store for the browser preview (when the app runs outside Tauri
 // there is no OS keychain). Keys stay in memory only — never persisted.
@@ -97,56 +101,72 @@ export async function streamExplanation(opts: ExplainOptions): Promise<void> {
 export async function stopExplanation(): Promise<void> {
   if (isTauri()) {
     await invoke("stop_explaining");
+    return;
   }
+  activeController?.abort();
 }
 
 async function streamExplanationBrowser(opts: ExplainOptions): Promise<void> {
   const { provider, paper, language, onChunk } = opts;
   const key = getBrowserKey(provider.id);
 
-  const res = await fetch(normalizeBaseUrl(provider.baseUrl), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(key ? { Authorization: `Bearer ${key}` } : {}),
-    },
-    body: JSON.stringify({
-      model: provider.model,
-      messages: buildMessages(paper, language),
-      stream: true,
-      temperature: 0.4,
-    }),
-  });
+  const controller = new AbortController();
+  activeController = controller;
+  try {
+    const res = await fetch(normalizeBaseUrl(provider.baseUrl), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(key ? { Authorization: `Bearer ${key}` } : {}),
+      },
+      body: JSON.stringify({
+        model: provider.model,
+        messages: buildMessages(paper, language),
+        stream: true,
+        temperature: 0.4,
+      }),
+      signal: controller.signal,
+    });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${redactTokens(text).slice(0, 300)}`);
-  }
-  if (!res.body) throw new Error("Provider returned an empty response.");
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`HTTP ${res.status}: ${redactTokens(text).slice(0, 300)}`);
+    }
+    if (!res.body) throw new Error("Provider returned an empty response.");
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
 
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let newline: number;
-    while ((newline = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, newline).replace(/\r$/, "");
-      buf = buf.slice(newline + 1);
-      if (!line.startsWith("data:")) continue;
-      const data = line.slice(5).trim();
-      if (data === "[DONE]") return;
-      try {
-        const parsed = JSON.parse(data);
-        const content = parsed?.choices?.[0]?.delta?.content;
-        if (content) onChunk(content);
-      } catch {
-        // keep-alive comments and partial JSON are ignored
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let newline: number;
+      while ((newline = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, newline).replace(/\r$/, "");
+        buf = buf.slice(newline + 1);
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (data === "[DONE]") return;
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed?.choices?.[0]?.delta?.content;
+          if (content) onChunk(content);
+        } catch {
+          // keep-alive comments and partial JSON are ignored
+        }
       }
     }
+  } catch (err) {
+    // A stop aborts the fetch signal; surface it through the same typed
+    // cancellation contract the Tauri path uses (plan 005).
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error(CANCELLED_MARKER);
+    }
+    throw err;
+  } finally {
+    activeController = null;
   }
 }
 

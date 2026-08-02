@@ -22,7 +22,7 @@ STOP conditions, and update your row when done.
 | 008 | HTTPS enforcement + arXiv PDF normalization | P2 | S | — | DONE |
 | 009 | Shared reqwest client | P2 | S | — | DONE |
 | 010 | Rust test gaps (fragmented streams, cancel, units) | P2 | S | 001 | DONE (cancel test deferred to plan 005) |
-| 011 | Browser-preview Stop via AbortController | P2 | S | 002, 004, 005 | TODO |
+| 011 | Browser-preview Stop via AbortController | P2 | S | 002, 004, 005 | DONE |
 | 012 | localStorage provider shape validation | P2 | S | 002 | DONE |
 | 013 | Redact token-shaped strings from error bodies | P2 | S | — | DONE (TS tests in standalone ai-redact.test.ts) |
 | 014 | Remove dead code + dangling lint suppression | P2 | S | — | DONE |
