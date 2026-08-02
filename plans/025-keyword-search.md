@@ -34,7 +34,7 @@ just never sends it. Search is the difference between a feed and a tool.
 - `src-tauri/src/papers.rs:43-63` — `fetch_papers(category, max_results)`
   builds `search_query=cat:{category}` only.
 - `src/lib/arxiv.ts:4-13` — six fixed categories; `fetchPapers(category,
-  maxResults)` (lines 25-37) — browser fallback returns mock data by
+maxResults)` (lines 25-37) — browser fallback returns mock data by
   category key.
 - `src/stores/papers.ts` — `category` is the sole selector; store race fix
   (plan 003) adds the sequence token.
@@ -45,16 +45,17 @@ just never sends it. Search is the difference between a feed and a tool.
 
 ## Commands you will need
 
-| Purpose   | Command                  | Expected on success |
-|-----------|--------------------------|---------------------|
-| Rust test | `cd src-tauri && cargo test --lib` | all pass      |
-| TS test   | `pnpm test`              | all pass            |
-| Typecheck | `pnpm exec tsc --noEmit` | exit 0              |
-| Build     | `pnpm run build`         | exit 0              |
+| Purpose   | Command                            | Expected on success |
+| --------- | ---------------------------------- | ------------------- |
+| Rust test | `cd src-tauri && cargo test --lib` | all pass            |
+| TS test   | `pnpm test`                        | all pass            |
+| Typecheck | `pnpm exec tsc --noEmit`           | exit 0              |
+| Build     | `pnpm run build`                   | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src-tauri/src/papers.rs` (optional `query` param)
 - `src/lib/arxiv.ts` (pass query; browser fallback filters mocks)
 - `src/stores/papers.ts` (query state)
@@ -63,6 +64,7 @@ just never sends it. Search is the difference between a feed and a tool.
 - Tests: Rust (`papers.rs` tests) + TS (`src/stores/__tests__/papers.test.ts`)
 
 **Out of scope** (do NOT touch):
+
 - The explain flow; settings; anything else.
 
 ## Git workflow
@@ -80,7 +82,7 @@ In `src-tauri/src/papers.rs`:
   - Validate: if `Some(q)`, trim; require `1 <= len <= 200`; reject
     characters that break the arXiv query syntax: `[",:\"()]` — arXiv's
     `all:` field is phrase-ish; safe charset is alphanumerics, spaces,
-    `-`, `_`, `+`, `*`?  — keep it conservative: reject `"`, `(`, `)`,
+    `-`, `_`, `+`, `*`? — keep it conservative: reject `"`, `(`, `)`,
     `:` and `&` (URL-encoding is handled by reqwest, but the search_query
     grammar itself is the risk). Return `Err("Invalid search query")` on
     violation.
@@ -119,7 +121,7 @@ In `src-tauri/src/papers.rs`:
 - Rust: URL construction tests (with/without query, invalid query chars
   rejected).
 - TS (`src/stores/__tests__/papers.test.ts`): `setQuery triggers refresh
-  with query` (mocked `fetchPapers` asserts the query arg); stale-response
+with query` (mocked `fetchPapers` asserts the query arg); stale-response
   guard still applies to searches (extend the plan-003 race test with a
   query variant).
 

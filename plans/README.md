@@ -9,36 +9,36 @@ STOP conditions, and update your row when done.
 
 ## Execution order & status
 
-| # | Plan | Priority | Effort | Depends on | Status |
-|---|------|----------|--------|------------|--------|
-| 001 | Fix Rust SSE UTF-8 corruption (Arabic) | P1 | S | — | DONE (helper takes Vec<Vec<u8>> so a mid-character byte split is expressible) |
-| 019 | Rust edition 2021 → 2024 | P2 | S | — | DONE |
-| 007 | Remove unused `keyring:default` capability | P1 | S | — | DONE |
-| 002 | Frontend test runner (Vitest) | P1 | M | — | DONE |
-| 003 | Papers-store stale-response race | P1 | S | 002 | DONE |
-| 004 | Characterization tests (stores + SSE parser) | P1 | M | 002 | DONE |
-| 005 | Typed cancellation (stop race + marker contract) | P1 | S | 002, 004 | DONE (marker also exported from src/lib/ai.ts per plan Step 2; 3 Rust marker sites, plan said 2) |
-| 006 | Keychain-delete failure surfaced in UI | P1 | S | — | DONE |
-| 008 | HTTPS enforcement + arXiv PDF normalization | P2 | S | — | DONE |
-| 009 | Shared reqwest client | P2 | S | — | DONE |
-| 010 | Rust test gaps (fragmented streams, cancel, units) | P2 | S | 001 | DONE (cancel test deferred to plan 005) |
-| 011 | Browser-preview Stop via AbortController | P2 | S | 002, 004, 005 | DONE |
-| 012 | localStorage provider shape validation | P2 | S | 002 | DONE |
-| 013 | Redact token-shaped strings from error bodies | P2 | S | — | DONE (TS tests in standalone ai-redact.test.ts) |
-| 014 | Remove dead code + dangling lint suppression | P2 | S | — | DONE |
-| 015 | Chunk coalescing in explanation store | P2 | S | 004, 005 | DONE |
-| 016 | De-duplicate AI layer (prompts/URL/contract) | P2 | M | 001, 004, 005 | DONE (shared resource src-tauri/prompts.json; prompts+marker identical in both languages — no drift found; URL divergence documented in ai.ts) |
-| 017 | Split settings-page god component | P3 | M | 004, 006, 014 | DONE (per-card confirm arm; formKey remount to preserve open-reset semantics) |
-| 018 | Lint, format, hooks, typecheck-in-dev, CI | P2 | M | 014 | TODO |
-| 020 | README: document pnpm prerequisite | P3 | S | — | DONE |
-| 022 | Archive REF1/REF2 research artifacts | P2 | S | — | DONE |
-| 023 | Document the null-CSP decision | P3 | S | 007 | DONE |
-| 021 | README screenshots (EN/AR, light/dark) | P3 | S | — | DONE |
-| 024 | Keyring dependency posture (vendor `keyring` crate) | P2 | S-M | — | TODO |
-| 025 | Keyword search (DIR-1) | P2 | S-M | 002, 003 | TODO |
-| 026 | Favorites / reading list (DIR-2) | P2 | S | 002, 012 | DONE (light inline Paper shape check — plan 012's isProviderConfig is provider-specific) |
-| 027 | Provider failover — design spike (DIR-3) | P3 | S-M | 005, 007 | DONE (spike; feature pending maintainer decision) |
-| 028 | Second paper source — design spike (DIR-4) | P3 | M | 025 | DONE (spike; feature pending maintainer decision) |
+| #   | Plan                                                | Priority | Effort | Depends on    | Status                                                                                                                                         |
+| --- | --------------------------------------------------- | -------- | ------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 001 | Fix Rust SSE UTF-8 corruption (Arabic)              | P1       | S      | —             | DONE (helper takes Vec<Vec<u8>> so a mid-character byte split is expressible)                                                                  |
+| 019 | Rust edition 2021 → 2024                            | P2       | S      | —             | DONE                                                                                                                                           |
+| 007 | Remove unused `keyring:default` capability          | P1       | S      | —             | DONE                                                                                                                                           |
+| 002 | Frontend test runner (Vitest)                       | P1       | M      | —             | DONE                                                                                                                                           |
+| 003 | Papers-store stale-response race                    | P1       | S      | 002           | DONE                                                                                                                                           |
+| 004 | Characterization tests (stores + SSE parser)        | P1       | M      | 002           | DONE                                                                                                                                           |
+| 005 | Typed cancellation (stop race + marker contract)    | P1       | S      | 002, 004      | DONE (marker also exported from src/lib/ai.ts per plan Step 2; 3 Rust marker sites, plan said 2)                                               |
+| 006 | Keychain-delete failure surfaced in UI              | P1       | S      | —             | DONE                                                                                                                                           |
+| 008 | HTTPS enforcement + arXiv PDF normalization         | P2       | S      | —             | DONE                                                                                                                                           |
+| 009 | Shared reqwest client                               | P2       | S      | —             | DONE                                                                                                                                           |
+| 010 | Rust test gaps (fragmented streams, cancel, units)  | P2       | S      | 001           | DONE (cancel test deferred to plan 005)                                                                                                        |
+| 011 | Browser-preview Stop via AbortController            | P2       | S      | 002, 004, 005 | DONE                                                                                                                                           |
+| 012 | localStorage provider shape validation              | P2       | S      | 002           | DONE                                                                                                                                           |
+| 013 | Redact token-shaped strings from error bodies       | P2       | S      | —             | DONE (TS tests in standalone ai-redact.test.ts)                                                                                                |
+| 014 | Remove dead code + dangling lint suppression        | P2       | S      | —             | DONE                                                                                                                                           |
+| 015 | Chunk coalescing in explanation store               | P2       | S      | 004, 005      | DONE                                                                                                                                           |
+| 016 | De-duplicate AI layer (prompts/URL/contract)        | P2       | M      | 001, 004, 005 | DONE (shared resource src-tauri/prompts.json; prompts+marker identical in both languages — no drift found; URL divergence documented in ai.ts) |
+| 017 | Split settings-page god component                   | P3       | M      | 004, 006, 014 | DONE (per-card confirm arm; formKey remount to preserve open-reset semantics)                                                                  |
+| 018 | Lint, format, hooks, typecheck-in-dev, CI           | P2       | M      | 014           | DONE (tsconfig lib += ES2022.Error for Error-cause lint fix; eslint globals for dev/*.mjs; prettier normalized repo to LF per .editorconfig)   |
+| 020 | README: document pnpm prerequisite                  | P3       | S      | —             | DONE                                                                                                                                           |
+| 022 | Archive REF1/REF2 research artifacts                | P2       | S      | —             | DONE                                                                                                                                           |
+| 023 | Document the null-CSP decision                      | P3       | S      | 007           | DONE                                                                                                                                           |
+| 021 | README screenshots (EN/AR, light/dark)              | P3       | S      | —             | DONE                                                                                                                                           |
+| 024 | Keyring dependency posture (vendor `keyring` crate) | P2       | S-M    | —             | TODO                                                                                                                                           |
+| 025 | Keyword search (DIR-1)                              | P2       | S-M    | 002, 003      | TODO                                                                                                                                           |
+| 026 | Favorites / reading list (DIR-2)                    | P2       | S      | 002, 012      | DONE (light inline Paper shape check — plan 012's isProviderConfig is provider-specific)                                                       |
+| 027 | Provider failover — design spike (DIR-3)            | P3       | S-M    | 005, 007      | DONE (spike; feature pending maintainer decision)                                                                                              |
+| 028 | Second paper source — design spike (DIR-4)          | P3       | M      | 025           | DONE (spike; feature pending maintainer decision)                                                                                              |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 

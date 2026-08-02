@@ -6,19 +6,19 @@
 
 ## 0. Drift check (plan vs. live tree)
 
-| Plan claim | Live tree (verified 2026-08-02) |
-|---|---|
-| "Repo has no git commits yet" | Stale — 15 commits exist (baseline + plans 001–022). Commit workflow per operator instruction. |
-| `paper-card.tsx:44-52` `handleExplain` picks `activeProviderId ?? providers[0]` | Accurate — `src/features/papers/paper-card.tsx:42-52`. |
-| Plan 005 marker landed | Yes — `CANCELLED_MARKER` in `src-tauri/src/ai.rs:22`, mirrored/exported in `src/lib/ai.ts:7`; 3 marker sites in `stream_chat` (`ai.rs:203, 212, 228`). |
-| Plan 007 capability trim landed | Yes — no `keyring:default` in `src-tauri/capabilities/default.json`; keys are fetched Rust-side via `tauri_plugin_keyring` (`ai.rs:113-126`). |
-| `stream_chat` errors are `Err(String)` (`ai.rs:104-113`) | Accurate but line-shifted — `stream_chat` is `ai.rs:130-239`; `load_key` is `ai.rs:113-126`. |
-| `explanation.providerId` already stored | Yes — `src/stores/explanation.ts:11`, set at `start` (`:41`). |
-| "Multiple AI providers with fallback" is a stated nice-to-have | Yes — `docs/research/REF2.md:34` (archived, line 30 in the plan brief). |
+| Plan claim                                                                      | Live tree (verified 2026-08-02)                                                                                                                        |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| "Repo has no git commits yet"                                                   | Stale — 15 commits exist (baseline + plans 001–022). Commit workflow per operator instruction.                                                         |
+| `paper-card.tsx:44-52` `handleExplain` picks `activeProviderId ?? providers[0]` | Accurate — `src/features/papers/paper-card.tsx:42-52`.                                                                                                 |
+| Plan 005 marker landed                                                          | Yes — `CANCELLED_MARKER` in `src-tauri/src/ai.rs:22`, mirrored/exported in `src/lib/ai.ts:7`; 3 marker sites in `stream_chat` (`ai.rs:203, 212, 228`). |
+| Plan 007 capability trim landed                                                 | Yes — no `keyring:default` in `src-tauri/capabilities/default.json`; keys are fetched Rust-side via `tauri_plugin_keyring` (`ai.rs:113-126`).          |
+| `stream_chat` errors are `Err(String)` (`ai.rs:104-113`)                        | Accurate but line-shifted — `stream_chat` is `ai.rs:130-239`; `load_key` is `ai.rs:113-126`.                                                           |
+| `explanation.providerId` already stored                                         | Yes — `src/stores/explanation.ts:11`, set at `start` (`:41`).                                                                                          |
+| "Multiple AI providers with fallback" is a stated nice-to-have                  | Yes — `docs/research/REF2.md:34` (archived, line 30 in the plan brief).                                                                                |
 
 **Stop-condition check**: AGENTS.md's "Don't force users to use a specific AI
 provider" is compatible with failover (the user's active provider is always
-tried *first*; fallback only engages when it fails). No conflict found, so no
+tried _first_; fallback only engages when it fails). No conflict found, so no
 stop was triggered. Plans 005 and 007 have landed; this design builds on their
 actual shapes (marker contract, Rust-side keys).
 
@@ -177,13 +177,13 @@ documented as degraded in dev only (Open question 4).
 
 ## 3. UX spec
 
-| Moment | What the user sees | Notes |
-|---|---|---|
-| Chain running | Existing `explain.explaining` ("Explaining…") spinner | One continuous run; no per-attempt progress in v1 (Rust-internal). Worst case N × 120 s (per-attempt timeout); Stop always works. |
-| Failover succeeded | Inline note under the panel header: **"Explained by {{provider}}"** | Shown only when the winning provider ≠ the provider the user picked. The Select keeps showing the user's active choice. |
-| All providers failed | Existing error box (`explain.error` header + raw message) | Message is the Rust aggregate: `All 3 providers failed: OpenAI: HTTP 401 … | DeepSeek: Network error …` (truncated 500 chars). English, consistent with today's Rust error strings (see Open question 3). |
-| Stop during chain | Existing `explain.stopped` ("Stopped.") | Marker propagates; partial text from the aborted attempt stays. |
-| No providers | Existing guards: Explain button disabled (`paper-card.tsx:89-90`), `explain.noProvider` panel (already shipped) | Rust defense-in-depth: empty `Vec` → `Err("No providers configured")`. |
+| Moment               | What the user sees                                                                                              | Notes                                                                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Chain running        | Existing `explain.explaining` ("Explaining…") spinner                                                           | One continuous run; no per-attempt progress in v1 (Rust-internal). Worst case N × 120 s (per-attempt timeout); Stop always works. |
+| Failover succeeded   | Inline note under the panel header: **"Explained by {{provider}}"**                                             | Shown only when the winning provider ≠ the provider the user picked. The Select keeps showing the user's active choice.           |
+| All providers failed | Existing error box (`explain.error` header + raw message)                                                       | Message is the Rust aggregate: `All 3 providers failed: OpenAI: HTTP 401 …                                                        | DeepSeek: Network error …` (truncated 500 chars). English, consistent with today's Rust error strings (see Open question 3). |
+| Stop during chain    | Existing `explain.stopped` ("Stopped.")                                                                         | Marker propagates; partial text from the aborted attempt stays.                                                                   |
+| No providers         | Existing guards: Explain button disabled (`paper-card.tsx:89-90`), `explain.noProvider` panel (already shipped) | Rust defense-in-depth: empty `Vec` → `Err("No providers configured")`.                                                            |
 
 **i18n keys to add** (both `en.json` and `ar.json`; names only — no feature):
 
@@ -211,8 +211,8 @@ appends, `settings.ts:71-76`); the active provider is always first.
 
 1. **All providers fail** — aggregate `Err` (sketch above). Each provider is
    tried exactly once (deduped chain); failures are recorded per provider so
-   the user sees *which* provider said what. The store maps it to `status:
-   "error"` and the panel shows the error box. No infinite loops possible (the
+   the user sees _which_ provider said what. The store maps it to `status:
+"error"` and the panel shows the error box. No infinite loops possible (the
    chain is a finite pre-built list).
 2. **No providers** — frontend guards already exist (button disabled,
    `paper-card.tsx:89-90`; `explain.noProvider` in the panel). Rust side gets
@@ -237,7 +237,7 @@ appends, `settings.ts:71-76`); the active provider is always first.
    (`explanation.ts:75-87`). The next `start()` resets the flag (entry line
    kept).
 5. **Plan-005 marker contract** — preserved exactly: the marker is
-   🛑-prefixed and collision-proof, and the chain returns it *verbatim*
+   🛑-prefixed and collision-proof, and the chain returns it _verbatim_
    (`e.starts_with(CANCELLED_MARKER)` short-circuit, same prefix semantics as
    `explanation.ts:77`). Provider error strings can never be mislabeled as
    stops (they cannot start with the marker), and the marker can never be
@@ -256,7 +256,7 @@ appends, `settings.ts:71-76`); the active provider is always first.
 The plan's brief suggested `full.is_empty()` at error time is the
 discriminator. **Correction found in the code**: `full.is_empty()` is checked
 only in the EOF-without-`[DONE]` branch (`ai.rs:175-178`). The mid-read
-`Stream error: {e}` branch (`ai.rs:172`) can fire *after* chunks were already
+`Stream error: {e}` branch (`ai.rs:172`) can fire _after_ chunks were already
 delivered. So the reliable, string-independent signal is a
 `delivered: bool` flag flipped by the `on_chunk` wrapper in the caller — which
 is exactly what the sketch above uses. The existing unit test
@@ -278,28 +278,28 @@ implementation's "500 then 200" test needs a multi-request variant (loop
 
 ## 5. Open questions (for the maintainer)
 
-1. **Cross-run memory of "last provider that worked"?** *Recommendation: none
-   in v1.* Every run starts at the active provider (the user's explicit
+1. **Cross-run memory of "last provider that worked"?** _Recommendation: none
+   in v1._ Every run starts at the active provider (the user's explicit
    choice — AGENTS.md "don't force providers"); per-paper `providerId` already
    records the winner and Regenerate naturally re-uses it (current
    `explain-panel.tsx:67` behavior). Global or per-paper memory would silently
    override the user's active choice.
-2. **Are auth failures (401/403) retryable?** *Recommendation: yes* — a
+2. **Are auth failures (401/403) retryable?** _Recommendation: yes_ — a
    failed key on the active provider is exactly the "out of credits / bad key"
    case the chain exists for; the next provider may be valid. Cost: one extra
    round-trip. Only the marker and post-first-chunk errors are terminal.
-3. **Aggregate error language (bilingual)?** *Recommendation: defer.* Today
+3. **Aggregate error language (bilingual)?** _Recommendation: defer._ Today
    all Rust errors are English strings; an i18n-able aggregate needs
    structured error codes (`ExplainError { code, attempts }`) — a breaking
    IPC change that also touches the marker contract's transport. Keep the
    English aggregate consistent with today, revisit with a structured-error
    plan.
-4. **Browser-preview (non-Tauri) parity?** *Recommendation: implement the
-   same loop in `streamExplanationBrowser` in the same commit* (~15 lines,
+4. **Browser-preview (non-Tauri) parity?** _Recommendation: implement the
+   same loop in `streamExplanationBrowser` in the same commit_ (~15 lines,
    local `delivered` flag, same chain input). If cut for scope, the dev
    preview silently lacks failover — acceptable but should be noted in the
    panel in dev builds only.
-5. **Rate-limit backoff on 429?** *Recommendation: none in v1.* Fail over to
+5. **Rate-limit backoff on 429?** _Recommendation: none in v1._ Fail over to
    the next provider immediately; a 429 usually returns fast, and the 120 s
    per-attempt timeout bounds the worst case. Add backoff only if real-world
    usage shows chained 429s burning attempts.
@@ -310,7 +310,7 @@ implementation's "500 then 200" test needs a multi-request variant (loop
 note, ~4 new Rust tests + 2 store tests): **S** (~half a day). Grows to **M**
 if Open-question 3's structured errors or browser-parity (Q4) are included.
 
-**Existing tests that cover it** (per plan 027, the doc *is* the test plan):
+**Existing tests that cover it** (per plan 027, the doc _is_ the test plan):
 
 - Rust (`src-tauri/src/ai.rs`, `#[cfg(test)]`):
   - `surfaces_provider_errors` (`:591`) — the per-attempt HTTP-failure path.

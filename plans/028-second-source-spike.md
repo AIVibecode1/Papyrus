@@ -34,25 +34,27 @@ second source slots in cleanly — if the signature anticipates it.
 - `src-tauri/src/papers.rs:43-63` — `fetch_papers(category, max_results)`
   (plan 025 adds `query`) — single source (arXiv), single endpoint.
 - `Paper` struct (`papers.rs:17-25`): `id, title, authors, published,
-  summary, pdf_url, categories` — no citation fields.
+summary, pdf_url, categories` — no citation fields.
 - `src/lib/arxiv.ts` — the TS-side fetch wrapper (invoke or mock fallback).
 - REF1.md:20-35 — API notes (arXiv, Semantic Scholar `/graph/v1/paper/search`,
   OpenAlex `/works`) — archived by plan 022 but still in `docs/research/`.
 
 ## Commands you will need
 
-| Purpose   | Command                              | Expected on success |
-|-----------|--------------------------------------|---------------------|
-| API probe | `curl -s "https://api.semanticscholar.org/graph/v1/paper/search?query=transformers&fields=title,abstract,year,citationCount,tldr&limit=3"` | 200 + JSON |
-| API probe | `curl -s "https://api.openalex.org/works?search=transformers&sort=publication_date:desc&per_page=3"` | 200 + JSON |
-| Rust check| `cd src-tauri && cargo check`        | Finished, no warnings |
+| Purpose    | Command                                                                                                                                    | Expected on success   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
+| API probe  | `curl -s "https://api.semanticscholar.org/graph/v1/paper/search?query=transformers&fields=title,abstract,year,citationCount,tldr&limit=3"` | 200 + JSON            |
+| API probe  | `curl -s "https://api.openalex.org/works?search=transformers&sort=publication_date:desc&per_page=3"`                                       | 200 + JSON            |
+| Rust check | `cd src-tauri && cargo check`                                                                                                              | Finished, no warnings |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `docs/spikes/second-source.md` (create — THE DELIVERABLE)
 
 **Out of scope** (do NOT touch):
+
 - Any app source file. The feature itself.
 
 ## Git workflow
@@ -84,7 +86,7 @@ branches or commit unless the operator explicitly instructs it.
    `venue?: string`). Note `Paper` is `Serialize + Deserialize` — adding
    optional fields is backward-compatible with the frontend.
 2. **Command signature**: `fetch_papers(category, max_results, query?,
-   source?)` where `source: "arxiv" | "semanticscholar" | "openalex"`
+source?)` where `source: "arxiv" | "semanticscholar" | "openalex"`
    (default `"arxiv"`); the rate-limit design (per-source limiters;
    Semantic Scholar unauthenticated ~100 req/5min, OpenAlex ~10 req/s —
    verify at execution time and cite the source).

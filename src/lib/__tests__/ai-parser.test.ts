@@ -4,7 +4,7 @@ import type { Paper, ProviderConfig } from "@/lib/types";
 
 // isTauri() checks "__TAURI_INTERNALS__" in window; node has no window, so
 // provide an empty one to force the browser (fetch-based) path.
-globalThis.window = {} as any;
+globalThis.window = {} as unknown as Window & typeof globalThis;
 
 const paper: Paper = {
   id: "p1",
@@ -28,9 +28,7 @@ function sseResponse(chunks: (string | Uint8Array)[], status = 200): Response {
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       for (const chunk of chunks) {
-        controller.enqueue(
-          typeof chunk === "string" ? encoder.encode(chunk) : chunk,
-        );
+        controller.enqueue(typeof chunk === "string" ? encoder.encode(chunk) : chunk);
       }
       controller.close();
     },
@@ -53,10 +51,7 @@ describe("streamExplanation (browser SSE parser)", () => {
   it("parses streamed SSE deltas in order", async () => {
     const onChunk = vi.fn();
     fetchMock.mockResolvedValue(
-      sseResponse([
-        'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n',
-        "data: [DONE]\n\n",
-      ]),
+      sseResponse(['data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n', "data: [DONE]\n\n"]),
     );
 
     await streamExplanation({ provider, paper, language: "en", onChunk });
@@ -103,9 +98,9 @@ describe("streamExplanation (browser SSE parser)", () => {
     const onChunk = vi.fn();
     fetchMock.mockResolvedValue(new Response("unauthorized", { status: 401 }));
 
-    await expect(
-      streamExplanation({ provider, paper, language: "en", onChunk }),
-    ).rejects.toThrow("HTTP 401: unauthorized");
+    await expect(streamExplanation({ provider, paper, language: "en", onChunk })).rejects.toThrow(
+      "HTTP 401: unauthorized",
+    );
     expect(onChunk).not.toHaveBeenCalled();
   });
 
@@ -138,15 +133,11 @@ describe("stopExplanation (browser abort)", () => {
       fetchInit = init;
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
-          controller.enqueue(
-            encoder.encode('data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n'),
-          );
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n'));
           // Never end the stream; a stop must abort the fetch signal, which
           // errors the body reader with AbortError (as real fetch does).
           init?.signal?.addEventListener("abort", () => {
-            controller.error(
-              new DOMException("The operation was aborted.", "AbortError"),
-            );
+            controller.error(new DOMException("The operation was aborted.", "AbortError"));
           });
         },
       });

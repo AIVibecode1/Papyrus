@@ -55,7 +55,7 @@ makes the app resilient to hand-edited storage.
 ## Commands you will need
 
 | Purpose   | Command                  | Expected on success |
-|-----------|--------------------------|---------------------|
+| --------- | ------------------------ | ------------------- |
 | Test      | `pnpm test`              | all pass            |
 | Typecheck | `pnpm exec tsc --noEmit` | exit 0              |
 | Build     | `pnpm run build`         | exit 0              |
@@ -63,10 +63,12 @@ makes the app resilient to hand-edited storage.
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src/stores/settings.ts`
 - `src/stores/__tests__/settings.test.ts` (extend plan 004's suite)
 
 **Out of scope** (do NOT touch):
+
 - `src/lib/types.ts` (no type changes); any Rust code; the UI.
 
 ## Git workflow
@@ -85,10 +87,16 @@ function isProviderConfig(value: unknown): value is ProviderConfig {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
-    typeof v.id === "string" && v.id.length > 0 && v.id.length <= 64 &&
-    typeof v.name === "string" && v.name.length > 0 && v.name.length <= 64 &&
-    typeof v.baseUrl === "string" && v.baseUrl.length > 0 &&
-    typeof v.model === "string" && v.model.length > 0
+    typeof v.id === "string" &&
+    v.id.length > 0 &&
+    v.id.length <= 64 &&
+    typeof v.name === "string" &&
+    v.name.length > 0 &&
+    v.name.length <= 64 &&
+    typeof v.baseUrl === "string" &&
+    v.baseUrl.length > 0 &&
+    typeof v.model === "string" &&
+    v.model.length > 0
   );
 }
 ```

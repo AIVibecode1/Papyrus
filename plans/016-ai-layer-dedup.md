@@ -51,16 +51,17 @@ changes touch one place.
 
 ## Commands you will need
 
-| Purpose   | Command                              | Expected on success |
-|-----------|--------------------------------------|---------------------|
-| Rust test | `cd src-tauri && cargo test --lib`   | all pass            |
-| TS test   | `pnpm test`                          | all pass            |
-| Typecheck | `pnpm exec tsc --noEmit`             | exit 0              |
-| Build     | `pnpm run build`                     | exit 0              |
+| Purpose   | Command                            | Expected on success |
+| --------- | ---------------------------------- | ------------------- |
+| Rust test | `cd src-tauri && cargo test --lib` | all pass            |
+| TS test   | `pnpm test`                        | all pass            |
+| Typecheck | `pnpm exec tsc --noEmit`           | exit 0              |
+| Build     | `pnpm run build`                   | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src-tauri/src/ai.rs` (consume the shared prompt resource)
 - `src/lib/ai.ts` (consume the shared prompt resource)
 - A new shared prompt resource (see steps — one of the two options)
@@ -68,8 +69,9 @@ changes touch one place.
   `src/lib/__tests__/` if any)
 
 **Out of scope** (do NOT touch):
+
 - The parser implementations themselves (plans 001/011 just fixed them —
-  this plan only *documents* their contract).
+  this plan only _documents_ their contract).
 - Any UI file.
 
 ## Git workflow

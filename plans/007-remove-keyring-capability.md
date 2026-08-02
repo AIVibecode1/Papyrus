@@ -43,11 +43,7 @@ honors the project's own least-privilege rule (AGENTS.md). Also trims
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "opener:default",
-    "keyring:default"
-  ]
+  "permissions": ["core:default", "opener:default", "keyring:default"]
 }
 ```
 
@@ -61,18 +57,20 @@ honors the project's own least-privilege rule (AGENTS.md). Also trims
 
 ## Commands you will need
 
-| Purpose      | Command                             | Expected on success |
-|--------------|-------------------------------------|---------------------|
-| Rust check   | `cd src-tauri && cargo check`       | Finished, no warnings |
-| Dev compile  | `cd src-tauri && cargo build`       | exit 0              |
-| Typecheck    | `pnpm exec tsc --noEmit`            | exit 0              |
+| Purpose     | Command                       | Expected on success   |
+| ----------- | ----------------------------- | --------------------- |
+| Rust check  | `cd src-tauri && cargo check` | Finished, no warnings |
+| Dev compile | `cd src-tauri && cargo build` | exit 0                |
+| Typecheck   | `pnpm exec tsc --noEmit`      | exit 0                |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src-tauri/capabilities/default.json`
 
 **Out of scope** (do NOT touch):
+
 - `src-tauri/src/ai.rs` — keyring usage stays Rust-side (that's the point).
 - Any frontend file; any other capability file.
 
@@ -95,6 +93,7 @@ In `src-tauri/capabilities/default.json`, replace the permissions array with:
 ```
 
 Notes:
+
 - `opener:allow-open-url` is the only opener permission the app needs
   (PDF links via `openUrl`); the app never calls `revealItemInDir` or
   `openPath`.

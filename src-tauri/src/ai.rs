@@ -4,11 +4,11 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tauri::ipc::Channel;
 use tauri_plugin_keyring::KeyringExt;
 
-use crate::papers::{shared_client, Paper};
+use crate::papers::{Paper, shared_client};
 
 const KEYRING_SERVICE: &str = "papyrus";
 const EXPLAIN_TIMEOUT: Duration = Duration::from_secs(120);
@@ -136,9 +136,7 @@ fn load_key(app: &tauri::AppHandle, provider: &ProviderConfig) -> Result<String,
     match key {
         Some(k) => Ok(k),
         None if is_local => Ok(String::new()),
-        None => Err(
-            "No API key found for this provider. Add it in Settings → Providers.".into(),
-        ),
+        None => Err("No API key found for this provider. Add it in Settings → Providers.".into()),
     }
 }
 
@@ -222,17 +220,16 @@ async fn stream_chat(
                     if data == "[DONE]" {
                         return Ok(full);
                     }
-                    if let Ok(value) = serde_json::from_str::<Value>(data) {
-                        if let Some(content) = value
+                    if let Ok(value) = serde_json::from_str::<Value>(data)
+                        && let Some(content) = value
                             .pointer("/choices/0/delta/content")
                             .and_then(|c| c.as_str())
-                        {
-                            if CANCEL_EXPLAIN.load(Ordering::SeqCst) {
-                                return Err(cancelled_marker().into());
-                            }
-                            full.push_str(content);
-                            on_chunk(content);
+                    {
+                        if CANCEL_EXPLAIN.load(Ordering::SeqCst) {
+                            return Err(cancelled_marker().into());
                         }
+                        full.push_str(content);
+                        on_chunk(content);
                     }
                 }
             }
@@ -346,7 +343,7 @@ pub async fn explain_paper(
         "temperature": 0.4,
     });
 
-    stream_chat(&client, &url, &key, body, EXPLAIN_TIMEOUT, &mut |chunk| {
+    stream_chat(client, &url, &key, body, EXPLAIN_TIMEOUT, &mut |chunk| {
         let _ = on_chunk.send(chunk.to_string());
     })
     .await
@@ -371,7 +368,7 @@ pub async fn test_provider(
         "max_tokens": 8,
     });
 
-    let reply = stream_chat(&client, &url, &key, body, TEST_TIMEOUT, &mut |_| {}).await?;
+    let reply = stream_chat(client, &url, &key, body, TEST_TIMEOUT, &mut |_| {}).await?;
     Ok(reply.trim().to_string())
 }
 
@@ -465,7 +462,10 @@ mod tests {
             "http://[::1]:11434/v1/chat/completions"
         );
         let remote_err = "HTTP (plaintext) base URLs are only allowed for local servers (localhost). Use https:// for remote providers.";
-        assert_eq!(build_chat_url("http://192.168.1.5/v1"), Err(remote_err.into()));
+        assert_eq!(
+            build_chat_url("http://192.168.1.5/v1"),
+            Err(remote_err.into())
+        );
         assert_eq!(
             build_chat_url("http://api.example.com/v1"),
             Err(remote_err.into())

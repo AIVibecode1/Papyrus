@@ -50,19 +50,14 @@ async function newPage(browser, { theme, lang }) {
 async function gotoPapers(page) {
   await page.goto(APP_URL, { waitUntil: "networkidle0", timeout: 30000 });
   // Wait for the paper list to render (h3 = paper title).
-  await page.waitForFunction(
-    () => document.querySelectorAll("h3").length > 0,
-    { timeout: 15000 },
-  );
+  await page.waitForFunction(() => document.querySelectorAll("h3").length > 0, { timeout: 15000 });
   // Let fonts/layout settle.
   await new Promise((r) => setTimeout(r, 1200));
 }
 
 function findButtonByText(page, text) {
   return page.evaluate((t) => {
-    const btn = [...document.querySelectorAll("button")].find(
-      (b) => b.textContent.trim() === t,
-    );
+    const btn = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === t);
     if (!btn) return null;
     btn.click();
     return true;
@@ -125,8 +120,7 @@ async function captureSettings(browser, file) {
   // Settings page rendered: heading + seeded provider card.
   await page.waitForFunction(
     () =>
-      document.querySelectorAll("h1").length > 0 &&
-      document.body.textContent.includes("Mock AI"),
+      document.querySelectorAll("h1").length > 0 && document.body.textContent.includes("Mock AI"),
     { timeout: 15000 },
   );
   await new Promise((r) => setTimeout(r, 800));
@@ -138,9 +132,7 @@ async function captureSettings(browser, file) {
 async function main() {
   const executablePath = BROWSER_CANDIDATES.find((p) => fs.existsSync(p));
   if (!executablePath) {
-    throw new Error(
-      `No browser found at: ${BROWSER_CANDIDATES.join(" | ")}`,
-    );
+    throw new Error(`No browser found at: ${BROWSER_CANDIDATES.join(" | ")}`);
   }
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -174,9 +166,7 @@ async function main() {
       // DOM before capture (papers rendered, explanation text present,
       // settings page + provider card), and sparse pages such as Settings
       // legitimately compress below 50 KB.
-      console.warn(
-        `  WARN: ${f} is under 50 KB — eyeball it to rule out a blank capture`,
-      );
+      console.warn(`  WARN: ${f} is under 50 KB — eyeball it to rule out a blank capture`);
     }
   }
 }

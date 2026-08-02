@@ -61,11 +61,7 @@ export function ExplainPanel({ paper }: ExplainPanelProps) {
           </Button>
         )}
         {!busy && status !== "idle" && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => provider && handleStart(provider)}
-          >
+          <Button size="sm" variant="outline" onClick={() => provider && handleStart(provider)}>
             <RotateCcw className="size-3.5" />
             {t("explain.regenerate")}
           </Button>
@@ -116,7 +112,12 @@ export function ExplainPanel({ paper }: ExplainPanelProps) {
           </span>
           <span className="text-muted-foreground">{explanation.error}</span>
           {provider && (
-            <Button size="sm" variant="outline" className="self-start" onClick={() => handleStart(provider)}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="self-start"
+              onClick={() => handleStart(provider)}
+            >
               {t("explain.retry")}
             </Button>
           )}

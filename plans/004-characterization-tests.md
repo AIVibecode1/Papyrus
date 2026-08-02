@@ -47,18 +47,20 @@ desired behavior where noted.
 ## Commands you will need
 
 | Purpose   | Command                  | Expected on success |
-|-----------|--------------------------|---------------------|
+| --------- | ------------------------ | ------------------- |
 | Test      | `pnpm test`              | all pass            |
 | Typecheck | `pnpm exec tsc --noEmit` | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src/stores/__tests__/explanation.test.ts` (create)
 - `src/stores/__tests__/settings.test.ts` (create)
 - `src/lib/__tests__/ai-parser.test.ts` (create)
 
 **Out of scope** (do NOT touch):
+
 - Any app source file — this plan only ADDS tests. Bug fixes land in
   plans 005 (cancellation), 011 (browser stop), 015 (coalescing).
   Write the tests to document CURRENT behavior; where current behavior is

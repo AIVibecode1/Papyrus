@@ -35,17 +35,17 @@ per-provider errors (`ai.rs:104-113`). A failover loop in Rust turns
 - `src/features/papers/paper-card.tsx:44-52`:
 
 ```ts
-  const handleExplain = () => {
-    if (expanded) {
-      toggle(paper.id);
-      return;
-    }
+const handleExplain = () => {
+  if (expanded) {
     toggle(paper.id);
-    const provider = providers.find((p) => p.id === activeProviderId) ?? providers[0];
-    if (provider) {
-      void start(paper, provider, i18n.language);
-    }
-  };
+    return;
+  }
+  toggle(paper.id);
+  const provider = providers.find((p) => p.id === activeProviderId) ?? providers[0];
+  if (provider) {
+    void start(paper, provider, i18n.language);
+  }
+};
 ```
 
 - `src-tauri/src/ai.rs` — `explain_paper(provider, paper, language, on_chunk)`
@@ -58,19 +58,21 @@ per-provider errors (`ai.rs:104-113`). A failover loop in Rust turns
 
 ## Commands you will need
 
-| Purpose   | Command                              | Expected on success |
-|-----------|--------------------------------------|---------------------|
-| Rust check| `cd src-tauri && cargo check`        | Finished, no warnings |
-| Typecheck | `pnpm exec tsc --noEmit`             | exit 0              |
+| Purpose    | Command                       | Expected on success   |
+| ---------- | ----------------------------- | --------------------- |
+| Rust check | `cd src-tauri && cargo check` | Finished, no warnings |
+| Typecheck  | `pnpm exec tsc --noEmit`      | exit 0                |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `docs/spikes/provider-failover.md` (create — THE DELIVERABLE)
 - Optionally a throwaway scratch file under `dev/spike-*` (deleted before
   finishing; never committed into `src/` or `src-tauri/src/`)
 
 **Out of scope** (do NOT touch):
+
 - Any app source file. The feature itself.
 
 ## Git workflow
@@ -90,7 +92,7 @@ Answer these in writing, using the code as evidence:
    hybrid. Consider: keys must stay in Rust (plan 007); the store owns the
    per-paper status machine; `on_chunk` streaming means a mid-stream
    failure can't cleanly retry (partial text already delivered) — so
-   failover applies only to *pre-first-chunk* failures. Which layer can
+   failover applies only to _pre-first-chunk_ failures. Which layer can
    express "retry only if zero chunks were delivered"?
 2. **Ordering & selection**: try active first, then the rest in
    configuration order? Should the store remember "last provider that

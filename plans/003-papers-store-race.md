@@ -23,11 +23,11 @@
 
 Rapid category switching (A → B → C) fires overlapping `fetchPapers` calls.
 Each `refresh()` captures the category at call time and applies its result
-unconditionally — so a slow response for category B can resolve *after* the
+unconditionally — so a slow response for category B can resolve _after_ the
 response for C, overwriting C's list while the sidebar highlights C. On the
 app's core screen the user sees a mismatch: highlighted category, wrong
 papers. The Rust backend's 3-second arXiv rate limiter makes overlapping
-requests the *normal* case when clicking through categories quickly.
+requests the _normal_ case when clicking through categories quickly.
 
 ## Current state
 
@@ -61,7 +61,7 @@ requests the *normal* case when clicking through categories quickly.
 ## Commands you will need
 
 | Purpose   | Command                  | Expected on success |
-|-----------|--------------------------|---------------------|
+| --------- | ------------------------ | ------------------- |
 | Test      | `pnpm test`              | all pass            |
 | Typecheck | `pnpm exec tsc --noEmit` | exit 0              |
 | Build     | `pnpm run build`         | exit 0              |
@@ -69,10 +69,12 @@ requests the *normal* case when clicking through categories quickly.
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src/stores/papers.ts`
 - `src/stores/__tests__/papers.test.ts` (create)
 
 **Out of scope** (do NOT touch):
+
 - `src/lib/arxiv.ts` — the fetch layer; the race is in the store.
 - Any Rust code; any other store.
 

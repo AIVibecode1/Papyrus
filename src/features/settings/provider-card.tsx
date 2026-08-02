@@ -81,12 +81,7 @@ export function ProviderCard({
             )}
           </div>
           <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => void handleTest()}
-              disabled={testing}
-            >
+            <Button size="sm" variant="ghost" onClick={() => void handleTest()} disabled={testing}>
               {testing ? (
                 <Loader2 className="size-3.5 animate-spin" />
               ) : (

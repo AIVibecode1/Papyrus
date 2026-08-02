@@ -20,9 +20,7 @@ export function TopBar() {
             <ScrollText className="size-4" />
           </div>
           <span className="text-base font-bold tracking-tight">{t("app.name")}</span>
-          <span className="hidden text-sm text-muted-foreground sm:inline">
-            {t("app.tagline")}
-          </span>
+          <span className="hidden text-sm text-muted-foreground sm:inline">{t("app.tagline")}</span>
         </div>
 
         <div className="flex items-center gap-2">

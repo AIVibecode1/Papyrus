@@ -31,8 +31,7 @@ export const useExplanationStore = create<ExplanationState>((set, get) => ({
   expandedId: null,
   generations: {},
 
-  toggle: (paperId) =>
-    set((s) => ({ expandedId: s.expandedId === paperId ? null : paperId })),
+  toggle: (paperId) => set((s) => ({ expandedId: s.expandedId === paperId ? null : paperId })),
 
   start: async (paper, provider, language) => {
     const id = paper.id;

@@ -2,16 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 // Shared resource: the same file the Rust backend reads (include_str! in
 // src-tauri/src/ai.rs) — these tests pin the cross-language contract.
 import prompts from "../../../src-tauri/prompts.json";
-import {
-  CANCELLED_MARKER,
-  normalizeBaseUrl,
-  streamExplanation,
-} from "@/lib/ai";
+import { CANCELLED_MARKER, normalizeBaseUrl, streamExplanation } from "@/lib/ai";
 import type { Paper, ProviderConfig } from "@/lib/types";
 
 // isTauri() checks "__TAURI_INTERNALS__" in window; node has no window, so
 // provide an empty one to force the browser (fetch-based) path.
-globalThis.window = {} as any;
+globalThis.window = {} as unknown as Window & typeof globalThis;
 
 // Mirrors sample_paper() in src-tauri/src/ai.rs so the message-shape test
 // asserts exactly what messages_follow_ui_language asserts in Rust.
@@ -53,18 +49,14 @@ describe("cross-language contract checks", () => {
     // append /chat/completions unless already present (plan 008).
     expect(normalizeBaseUrl("https://x/v1")).toBe("https://x/v1/chat/completions");
     expect(normalizeBaseUrl("https://x/v1/")).toBe("https://x/v1/chat/completions");
-    expect(normalizeBaseUrl("https://x/v1/chat/completions")).toBe(
-      "https://x/v1/chat/completions",
-    );
+    expect(normalizeBaseUrl("https://x/v1/chat/completions")).toBe("https://x/v1/chat/completions");
     // Loopback http:// is allowed Rust-side only (see the divergence note
     // above normalizeBaseUrl); the TS dev path keeps the simpler rule.
   });
 
   it("builds the user message in the exact shape messages_follow_ui_language asserts (Rust)", async () => {
     const onChunk = vi.fn();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(new Response("data: [DONE]\n\n", { status: 200 }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response("data: [DONE]\n\n", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     try {
       await streamExplanation({ provider, paper, language: "en", onChunk });

@@ -42,18 +42,20 @@ the parser; this plan pins the rest of the behavior.
 
 ## Commands you will need
 
-| Purpose   | Command                            | Expected on success |
-|-----------|------------------------------------|---------------------|
-| Rust test | `cd src-tauri && cargo test --lib` | all pass            |
-| Rust check| `cd src-tauri && cargo check`      | Finished, no warnings |
+| Purpose    | Command                            | Expected on success   |
+| ---------- | ---------------------------------- | --------------------- |
+| Rust test  | `cd src-tauri && cargo test --lib` | all pass              |
+| Rust check | `cd src-tauri && cargo check`      | Finished, no warnings |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src-tauri/src/ai.rs` (tests only)
 - `src-tauri/src/papers.rs` (tests only)
 
 **Out of scope** (do NOT touch):
+
 - Non-test code — if a test exposes a bug in non-test code, report it
   (STOP condition) instead of fixing silently; the fix belongs in its own
   plan.
@@ -97,9 +99,9 @@ Using `spawn_mock_server_chunked`, add tests:
 ### Step 3: Unit tests for the small untested units
 
 - `load_key` — needs an `AppHandle` (hard to construct in tests). Test the
-  *logic* instead: extract the local-host detection into a testable
+  _logic_ instead: extract the local-host detection into a testable
   function if it isn't already (e.g. `fn is_local_base_url(url: &str) ->
-  bool`) — if extraction is needed, it's a tiny refactor of `ai.rs:77`;
+bool`) — if extraction is needed, it's a tiny refactor of `ai.rs:77`;
   then test: `localhost` → true, `127.0.0.1` → true, `https://api.x.com` →
   false. (Do NOT mock the keyring; only the pure function.)
 - `validate_provider` — direct unit tests: valid config passes; empty id /

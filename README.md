@@ -5,7 +5,7 @@
 Papyrus is a free, open-source desktop app (Windows + macOS) that:
 
 - Shows the **newest papers** from arXiv in the fields you care about (AI, ML, NLP, Vision…)
-- **Explains any paper in plain language** using *your* AI provider — OpenAI, OpenRouter, DeepSeek, Groq, Ollama, or any OpenAI-compatible endpoint (custom base URL)
+- **Explains any paper in plain language** using _your_ AI provider — OpenAI, OpenRouter, DeepSeek, Groq, Ollama, or any OpenAI-compatible endpoint (custom base URL)
 - Speaks **English and Arabic** natively, with full RTL support
 - Keeps your API keys in the **OS keychain** (Windows Credential Manager / macOS Keychain) — nothing leaves your device except the request to the provider you configured
 
@@ -13,23 +13,23 @@ Built with **Tauri 2 · React · TypeScript · Tailwind CSS · shadcn/ui · Zust
 
 ## Features
 
-| | |
-|---|---|
-| 📄 Latest papers | arXiv API, newest first, 6 fields (AI, ML, NLP, CV, Neural, Stats) + refresh |
-| ✨ AI explanations | Streaming, in the current UI language (English or Arabic), stop/regenerate |
-| 🔑 Your providers | OpenAI, OpenRouter, DeepSeek, Groq, Ollama (local) or any custom base URL + model |
-| 🔒 Privacy first | Keys stored in the OS keychain; paper fetching and AI calls happen in the Rust backend |
-| 🌍 Bilingual | Instant EN ⇄ AR switching, full RTL, Cairo font |
-| 🌗 Theme | Light & dark mode |
+|                    |                                                                                        |
+| ------------------ | -------------------------------------------------------------------------------------- |
+| 📄 Latest papers   | arXiv API, newest first, 6 fields (AI, ML, NLP, CV, Neural, Stats) + refresh           |
+| ✨ AI explanations | Streaming, in the current UI language (English or Arabic), stop/regenerate             |
+| 🔑 Your providers  | OpenAI, OpenRouter, DeepSeek, Groq, Ollama (local) or any custom base URL + model      |
+| 🔒 Privacy first   | Keys stored in the OS keychain; paper fetching and AI calls happen in the Rust backend |
+| 🌍 Bilingual       | Instant EN ⇄ AR switching, full RTL, Cairo font                                        |
+| 🌗 Theme           | Light & dark mode                                                                      |
 
 ## Screenshots
 
-| Papers (EN) | Explanation (AR, dark) |
-|---|---|
+| Papers (EN)                                     | Explanation (AR, dark)                               |
+| ----------------------------------------------- | ---------------------------------------------------- |
 | ![Papers](docs/screenshots/papers-en-light.png) | ![Explanation](docs/screenshots/explain-ar-dark.png) |
 
-| Settings (AR) | Dark mode (EN) |
-|---|---|
+| Settings (AR)                                       | Dark mode (EN)                               |
+| --------------------------------------------------- | -------------------------------------------- |
 | ![Settings](docs/screenshots/settings-ar-light.png) | ![Dark](docs/screenshots/papers-en-dark.png) |
 
 ## Development
@@ -72,6 +72,20 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Rust: parsing, streaming, er
 pnpm test                                          # Frontend unit tests (Vitest)
 pnpm run build                                     # TypeScript strict + production build
 ```
+
+### Lint, types and formatting
+
+```bash
+pnpm lint            # ESLint (flat config)
+pnpm typecheck       # TypeScript strict (tsc --noEmit)
+pnpm format          # Prettier — write formatting fixes
+pnpm format:check    # Prettier — verify formatting (CI runs this)
+```
+
+Pre-commit hooks (via [lefthook](https://lefthook.dev)) run typecheck, lint,
+formatting checks, and `cargo fmt --check` automatically on every commit. CI
+(GitHub Actions) runs the same gates plus the Rust suite and desktop builds
+on Windows and macOS.
 
 A live arXiv fetch test is included but ignored by default (requires network):
 

@@ -42,19 +42,21 @@ Coming soon.
 
 ## Commands you will need
 
-| Purpose        | Command                    | Expected on success |
-|----------------|----------------------------|---------------------|
-| Dev server     | `pnpm dev` (background)    | serves :1420        |
-| Mock AI server | `pnpm mock-ai` (background)| serves :8765        |
-| Typecheck      | `pnpm exec tsc --noEmit`   | exit 0              |
+| Purpose        | Command                     | Expected on success |
+| -------------- | --------------------------- | ------------------- |
+| Dev server     | `pnpm dev` (background)     | serves :1420        |
+| Mock AI server | `pnpm mock-ai` (background) | serves :8765        |
+| Typecheck      | `pnpm exec tsc --noEmit`    | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `README.md`
 - `docs/screenshots/` (create; store PNGs there)
 
 **Out of scope** (do NOT touch):
+
 - App code; any other docs.
 
 ## Git workflow
@@ -100,12 +102,12 @@ Replace the placeholder:
 ```md
 ## Screenshots
 
-| Papers (EN) | Explanation (AR, dark) |
-|---|---|
+| Papers (EN)                                     | Explanation (AR, dark)                               |
+| ----------------------------------------------- | ---------------------------------------------------- |
 | ![Papers](docs/screenshots/papers-en-light.png) | ![Explanation](docs/screenshots/explain-ar-dark.png) |
 
-| Settings (AR) | Dark mode (EN) |
-|---|---|
+| Settings (AR)                                       | Dark mode (EN)                               |
+| --------------------------------------------------- | -------------------------------------------- |
 | ![Settings](docs/screenshots/settings-ar-light.png) | ![Dark](docs/screenshots/papers-en-dark.png) |
 ```
 

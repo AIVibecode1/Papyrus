@@ -5,6 +5,7 @@
 This is an open-source cross-platform desktop application (Windows + macOS) built with **Tauri 2**.
 
 **Core purpose:**
+
 - Fetch the latest research papers (primarily from arXiv) in user-selected fields (AI, ML, CS, etc.)
 - Explain selected papers using the user's own AI providers / API keys
 - Fully bilingual: English + Arabic with proper RTL support
@@ -18,6 +19,7 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
 ## Critical Rules (Must Follow)
 
 ### 1. Package Installation Rule
+
 - **Never** install any packages globally.
 - **Never** install packages outside the project folder.
 - All dependencies must be installed **locally** inside the project using:
@@ -27,6 +29,7 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
 - Always prefer project-local tools and virtual environments.
 
 ### 2. Security First
+
 - Always prioritize security practices.
 - Never hardcode API keys or secrets.
 - Store all user API keys using Tauri's secure storage / OS keychain.
@@ -36,12 +39,14 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
 - Prefer secure defaults in every feature.
 
 ### 3. Platform Reality
+
 - The main developer is building and testing on **Windows**.
 - Do **not** assume Mac-specific behavior can be tested.
 - Write cross-platform code, but prioritize Windows compatibility and testing.
 - Avoid Mac-only APIs or assumptions unless clearly marked as optional.
 
 ### 4. When in Doubt
+
 - If you have any doubt about the best approach, libraries, patterns, or current best practices → **search** first.
 - You are allowed and encouraged to use **Tavily search** (or web search) to verify information before implementing.
 - Prefer verified, up-to-date information over assumptions.
@@ -115,6 +120,7 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
 ## Important Do's and Don'ts
 
 **Do:**
+
 - Make the app feel fast and responsive.
 - Handle loading, empty, and error states properly.
 - Keep API key management clear and secure.
@@ -122,6 +128,7 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
 - Search (or use Tavily) when unsure.
 
 **Don't:**
+
 - Don't install any packages globally or outside the project.
 - Don't force users to use a specific AI provider.
 - Don't store API keys insecurely.

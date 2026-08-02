@@ -60,17 +60,19 @@ complete lines. Repo conventions: error strings are plain `String` via
 
 ## Commands you will need
 
-| Purpose   | Command                              | Expected on success |
-|-----------|--------------------------------------|---------------------|
-| Rust test | `cd src-tauri && cargo test --lib`   | all pass            |
-| Rust check| `cd src-tauri && cargo check`        | Finished, no warnings |
+| Purpose    | Command                            | Expected on success   |
+| ---------- | ---------------------------------- | --------------------- |
+| Rust test  | `cd src-tauri && cargo test --lib` | all pass              |
+| Rust check | `cd src-tauri && cargo check`      | Finished, no warnings |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src-tauri/src/ai.rs`
 
 **Out of scope** (do NOT touch, even though they look related):
+
 - `src/lib/ai.ts` — the browser parser; it is already correct and is
   handled by plan 016 (dedup), not here.
 - The non-streaming JSON branch (`ai.rs:162+`) and everything else.

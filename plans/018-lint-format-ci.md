@@ -47,17 +47,18 @@ standard Tauri 2 CI workflow uses `tauri-apps/tauri-action`
 
 ## Commands you will need
 
-| Purpose   | Command                    | Expected on success |
-|-----------|----------------------------|---------------------|
-| Install   | `pnpm add -D eslint typescript-eslint @eslint/js prettier eslint-config-prettier` | exit 0 |
-| Lint      | `pnpm lint`                | exit 0              |
-| Format    | `pnpm format`              | exit 0              |
-| Typecheck | `pnpm exec tsc --noEmit`   | exit 0              |
-| CI checks | see steps                 | exit 0              |
+| Purpose   | Command                                                                           | Expected on success |
+| --------- | --------------------------------------------------------------------------------- | ------------------- |
+| Install   | `pnpm add -D eslint typescript-eslint @eslint/js prettier eslint-config-prettier` | exit 0              |
+| Lint      | `pnpm lint`                                                                       | exit 0              |
+| Format    | `pnpm format`                                                                     | exit 0              |
+| Typecheck | `pnpm exec tsc --noEmit`                                                          | exit 0              |
+| CI checks | see steps                                                                         | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `package.json` (scripts + devDependencies)
 - `eslint.config.mjs` (create), `.prettierrc.json` (create), `.editorconfig` (create)
 - `src-tauri/src/` (only if `cargo fmt` reformats — that's expected and in scope)
@@ -65,6 +66,7 @@ standard Tauri 2 CI workflow uses `tauri-apps/tauri-action`
 - `README.md` (dev section: document lint/format/typecheck)
 
 **Out of scope** (do NOT touch):
+
 - App behavior; store/component logic; Rust logic. `pnpm test` wiring is
   plan 002's scope (do not add vitest here).
 
@@ -101,17 +103,14 @@ export default tseslint.config(
 );
 ```
 
-   (If `projectService` typing complains, use the non-type-checked
-   `tseslint.configs.recommended` only — the important rules are the base
-   ones plus `react-hooks` if the plugin installs cleanly; keep it minimal
-   and working over maximal.)
-3. Add scripts: `"lint": "pnpm exec eslint ."`,
-   `"typecheck": "pnpm exec tsc --noEmit"`.
-4. Change the `build` script to use the new typecheck script:
-   `"build": "pnpm typecheck && pnpm exec vite build"` (or keep inline —
-   either is fine; the point is `pnpm run typecheck` exists standalone).
-5. Also add `"dev:check": "pnpm typecheck && pnpm lint"`? No — keep the
-   script list minimal (lint, typecheck, format).
+(If `projectService` typing complains, use the non-type-checked
+`tseslint.configs.recommended` only — the important rules are the base
+ones plus `react-hooks` if the plugin installs cleanly; keep it minimal
+and working over maximal.) 3. Add scripts: `"lint": "pnpm exec eslint ."`,
+`"typecheck": "pnpm exec tsc --noEmit"`. 4. Change the `build` script to use the new typecheck script:
+`"build": "pnpm typecheck && pnpm exec vite build"` (or keep inline —
+either is fine; the point is `pnpm run typecheck` exists standalone). 5. Also add `"dev:check": "pnpm typecheck && pnpm lint"`? No — keep the
+script list minimal (lint, typecheck, format).
 
 **Verify**: `pnpm lint` → exit 0 (fix any pre-existing violations the
 rules flag; plan 014 removed the known one). If `react-hooks` rules were
@@ -132,13 +131,10 @@ added and flag the effect in `settings-page.tsx`, apply plan 014's
 }
 ```
 
-   (Match the existing code style — the current code uses double quotes,
-   semicolons, ~90-100 width. Adjust if the existing style differs.)
-3. Add `"format": "pnpm exec prettier --write ."` and
-   `"format:check": "pnpm exec prettier --check ."`.
-4. Run `pnpm format` — expect it to reformat files; review the diff is
-   style-only.
-5. Create `.editorconfig` (indent 2 spaces, utf-8, lf — standard).
+(Match the existing code style — the current code uses double quotes,
+semicolons, ~90-100 width. Adjust if the existing style differs.) 3. Add `"format": "pnpm exec prettier --write ."` and
+`"format:check": "pnpm exec prettier --check ."`. 4. Run `pnpm format` — expect it to reformat files; review the diff is
+style-only. 5. Create `.editorconfig` (indent 2 spaces, utf-8, lf — standard).
 
 **Verify**: `pnpm format:check` → exit 0; `pnpm lint` → exit 0;
 `pnpm exec tsc --noEmit` → exit 0.
@@ -166,8 +162,8 @@ pre-commit:
       run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 ```
 
-   (Adjust `{staged_files}` syntax to the lefthook version installed —
-   check `pnpm exec lefthook --version` docs if it errors.)
+(Adjust `{staged_files}` syntax to the lefthook version installed —
+check `pnpm exec lefthook --version` docs if it errors.)
 
 **Verify**: `pnpm exec lefthook run pre-commit` (dry run) → all commands pass.
 
@@ -224,10 +220,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-  Note: `pnpm test` requires plan 002 to have landed. If it hasn't, omit
-  that line and add it when 002 lands (note in the status row).
-  Rust toolchain: `cargo fmt`/`clippy` need the components; locally
-  `rustup component add rustfmt clippy` if missing.
+Note: `pnpm test` requires plan 002 to have landed. If it hasn't, omit
+that line and add it when 002 lands (note in the status row).
+Rust toolchain: `cargo fmt`/`clippy` need the components; locally
+`rustup component add rustfmt clippy` if missing.
 
 **Verify**: workflow file is valid YAML (`node -e "require('yaml')"` is
 not available — validate by inspection or `python -c "import yaml"` if

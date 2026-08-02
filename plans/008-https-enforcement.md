@@ -57,18 +57,20 @@ fn build_chat_url(base: &str) -> Result<String, String> {
 
 ## Commands you will need
 
-| Purpose   | Command                            | Expected on success |
-|-----------|------------------------------------|---------------------|
-| Rust test | `cd src-tauri && cargo test --lib` | all pass            |
-| Rust check| `cd src-tauri && cargo check`      | Finished, no warnings |
+| Purpose    | Command                            | Expected on success   |
+| ---------- | ---------------------------------- | --------------------- |
+| Rust test  | `cd src-tauri && cargo test --lib` | all pass              |
+| Rust check | `cd src-tauri && cargo check`      | Finished, no warnings |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src-tauri/src/ai.rs`
 - `src-tauri/src/papers.rs`
 
 **Out of scope** (do NOT touch):
+
 - `src/lib/ai.ts` — the browser path (`normalizeBaseUrl`) mirrors this
   logic and is dev-only; plan 016 (dedup) will align them. If the TS side
   diverges behaviorally it only affects the browser preview.
@@ -162,5 +164,5 @@ Stop and report back (do not improvise) if:
 
 - Plan 016 (dedup) must mirror these rules into the shared contract so the
   browser preview behaves identically.
-- If the settings UI later wants to *warn* instead of hard-error for
+- If the settings UI later wants to _warn_ instead of hard-error for
   http:// LAN providers, the error message is the extension point.

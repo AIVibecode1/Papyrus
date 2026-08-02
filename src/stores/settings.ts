@@ -19,10 +19,16 @@ function isProviderConfig(value: unknown): value is ProviderConfig {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
-    typeof v.id === "string" && v.id.length > 0 && v.id.length <= 64 &&
-    typeof v.name === "string" && v.name.length > 0 && v.name.length <= 64 &&
-    typeof v.baseUrl === "string" && v.baseUrl.length > 0 &&
-    typeof v.model === "string" && v.model.length > 0
+    typeof v.id === "string" &&
+    v.id.length > 0 &&
+    v.id.length <= 64 &&
+    typeof v.name === "string" &&
+    v.name.length > 0 &&
+    v.name.length <= 64 &&
+    typeof v.baseUrl === "string" &&
+    v.baseUrl.length > 0 &&
+    typeof v.model === "string" &&
+    v.model.length > 0
   );
 }
 
@@ -49,12 +55,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   load: () => {
     if (get().loaded) return;
     try {
-      const parsed = JSON.parse(
-        localStorage.getItem(STORAGE_KEY) ?? "[]",
-      ) as unknown;
-      const providers = Array.isArray(parsed)
-        ? parsed.filter(isProviderConfig)
-        : [];
+      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]") as unknown;
+      const providers = Array.isArray(parsed) ? parsed.filter(isProviderConfig) : [];
       let activeProviderId = localStorage.getItem(ACTIVE_KEY);
       if (
         typeof activeProviderId === "string" &&

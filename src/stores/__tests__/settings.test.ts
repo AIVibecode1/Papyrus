@@ -78,9 +78,7 @@ describe("settings store", () => {
     const s = useSettingsStore.getState();
     expect(s.providers).toEqual([provider]);
     expect(s.activeProviderId).toBe(provider.id);
-    expect(localStorageMock.getItem("papyrus-providers")).toBe(
-      JSON.stringify([provider]),
-    );
+    expect(localStorageMock.getItem("papyrus-providers")).toBe(JSON.stringify([provider]));
   });
 
   it("load with corrupted JSON does not throw", () => {
@@ -105,9 +103,7 @@ describe("settings store", () => {
     );
     useSettingsStore.getState().load();
     const s = useSettingsStore.getState();
-    expect(s.providers).toEqual([
-      { id: "a", name: "A", baseUrl: "https://x", model: "m" },
-    ]);
+    expect(s.providers).toEqual([{ id: "a", name: "A", baseUrl: "https://x", model: "m" }]);
   });
 
   it("load with non-array JSON yields empty", () => {

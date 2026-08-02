@@ -44,18 +44,20 @@ AGENTS.md).
 
 ## Commands you will need
 
-| Purpose   | Command            | Expected on success |
-|-----------|--------------------|---------------------|
-| None      | `git status`       | expected changes only |
+| Purpose | Command      | Expected on success   |
+| ------- | ------------ | --------------------- |
+| None    | `git status` | expected changes only |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `REF1.md`, `REF2.md` (move)
 - `docs/research/` (create)
 - `README.md` (only if it references REF files — check first)
 
 **Out of scope** (do NOT touch):
+
 - `AGENTS.md` — it's the live governance doc (plan 024 touches its
   "official keychain" claim separately).
 - Any code.

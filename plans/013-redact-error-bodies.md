@@ -48,25 +48,27 @@ removes.
   (browser path, test): `throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`)`.
 - API keys: user-supplied `sk-...`-style strings stored in the OS keychain;
   no known key format is enforced (any string allowed), so redaction must
-  target *token-like substrings* rather than a specific prefix.
+  target _token-like substrings_ rather than a specific prefix.
 
 ## Commands you will need
 
-| Purpose   | Command                            | Expected on success |
-|-----------|------------------------------------|---------------------|
-| Rust test | `cd src-tauri && cargo test --lib` | all pass            |
-| Rust check| `cd src-tauri && cargo check`      | Finished, no warnings |
-| TS test   | `pnpm test`                        | all pass            |
-| Typecheck | `pnpm exec tsc --noEmit`           | exit 0              |
+| Purpose    | Command                            | Expected on success   |
+| ---------- | ---------------------------------- | --------------------- |
+| Rust test  | `cd src-tauri && cargo test --lib` | all pass              |
+| Rust check | `cd src-tauri && cargo check`      | Finished, no warnings |
+| TS test    | `pnpm test`                        | all pass              |
+| Typecheck  | `pnpm exec tsc --noEmit`           | exit 0                |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src-tauri/src/ai.rs`
 - `src/lib/ai.ts`
 - Tests for both (in-file Rust tests; `src/lib/__tests__/` for TS)
 
 **Out of scope** (do NOT touch):
+
 - The keychain store; the settings UI; any other error path.
 
 ## Git workflow
@@ -108,8 +110,9 @@ fn redact_tokens(text: &str) -> String {
 }
 ```
 
-  (Adjust the pattern list to what's reasonable; the goal is masking
-  `sk-<run>`, not language policing. Keep it dependency-free.)
+(Adjust the pattern list to what's reasonable; the goal is masking
+`sk-<run>`, not language policing. Keep it dependency-free.)
+
 - Apply it in the error path: `truncate(&redact_tokens(&text), 300)`.
 - Add unit tests: a body containing `sk-abcdef123456` → the output contains
   `sk-***` and does NOT contain `abcdef123456`; a body without tokens →

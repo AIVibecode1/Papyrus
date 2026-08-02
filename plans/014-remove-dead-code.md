@@ -30,7 +30,7 @@ Three dead items confuse contributors and add surface:
 2. `src/components/ui/separator.tsx` and `src/components/ui/textarea.tsx`
    (shadcn components) have zero importers.
 3. `settings-page.tsx:70` carries an `// eslint-disable-next-line
-   react-hooks/exhaustive-deps` comment in a repo with no ESLint installed —
+react-hooks/exhaustive-deps` comment in a repo with no ESLint installed —
    it hides the genuine effect-dependency issue it annotates (the
    key-status effect keys on `providers.length` only) and will confuse
    whoever adds lint first (plan 018).
@@ -49,10 +49,10 @@ export function getKeyForProvider(providerId: string): string {
 - `src/features/settings/settings-page.tsx:68-71`:
 
 ```ts
-  useEffect(() => {
-    refreshKeyStates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providers.length]);
+useEffect(() => {
+  refreshKeyStates();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [providers.length]);
 ```
 
 - `src/components/ui/separator.tsx`, `src/components/ui/textarea.tsx` —
@@ -60,19 +60,21 @@ export function getKeyForProvider(providerId: string): string {
 
 ## Commands you will need
 
-| Purpose   | Command                     | Expected on success |
-|-----------|-----------------------------|---------------------|
-| Typecheck | `pnpm exec tsc --noEmit`    | exit 0              |
-| Build     | `pnpm run build`            | exit 0              |
+| Purpose   | Command                  | Expected on success |
+| --------- | ------------------------ | ------------------- |
+| Typecheck | `pnpm exec tsc --noEmit` | exit 0              |
+| Build     | `pnpm run build`         | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src/stores/settings.ts` (remove the export)
 - `src/features/settings/settings-page.tsx` (fix the effect deps + remove the suppression comment)
 - `src/components/ui/separator.tsx`, `src/components/ui/textarea.tsx` (delete)
 
 **Out of scope** (do NOT touch):
+
 - Other shadcn components (button, card, badge, skeleton, select, input, label — all used).
 - Any behavior change beyond the effect-deps fix.
 
@@ -101,16 +103,16 @@ importer via unused/unknown module errors).
 
 ### Step 2: Fix the key-status effect deps properly
 
-In `settings-page.tsx`, the effect should re-run when the provider *set*
+In `settings-page.tsx`, the effect should re-run when the provider _set_
 changes, not just the length (delete + re-add at constant length leaves
 stale badges — the defect plan 004's TEST-02 noted). Rewrite:
 
 ```ts
-  const providerIds = providers.map((p) => p.id).join(",");
+const providerIds = providers.map((p) => p.id).join(",");
 
-  useEffect(() => {
-    refreshKeyStates();
-  }, [providerIds]);
+useEffect(() => {
+  refreshKeyStates();
+}, [providerIds]);
 ```
 
 - Remove the `eslint-disable-next-line` comment.

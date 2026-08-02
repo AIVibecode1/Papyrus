@@ -11,14 +11,8 @@ const emptyForm = { name: "", baseUrl: "", model: "", key: "" };
 
 export function SettingsPage() {
   const { t } = useTranslation();
-  const {
-    providers,
-    activeProviderId,
-    removeProvider,
-    setActiveProvider,
-    deleteKey,
-    hasKey,
-  } = useSettingsStore();
+  const { providers, activeProviderId, removeProvider, setActiveProvider, deleteKey, hasKey } =
+    useSettingsStore();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -65,9 +59,7 @@ export function SettingsPage() {
     removeProvider(id);
   };
 
-  const editingProvider = editingId
-    ? providers.find((p) => p.id === editingId)
-    : undefined;
+  const editingProvider = editingId ? providers.find((p) => p.id === editingId) : undefined;
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 p-6">

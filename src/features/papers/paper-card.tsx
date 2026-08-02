@@ -63,7 +63,12 @@ export function PaperCard({ paper }: PaperCardProps) {
   };
 
   return (
-    <Card className={cn("transition-colors hover:border-foreground/20", expanded && "border-primary/50")}>
+    <Card
+      className={cn(
+        "transition-colors hover:border-foreground/20",
+        expanded && "border-primary/50",
+      )}
+    >
       <CardContent className="flex flex-col gap-2.5 p-5">
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-semibold leading-snug">{paper.title}</h3>
@@ -97,11 +102,7 @@ export function PaperCard({ paper }: PaperCardProps) {
             aria-label={favorited ? t("papers.saved") : t("papers.save")}
             className={favorited ? "text-primary" : "text-muted-foreground"}
           >
-            {favorited ? (
-              <BookmarkCheck className="size-4" />
-            ) : (
-              <Bookmark className="size-4" />
-            )}
+            {favorited ? <BookmarkCheck className="size-4" /> : <Bookmark className="size-4" />}
           </Button>
           <Button variant="outline" size="sm" asChild>
             <a href={paper.pdfUrl} target="_blank" rel="noreferrer" onClick={handleOpenPdf}>

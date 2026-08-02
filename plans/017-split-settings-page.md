@@ -44,7 +44,7 @@ surgical.
 ## Commands you will need
 
 | Purpose   | Command                  | Expected on success |
-|-----------|--------------------------|---------------------|
+| --------- | ------------------------ | ------------------- |
 | Test      | `pnpm test`              | all pass            |
 | Typecheck | `pnpm exec tsc --noEmit` | exit 0              |
 | Build     | `pnpm run build`         | exit 0              |
@@ -52,11 +52,13 @@ surgical.
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src/features/settings/settings-page.tsx` (slimmed)
 - `src/features/settings/provider-form.tsx` (create)
 - `src/features/settings/provider-card.tsx` (create)
 
 **Out of scope** (do NOT touch):
+
 - `src/stores/settings.ts` — the store API is the interface; no store changes.
 - Any behavior change (this is a pure extraction).
 
@@ -110,6 +112,7 @@ Create `src/features/settings/provider-card.tsx` exporting `ProviderCard`:
   key-status effect (plan 014's `providerIds` deps).
 
 **Verify**:
+
 - `pnpm test` → all pass (plan 004's settings store tests + any UI-adjacent suites)
 - `pnpm run build` → exit 0
 - Manual smoke (operator or browser preview): add/edit/delete provider,

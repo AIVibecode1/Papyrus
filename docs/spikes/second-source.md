@@ -6,14 +6,14 @@
 
 ## 0. Drift check (plan vs. live tree)
 
-| Plan claim | Live tree (verified 2026-08-02) |
-|---|---|
-| "Repo has no git commits yet" | Stale — 18 commits exist (baseline + plans 001–027). Commit workflow per operator instruction. |
-| `fetch_papers(category, max_results)` at `papers.rs:43-63` | Accurate but line-shifted — command is `src-tauri/src/papers.rs:52-94`; input validation `:58-68`; arXiv-only URL construction `:72-74`. |
-| `Paper` struct at `papers.rs:17-25` | Line-shifted — `papers.rs:26-36`; `#[derive(Debug, Serialize, Deserialize)]` with `#[serde(rename_all = "camelCase")]`; all seven fields required (`String`/`Vec<String>`). |
-| `src/lib/arxiv.ts` is the TS fetch wrapper | Accurate — `fetchPapers(category, maxResults)` at `arxiv.ts:25-37`; Tauri invoke vs. `src/dev/mock-papers.json` browser fallback. |
-| REF1.md:20-35 API notes | Archived (plan 022) but still in `docs/research/REF1.md`. **Stale on OpenAlex**: it claims "API key required now" — live probe 2026-08-02 shows keyless still works (smaller pool, see §2/§A). |
-| Plan 025 (search) not landed | Correct — README row 025 is TODO; `fetch_papers` has no `query` param yet. This design composes with 025's `query` per the plan brief. |
+| Plan claim                                                 | Live tree (verified 2026-08-02)                                                                                                                                                                |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Repo has no git commits yet"                              | Stale — 18 commits exist (baseline + plans 001–027). Commit workflow per operator instruction.                                                                                                 |
+| `fetch_papers(category, max_results)` at `papers.rs:43-63` | Accurate but line-shifted — command is `src-tauri/src/papers.rs:52-94`; input validation `:58-68`; arXiv-only URL construction `:72-74`.                                                       |
+| `Paper` struct at `papers.rs:17-25`                        | Line-shifted — `papers.rs:26-36`; `#[derive(Debug, Serialize, Deserialize)]` with `#[serde(rename_all = "camelCase")]`; all seven fields required (`String`/`Vec<String>`).                    |
+| `src/lib/arxiv.ts` is the TS fetch wrapper                 | Accurate — `fetchPapers(category, maxResults)` at `arxiv.ts:25-37`; Tauri invoke vs. `src/dev/mock-papers.json` browser fallback.                                                              |
+| REF1.md:20-35 API notes                                    | Archived (plan 022) but still in `docs/research/REF1.md`. **Stale on OpenAlex**: it claims "API key required now" — live probe 2026-08-02 shows keyless still works (smaller pool, see §2/§A). |
+| Plan 025 (search) not landed                               | Correct — README row 025 is TODO; `fetch_papers` has no `query` param yet. This design composes with 025's `query` per the plan brief.                                                         |
 
 **Stop-condition check**: neither endpoint requires authentication — Semantic
 Scholar answered keyless (with HTTP 429, an AWS `TooManyRequestsException`, not
@@ -59,7 +59,7 @@ signature change.
   lands.
 - **No fallback (surface error only)**: the plan brief recommends fallback
   for MVP and so does this spike — a paper reader that shows an error page
-  when the secondary source hiccups (S2's 429 reality makes this *likely*,
+  when the secondary source hiccups (S2's 429 reality makes this _likely_,
   not rare) is worse than silently serving arXiv data with a notice.
 
 ## 2. Field mapping
@@ -112,18 +112,18 @@ s2FieldsOfStudy, publicationTypes, publicationDate, journal,
 citationStyles, authors` (all optional in the schema; `Tldr = { model, text }`,
 `openAccessInfo = { license, status, disclaimer }`).
 
-| S2 JSON | → `Paper` | Notes |
-|---|---|---|
-| `paperId` | `id` | **Prefix it** (`"s2:" + paperId`) — S2 ids are hashes, not arXiv ids; the prefixed id is the React key and ExplainPanel identity, and prevents cross-source collisions if a paper exists in both. |
-| `title` | `title` | |
-| `authors[].name` | `authors` | `AuthorInPaper` schema; `[]` if absent. |
-| `publicationDate` (YYYY-MM-DD) | `published` | Fall back to `year` (S2's `year` is an int; `String::from(year)`). Frontend does `new Date(paper.published)` (`paper-card.tsx:26-28`) — ISO date-only parses fine. |
-| `abstract` | `summary` | Nullable in practice → `""`. |
-| `openAccessPdf.url` | `pdf_url` | **Nullable** — when null, fall back to the paper landing page `url` (S2 canonical page). The card's button label is "Open PDF" (`papers.openPdf`); a landing page is the documented-acceptable fallback (arXiv's `parse_feed` already does this — `papers.rs:140` derives `https://arxiv.org/pdf/{id}`). |
-| `fieldsOfStudy` / `s2FieldsOfStudy` | `categories` | Very coarse (`["Computer Science"]`); take up to 3, prefer `s2FieldsOfStudy`. Card badge (`paper-card.tsx:59-61`) renders `categories[0]` — coarse but honest. |
-| `citationCount` | `citation_count` | The headline new signal. |
-| `tldr.text` | `tldr` | Free-tier field (see below). |
-| `venue` | `venue` | `publicationVenue` as fallback. |
+| S2 JSON                             | → `Paper`        | Notes                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paperId`                           | `id`             | **Prefix it** (`"s2:" + paperId`) — S2 ids are hashes, not arXiv ids; the prefixed id is the React key and ExplainPanel identity, and prevents cross-source collisions if a paper exists in both.                                                                                                        |
+| `title`                             | `title`          |                                                                                                                                                                                                                                                                                                          |
+| `authors[].name`                    | `authors`        | `AuthorInPaper` schema; `[]` if absent.                                                                                                                                                                                                                                                                  |
+| `publicationDate` (YYYY-MM-DD)      | `published`      | Fall back to `year` (S2's `year` is an int; `String::from(year)`). Frontend does `new Date(paper.published)` (`paper-card.tsx:26-28`) — ISO date-only parses fine.                                                                                                                                       |
+| `abstract`                          | `summary`        | Nullable in practice → `""`.                                                                                                                                                                                                                                                                             |
+| `openAccessPdf.url`                 | `pdf_url`        | **Nullable** — when null, fall back to the paper landing page `url` (S2 canonical page). The card's button label is "Open PDF" (`papers.openPdf`); a landing page is the documented-acceptable fallback (arXiv's `parse_feed` already does this — `papers.rs:140` derives `https://arxiv.org/pdf/{id}`). |
+| `fieldsOfStudy` / `s2FieldsOfStudy` | `categories`     | Very coarse (`["Computer Science"]`); take up to 3, prefer `s2FieldsOfStudy`. Card badge (`paper-card.tsx:59-61`) renders `categories[0]` — coarse but honest.                                                                                                                                           |
+| `citationCount`                     | `citation_count` | The headline new signal.                                                                                                                                                                                                                                                                                 |
+| `tldr.text`                         | `tldr`           | Free-tier field (see below).                                                                                                                                                                                                                                                                             |
+| `venue`                             | `venue`          | `publicationVenue` as fallback.                                                                                                                                                                                                                                                                          |
 
 **Free-tier status of `tldr` / `citationCount`** (official API page, 2026-08-02):
 `citationCount` is a standard `BasePaper` field, no key needed. `tldr` is
@@ -152,18 +152,18 @@ authorships[], abstract_inverted_index, open_access, best_oa_location,
 primary_location, topics[], primary_topic, ids, locations, counts_by_year,
 concepts, …`.
 
-| OpenAlex JSON | → `Paper` | Notes |
-|---|---|---|
-| `id` (`https://openalex.org/W…`) | `id` | Prefix `"oa:" + <W-number>` (strip URL). |
-| `title` | `title` | |
-| `authorships[].author.display_name` | `authors` | |
-| `publication_date` (YYYY-MM-DD) | `published` | Fall back to `publication_year`. |
-| `abstract_inverted_index` | `summary` | **Inverted index** (`{word: [positions]}`) — reconstruct by placing each word at its positions into a `Vec<Option<&str>>` and joining. ~20 lines; fixture-testable. `null` when the record has no abstract. |
-| `best_oa_location.pdf_url` | `pdf_url` | Nullable; fall back to `primary_location.landing_page_url` ?? `id`. |
-| `topics[].display_name` | `categories` | Up to 3. |
-| `cited_by_count` | `citation_count` | |
-| (none) | `tldr` | OpenAlex has no TLDR field → `None`. |
-| `primary_location.source.display_name` | `venue` | e.g. "Cairn.info", "RUCforsk (Roskilde University)" — live samples. |
+| OpenAlex JSON                          | → `Paper`        | Notes                                                                                                                                                                                                       |
+| -------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id` (`https://openalex.org/W…`)       | `id`             | Prefix `"oa:" + <W-number>` (strip URL).                                                                                                                                                                    |
+| `title`                                | `title`          |                                                                                                                                                                                                             |
+| `authorships[].author.display_name`    | `authors`        |                                                                                                                                                                                                             |
+| `publication_date` (YYYY-MM-DD)        | `published`      | Fall back to `publication_year`.                                                                                                                                                                            |
+| `abstract_inverted_index`              | `summary`        | **Inverted index** (`{word: [positions]}`) — reconstruct by placing each word at its positions into a `Vec<Option<&str>>` and joining. ~20 lines; fixture-testable. `null` when the record has no abstract. |
+| `best_oa_location.pdf_url`             | `pdf_url`        | Nullable; fall back to `primary_location.landing_page_url` ?? `id`.                                                                                                                                         |
+| `topics[].display_name`                | `categories`     | Up to 3.                                                                                                                                                                                                    |
+| `cited_by_count`                       | `citation_count` |                                                                                                                                                                                                             |
+| (none)                                 | `tldr`           | OpenAlex has no TLDR field → `None`.                                                                                                                                                                        |
+| `primary_location.source.display_name` | `venue`          | e.g. "Cairn.info", "RUCforsk (Roskilde University)" — live samples.                                                                                                                                         |
 
 **Live-verified quirks (design-relevant, from the actual probe):**
 
@@ -210,7 +210,7 @@ pub async fn fetch_papers(
   `Result<Vec<Paper>, String>`.
 - Non-arXiv sources **require `query`** in v1 (see Open question 2): if
   `source != "arxiv" && query.is_none()` → `Err("Query required for this
-  source")`. Category is ignored for non-arXiv sources (S2 has no category
+source")`. Category is ignored for non-arXiv sources (S2 has no category
   browse; OpenAlex topic filtering is future work).
 - TS mirror (`arxiv.ts:25`): `fetchPapers(category, maxResults, query?, source?)`
   → invoke args `{ category, maxResults, query, source }`. Browser mock
@@ -225,11 +225,11 @@ Replace the single arXiv limiter (`LAST_REQUEST`, `papers.rs:13, 39-50`) with
 a per-source registry — one `OnceLock<Mutex<HashMap<&'static str, Mutex<Instant>>>>`
 keyed by source name, keeping arXiv's 3 s interval exactly as-is:
 
-| Source | Interval | 429 handling |
-|---|---|---|
-| arxiv | 3 s (unchanged, `papers.rs:8-9`) | n/a (XML error → `Err`) |
+| Source          | Interval                                | 429 handling                                                                                                                                                               |
+| --------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| arxiv           | 3 s (unchanged, `papers.rs:8-9`)        | n/a (XML error → `Err`)                                                                                                                                                    |
 | semanticscholar | 1.1 s (keyed); 1.5 s + jitter (keyless) | **No blind retry loop.** One retry after a 2 s pause (shared pool can free up), then propagate the error → fallback (§5). No `Retry-After` is sent, so fixed backoff only. |
-| openalex | 1 s (polite; API allows ~10 req/s) | Read `X-RateLimit-Remaining` header; if < 20, stop paging and return what we have. 429 → propagate → fallback. |
+| openalex        | 1 s (polite; API allows ~10 req/s)      | Read `X-RateLimit-Remaining` header; if < 20, stop paging and return what we have. 429 → propagate → fallback.                                                             |
 
 Verified at execution time (2026-08-02): S2 keyed = 1 RPS (official page);
 S2 keyless = 1000 req/s shared + heavy-use throttling (official page; 429s
@@ -252,8 +252,8 @@ meta line under the title — less scannable than a badge.
 
 **TLDR as summary fallback.** `paper.summary || paper.tldr || t("papers.noAbstract")`
 at `paper-card.tsx:77`. Trade-off: a TLDR is a model-generated one-liner, not
-an abstract — showing it *instead of* a present abstract would mislead; as a
-*fallback* for missing abstracts (common on S2: `abstract` is nullable) it is
+an abstract — showing it _instead of_ a present abstract would mislead; as a
+_fallback_ for missing abstracts (common on S2: `abstract` is nullable) it is
 strictly better than "No abstract available".
 
 **Source switcher: Settings page** (recommended), not the sidebar footer. A
@@ -286,10 +286,10 @@ mechanism (§5).
    `Some`). This is an IPC shape change; alternative (rejected) is string
    sniffing on `Err` — brittle, and plan 005's typed-marker philosophy argues
    for structured signals.
-4. If arXiv *also* fails, return the arXiv error (existing behavior). The
+4. If arXiv _also_ fails, return the arXiv error (existing behavior). The
    fallback never masks a total outage.
 
-Rationale: S2 keyless 429s are *expected* (shared pool), so "error out and
+Rationale: S2 keyless 429s are _expected_ (shared pool), so "error out and
 make the user retry" would be a daily occurrence; arXiv is free, keyless, and
 already integrated. The fallback notice keeps it honest. Edge: a user who
 explicitly wants S2-only results can't get them in v1 — acceptable, and noted
@@ -302,7 +302,7 @@ in Open question 1.
    missing (arXiv rows have `citation_count: null` → no badge).
 2. **`openAccessPdf` null on S2 / `best_oa_location` null on OpenAlex.**
    `pdf_url` falls back to the landing page URL; the card button still opens
-   *something* reachable. arXiv's `parse_feed` precedent (`papers.rs:140`).
+   _something_ reachable. arXiv's `parse_feed` precedent (`papers.rs:140`).
 3. **Empty authors / empty abstract.** Normalize to `vec![]` / `""` at parse
    time; card already renders both gracefully (`paper-card.tsx:66-73, 77`).
 4. **S2 `fieldsOfStudy` is coarse** ("Computer Science" for nearly everything)
@@ -322,21 +322,21 @@ in Open question 1.
 ## 7. Open questions (for the maintainer)
 
 1. **Ship S2 with keyless-only first, or require the key setting?**
-   *Recommendation: keyless works with fallback; the Settings key is optional
-   from day one.* Keyless 429s degrade gracefully to arXiv (§5), and a
+   _Recommendation: keyless works with fallback; the Settings key is optional
+   from day one._ Keyless 429s degrade gracefully to arXiv (§5), and a
    mandatory key would block the "just works" story AGENTS.md wants.
-2. **Category browse for non-arXiv sources?** *Recommendation: no — search
-   only in v1.* S2's `fieldsOfStudy` filter (e.g. `Computer Science`) is
+2. **Category browse for non-arXiv sources?** _Recommendation: no — search
+   only in v1._ S2's `fieldsOfStudy` filter (e.g. `Computer Science`) is
    semantically sloppy, and OpenAlex topic filtering needs taxonomy research.
    The category sidebar keeps meaning "arXiv categories".
-3. **One retry on S2 429, then fallback — enough?** *Recommendation: yes.*
+3. **One retry on S2 429, then fallback — enough?** _Recommendation: yes._
    A retry loop with no `Retry-After` header is guesswork; the fallback makes
    the app functional regardless. Revisit if S2 becomes the primary source.
-4. **Deduplicate papers across sources by DOI?** *Recommendation: defer.*
+4. **Deduplicate papers across sources by DOI?** _Recommendation: defer._
    v1 sources are mutually exclusive per fetch (one `source` per call); cross-
    source dedup only matters if a future feature merges lists.
-5. **Should `tldr` ever replace a *present* abstract?** *Recommendation: no —
-   fallback only (§4).* TLDRs are generated, lossy, and sometimes stale;
+5. **Should `tldr` ever replace a _present_ abstract?** _Recommendation: no —
+   fallback only (§4)._ TLDRs are generated, lossy, and sometimes stale;
    abstracts are ground truth. A settings toggle "prefer TLDR" is a cheap
    follow-up if users want it.
 
@@ -387,7 +387,7 @@ en/ar) = S; tests = S-M.
 - Subsequent probes (~25 min): connection drops (`curl` exit 000) from the
   local IP; from a fresh cloud IP (Browserbase), 4 attempts → 4× `429` with
   body: `{"message": "Too Many Requests. Please wait and try again or apply
-  for a key for higher rate limits. https://www.semanticscholar.org/product/api#api-key-form", "code": "429"}`.
+for a key for higher rate limits. https://www.semanticscholar.org/product/api#api-key-form", "code": "429"}`.
   No `Retry-After` header on any 429.
 - Single-paper endpoint (`/paper/DOI:…`) answered 404 JSON (not 429),
   confirming the API tier responds when not throttled.

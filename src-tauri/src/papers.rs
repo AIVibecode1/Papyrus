@@ -4,7 +4,11 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 const ARXIV_API: &str = "https://export.arxiv.org/api/query";
-const USER_AGENT: &str = concat!("Papyrus/", env!("CARGO_PKG_VERSION"), " (research paper reader)");
+const USER_AGENT: &str = concat!(
+    "Papyrus/",
+    env!("CARGO_PKG_VERSION"),
+    " (research paper reader)"
+);
 /// arXiv asks for at most ~1 request per 3 seconds. Be polite.
 const MIN_REQUEST_INTERVAL: Duration = Duration::from_secs(3);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -117,7 +121,11 @@ pub fn parse_feed(xml: &str) -> Result<Vec<Paper>, String> {
 
         let title = normalize_whitespace(&text_of("title"));
         let summary = normalize_whitespace(&text_of("summary"));
-        let id = text_of("id").rsplit('/').next().unwrap_or_default().to_string();
+        let id = text_of("id")
+            .rsplit('/')
+            .next()
+            .unwrap_or_default()
+            .to_string();
         let published = text_of("published");
 
         let authors: Vec<String> = children

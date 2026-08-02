@@ -52,22 +52,24 @@ untested state machines.
 
 ## Commands you will need
 
-| Purpose   | Command                    | Expected on success |
-|-----------|----------------------------|---------------------|
-| Install   | `pnpm add -D vitest`       | exit 0              |
-| Typecheck | `pnpm exec tsc --noEmit`   | exit 0, no errors   |
-| Test      | `pnpm test`                | all pass            |
-| Build     | `pnpm run build`           | exit 0              |
+| Purpose   | Command                  | Expected on success |
+| --------- | ------------------------ | ------------------- |
+| Install   | `pnpm add -D vitest`     | exit 0              |
+| Typecheck | `pnpm exec tsc --noEmit` | exit 0, no errors   |
+| Test      | `pnpm test`              | all pass            |
+| Build     | `pnpm run build`         | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `package.json` (add `test` script; add vitest devDependency)
 - `vite.config.ts` (add `test` config block)
 - `src/lib/__tests__/smoke.test.ts` (create — the smoke test proving the runner works)
 - `src/test/setup.ts` (create — minimal vitest setup, if needed)
 
 **Out of scope** (do NOT touch):
+
 - Any app source file (`src/` outside the new test file), any Rust code.
 - Installing any other test tooling (no jest, no testing-library yet —
   plan 004 adds suites; they may add testing-library if needed).
@@ -93,10 +95,10 @@ branches or commit unless the operator explicitly instructs it.
   },
 ```
 
-   Note: `vite.config.ts` is a `defineConfig(async () => ({...}))` — add the
-   `test` key inside the returned object. If TypeScript complains about the
-   `test` key type, add `/// <reference types="vitest/config" />` at the top
-   of the file (this is the standard Vitest+Vite typing).
+Note: `vite.config.ts` is a `defineConfig(async () => ({...}))` — add the
+`test` key inside the returned object. If TypeScript complains about the
+`test` key type, add `/// <reference types="vitest/config" />` at the top
+of the file (this is the standard Vitest+Vite typing).
 
 4. Run `pnpm exec tsc --noEmit` → must still pass.
 

@@ -60,7 +60,7 @@ longer outputs.
 ## Commands you will need
 
 | Purpose   | Command                  | Expected on success |
-|-----------|--------------------------|---------------------|
+| --------- | ------------------------ | ------------------- |
 | Test      | `pnpm test`              | all pass            |
 | Typecheck | `pnpm exec tsc --noEmit` | exit 0              |
 | Build     | `pnpm run build`         | exit 0              |
@@ -68,10 +68,12 @@ longer outputs.
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src/stores/explanation.ts`
 - `src/stores/__tests__/explanation.test.ts` (update tests to the coalesced contract)
 
 **Out of scope** (do NOT touch):
+
 - `src/lib/ai.ts` (chunk delivery stays as-is); Rust code.
 
 ## Git workflow
@@ -87,7 +89,7 @@ Change the store's `PaperExplanation` accumulation from string-concat-per-
 chunk to a chunk buffer flushed on a timer:
 
 - Add to `PaperExplanation` (or the store module): keep `text: string` as
-  the *committed* text, plus a transient buffer. Two acceptable designs —
+  the _committed_ text, plus a transient buffer. Two acceptable designs —
   pick the simpler one that passes the tests:
 
   **Design A (array join on flush)**: `onChunk` pushes to a local

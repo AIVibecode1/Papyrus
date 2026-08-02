@@ -28,9 +28,7 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
   load: () => {
     if (get().loaded) return;
     try {
-      const raw = JSON.parse(
-        localStorage.getItem(STORAGE_KEY) ?? "{}",
-      ) as unknown;
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as unknown;
       const byId: Record<string, Paper> = {};
       if (raw && typeof raw === "object") {
         for (const [id, value] of Object.entries(raw)) {

@@ -50,7 +50,7 @@ export async function stopExplanation(): Promise<void> {
 ## Commands you will need
 
 | Purpose   | Command                  | Expected on success |
-|-----------|--------------------------|---------------------|
+| --------- | ------------------------ | ------------------- |
 | Test      | `pnpm test`              | all pass            |
 | Typecheck | `pnpm exec tsc --noEmit` | exit 0              |
 | Build     | `pnpm run build`         | exit 0              |
@@ -58,11 +58,13 @@ export async function stopExplanation(): Promise<void> {
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src/lib/ai.ts`
 - `src/stores/explanation.ts` (only if needed to wire the abort — see steps)
 - `src/lib/__tests__/ai-parser.test.ts` (extend, if plan 004 landed)
 
 **Out of scope** (do NOT touch):
+
 - Rust code; `stop_explaining` command semantics.
 
 ## Git workflow
@@ -79,7 +81,7 @@ In `src/lib/ai.ts`:
 - Module-level `let activeController: AbortController | null = null;`
 - In `streamExplanationBrowser`: create
   `const controller = new AbortController();` set `activeController =
-  controller`, pass `signal: controller.signal` to `fetch`, and clear
+controller`, pass `signal: controller.signal` to `fetch`, and clear
   `activeController` when the stream finishes (in a `finally`-equivalent —
   after the read loop and in a catch wrapper).
 - Change `stopExplanation()`:
@@ -109,7 +111,7 @@ export async function stopExplanation(): Promise<void> {
     }
 ```
 
-  (`CANCELLED_MARKER` is defined in this file by plan 005.)
+(`CANCELLED_MARKER` is defined in this file by plan 005.)
 
 **Verify**: `pnpm exec tsc --noEmit` → exit 0.
 

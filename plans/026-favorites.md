@@ -43,7 +43,7 @@ and `Paper` is a plain serializable struct.
 ## Commands you will need
 
 | Purpose   | Command                  | Expected on success |
-|-----------|--------------------------|---------------------|
+| --------- | ------------------------ | ------------------- |
 | TS test   | `pnpm test`              | all pass            |
 | Typecheck | `pnpm exec tsc --noEmit` | exit 0              |
 | Build     | `pnpm run build`         | exit 0              |
@@ -51,6 +51,7 @@ and `Paper` is a plain serializable struct.
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src/stores/favorites.ts` (create — zustand slice)
 - `src/stores/__tests__/favorites.test.ts` (create)
 - `src/features/papers/paper-card.tsx` (bookmark button)
@@ -60,6 +61,7 @@ and `Paper` is a plain serializable struct.
   there — optional; prefer the list-header toggle to keep scope tight)
 
 **Out of scope** (do NOT touch):
+
 - The Rust backend (no persistence needed — favorites are per-device,
   localStorage is correct for this and matches AGENTS.md's key rule: only
   API keys are forbidden from localStorage).

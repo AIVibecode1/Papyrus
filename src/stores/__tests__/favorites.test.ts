@@ -79,9 +79,6 @@ describe("favorites store", () => {
   it("saved order is insertion order", () => {
     useFavoritesStore.getState().toggle(makePaper("2607.00001v1"));
     useFavoritesStore.getState().toggle(makePaper("2607.00002v1"));
-    expect(useFavoritesStore.getState().ids).toEqual([
-      "2607.00001v1",
-      "2607.00002v1",
-    ]);
+    expect(useFavoritesStore.getState().ids).toEqual(["2607.00001v1", "2607.00002v1"]);
   });
 });

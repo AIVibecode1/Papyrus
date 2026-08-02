@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Paper, ProviderConfig } from "@/lib/types";
 
-const { streamExplanationMock, stopExplanationMock, CANCELLED_MARKER } = vi.hoisted(
-  () => ({
-    streamExplanationMock: vi.fn(),
-    stopExplanationMock: vi.fn(),
-    // Must mirror src/lib/ai.ts — the store matches rejections against it.
-    CANCELLED_MARKER: "\u{1F6D1}PAPYRUS_CANCELLED",
-  }),
-);
+const { streamExplanationMock, stopExplanationMock, CANCELLED_MARKER } = vi.hoisted(() => ({
+  streamExplanationMock: vi.fn(),
+  stopExplanationMock: vi.fn(),
+  // Must mirror src/lib/ai.ts — the store matches rejections against it.
+  CANCELLED_MARKER: "\u{1F6D1}PAPYRUS_CANCELLED",
+}));
 
 vi.mock("@/lib/ai", () => ({
   streamExplanation: streamExplanationMock,
@@ -46,15 +44,13 @@ describe("explanation store", () => {
     vi.useFakeTimers();
     streamExplanationMock.mockReset();
     stopExplanationMock.mockReset();
-    streamExplanationMock.mockImplementation(
-      (opts: { onChunk: (chunk: string) => void }) => {
-        onChunk = opts.onChunk;
-        return new Promise<void>((resolve, reject) => {
-          resolveStream = resolve;
-          rejectStream = reject;
-        });
-      },
-    );
+    streamExplanationMock.mockImplementation((opts: { onChunk: (chunk: string) => void }) => {
+      onChunk = opts.onChunk;
+      return new Promise<void>((resolve, reject) => {
+        resolveStream = resolve;
+        rejectStream = reject;
+      });
+    });
     useExplanationStore.setState({ byPaper: {}, expandedId: null, generations: {} });
   });
 
@@ -64,9 +60,7 @@ describe("explanation store", () => {
 
   it("start sets loading then done", async () => {
     const p = useExplanationStore.getState().start(paper, provider, "en");
-    expect(useExplanationStore.getState().byPaper[paper.id]?.status).toBe(
-      "loading",
-    );
+    expect(useExplanationStore.getState().byPaper[paper.id]?.status).toBe("loading");
 
     resolveStream();
     await p;
@@ -90,9 +84,7 @@ describe("explanation store", () => {
 
     resolveStream();
     await p;
-    expect(useExplanationStore.getState().byPaper[paper.id]?.status).toBe(
-      "done",
-    );
+    expect(useExplanationStore.getState().byPaper[paper.id]?.status).toBe("done");
   });
 
   it("chunks within the same flush window are batched into one store update", async () => {
@@ -124,9 +116,7 @@ describe("explanation store", () => {
     // Plan 015: commit the pre-stop chunk by advancing the flush window.
     vi.advanceTimersByTime(50);
     await useExplanationStore.getState().stop();
-    expect(useExplanationStore.getState().byPaper[paper.id]?.status).toBe(
-      "stopped",
-    );
+    expect(useExplanationStore.getState().byPaper[paper.id]?.status).toBe("stopped");
 
     // Plan 005: a chunk already in flight from the pre-stop run must be
     // dropped — text stays unchanged and the status stays "stopped".
@@ -149,7 +139,7 @@ describe("explanation store", () => {
     expect(after?.error).toBe("boom");
   });
 
-  it('error containing the word but not the marker is an error', async () => {
+  it("error containing the word but not the marker is an error", async () => {
     // Plan 005: classification matches the typed marker, not the word — a
     // provider error that merely contains "stopped" is NOT a user stop.
     const p = useExplanationStore.getState().start(paper, provider, "en");

@@ -68,21 +68,23 @@ pub fn stop_explaining() {
 
 ## Commands you will need
 
-| Purpose   | Command                              | Expected on success |
-|-----------|--------------------------------------|---------------------|
-| Rust test | `cd src-tauri && cargo test --lib`   | all pass            |
-| TS test   | `pnpm test`                          | all pass            |
-| Typecheck | `pnpm exec tsc --noEmit`             | exit 0              |
-| Rust check| `cd src-tauri && cargo check`        | Finished, no warnings |
+| Purpose    | Command                            | Expected on success   |
+| ---------- | ---------------------------------- | --------------------- |
+| Rust test  | `cd src-tauri && cargo test --lib` | all pass              |
+| TS test    | `pnpm test`                        | all pass              |
+| Typecheck  | `pnpm exec tsc --noEmit`           | exit 0                |
+| Rust check | `cd src-tauri && cargo check`      | Finished, no warnings |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src-tauri/src/ai.rs`
 - `src/stores/explanation.ts`
 - `src/stores/__tests__/explanation.test.ts` (update the KNOWN BUG tests from plan 004)
 
 **Out of scope** (do NOT touch):
+
 - `src/lib/ai.ts` — browser-side stop is plan 011's scope.
 - `src-tauri/src/papers.rs`, any other file.
 
@@ -119,7 +121,7 @@ pub const CANCELLED_MARKER: &str = "\u{1F6D1}PAPYRUS_CANCELLED"; // 🛑 prefix;
 In `src/stores/explanation.ts` catch block, replace:
 
 ```ts
-      const status: ExplainStatus = message.includes("Stopped") ? "stopped" : "error";
+const status: ExplainStatus = message.includes("Stopped") ? "stopped" : "error";
 ```
 
 with an exact-marker check. Export the marker from a shared place — since

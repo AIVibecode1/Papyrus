@@ -34,15 +34,15 @@ real (if small) hygiene hole, and the silent failure hides it.
 - `src/features/settings/settings-page.tsx:136-144`:
 
 ```ts
-  const handleDelete = async (id: string) => {
-    if (confirmDeleteId !== id) {
-      setConfirmDeleteId(id);
-      return;
-    }
-    await deleteKey(id).catch(() => undefined);   // <-- line 141: swallowed
-    removeProvider(id);
-    setConfirmDeleteId(null);
-  };
+const handleDelete = async (id: string) => {
+  if (confirmDeleteId !== id) {
+    setConfirmDeleteId(id);
+    return;
+  }
+  await deleteKey(id).catch(() => undefined); // <-- line 141: swallowed
+  removeProvider(id);
+  setConfirmDeleteId(null);
+};
 ```
 
 - `deleteKey` is `src/stores/settings.ts` — in Tauri it invokes
@@ -56,18 +56,20 @@ real (if small) hygiene hole, and the silent failure hides it.
 ## Commands you will need
 
 | Purpose   | Command                  | Expected on success |
-|-----------|--------------------------|---------------------|
+| --------- | ------------------------ | ------------------- |
 | Typecheck | `pnpm exec tsc --noEmit` | exit 0              |
 | Build     | `pnpm run build`         | exit 0              |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src/features/settings/settings-page.tsx`
 - `src/i18n/locales/en.json`
 - `src/i18n/locales/ar.json`
 
 **Out of scope** (do NOT touch):
+
 - `src/stores/settings.ts` — the store's API stays as-is.
 - Any Rust code.
 
@@ -87,22 +89,22 @@ In `settings-page.tsx`:
 - Rewrite `handleDelete`:
 
 ```ts
-  const handleDelete = async (id: string) => {
-    if (confirmDeleteId !== id) {
-      setConfirmDeleteId(id);
-      return;
-    }
-    setDeleteError(null);
-    try {
-      await deleteKey(id);
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : String(err));
-      setConfirmDeleteId(null);
-      return; // provider row stays; key was not removed
-    }
-    removeProvider(id);
+const handleDelete = async (id: string) => {
+  if (confirmDeleteId !== id) {
+    setConfirmDeleteId(id);
+    return;
+  }
+  setDeleteError(null);
+  try {
+    await deleteKey(id);
+  } catch (err) {
+    setDeleteError(err instanceof Error ? err.message : String(err));
     setConfirmDeleteId(null);
-  };
+    return; // provider row stays; key was not removed
+  }
+  removeProvider(id);
+  setConfirmDeleteId(null);
+};
 ```
 
 - Render the error near the provider list header (above the cards), using

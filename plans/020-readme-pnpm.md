@@ -39,16 +39,18 @@ Prerequisites: [Rust](https://rustup.rs), Node.js ≥ 20, and on Windows: Visual
 
 ## Commands you will need
 
-| Purpose   | Command            | Expected on success |
-|-----------|--------------------|---------------------|
-| None      | —                  | — (docs-only change) |
+| Purpose | Command | Expected on success  |
+| ------- | ------- | -------------------- |
+| None    | —       | — (docs-only change) |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `README.md`
 
 **Out of scope** (do NOT touch):
+
 - Any code; `package.json` (`packageManager` field is optional — add it
   only if it's missing and trivially safe: `pnpm@10.7.1` — it helps
   corepack users; decide by checking whether the field exists).

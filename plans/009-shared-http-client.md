@@ -49,19 +49,21 @@ means three independent timeout configs that must be kept consistent.
 
 ## Commands you will need
 
-| Purpose   | Command                            | Expected on success |
-|-----------|------------------------------------|---------------------|
-| Rust test | `cd src-tauri && cargo test --lib` | all pass            |
-| Rust check| `cd src-tauri && cargo check`      | Finished, no warnings |
+| Purpose    | Command                            | Expected on success   |
+| ---------- | ---------------------------------- | --------------------- |
+| Rust test  | `cd src-tauri && cargo test --lib` | all pass              |
+| Rust check | `cd src-tauri && cargo check`      | Finished, no warnings |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src-tauri/src/ai.rs`
 - `src-tauri/src/papers.rs`
 - `src-tauri/src/lib.rs` (only if registering managed state)
 
 **Out of scope** (do NOT touch):
+
 - Any frontend file. Any change to the public command signatures.
 
 ## Git workflow
@@ -93,13 +95,14 @@ pub fn shared_client() -> &'static Client {
 }
 ```
 
-  Notes:
-  - `USER_AGENT` is defined in `papers.rs` (line 8) — make it `pub(crate)`
-    or move it to the shared module.
-  - Default timeouts are removed from the client; per-command timeouts move
-    onto the individual requests (step 2).
-  - If a module-level `OnceLock` in `papers.rs` is cleaner for imports,
-    that's fine — the requirement is ONE client total.
+Notes:
+
+- `USER_AGENT` is defined in `papers.rs` (line 8) — make it `pub(crate)`
+  or move it to the shared module.
+- Default timeouts are removed from the client; per-command timeouts move
+  onto the individual requests (step 2).
+- If a module-level `OnceLock` in `papers.rs` is cleaner for imports,
+  that's fine — the requirement is ONE client total.
 
 - `lib.rs`: no change needed for `OnceLock` (no managed state required).
   Do NOT use `tauri::Builder::manage` unless the OnceLock approach hits a

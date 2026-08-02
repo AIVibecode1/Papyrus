@@ -63,9 +63,7 @@ const server = http.createServer((req, res) => {
 
       if (!stream) {
         res.writeHead(200, { "content-type": "application/json", ...CORS_HEADERS });
-        res.end(
-          JSON.stringify({ choices: [{ message: { role: "assistant", content: text } }] }),
-        );
+        res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: text } }] }));
         return;
       }
 

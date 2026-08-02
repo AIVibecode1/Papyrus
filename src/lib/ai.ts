@@ -54,15 +54,11 @@ export function normalizeBaseUrl(base: string): string {
 // they surface in the UI, so a gateway that echoes the submitted key back
 // in a 401/400 body cannot leak it into the explanation panel.
 export function redactTokens(text: string): string {
-  return text.replace(
-    /(sk-|sk_|key-|key_|ghp_|xai-|Bearer\s|bearer\s)[A-Za-z0-9_-]{6,}/g,
-    "$1***",
-  );
+  return text.replace(/(sk-|sk_|key-|key_|ghp_|xai-|Bearer\s|bearer\s)[A-Za-z0-9_-]{6,}/g, "$1***");
 }
 
 function buildMessages(paper: Paper, language: string) {
-  const system =
-    language === "ar" ? prompts.systemPromptAr : prompts.systemPromptEn;
+  const system = language === "ar" ? prompts.systemPromptAr : prompts.systemPromptEn;
   const user = [
     `Title: ${paper.title}`,
     `Authors: ${paper.authors.join(", ")}`,
@@ -175,7 +171,7 @@ async function streamExplanationBrowser(opts: ExplainOptions): Promise<void> {
     // A stop aborts the fetch signal; surface it through the same typed
     // cancellation contract the Tauri path uses (plan 005).
     if (err instanceof DOMException && err.name === "AbortError") {
-      throw new Error(CANCELLED_MARKER);
+      throw new Error(CANCELLED_MARKER, { cause: err });
     }
     throw err;
   } finally {

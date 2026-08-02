@@ -47,15 +47,17 @@ assume protection that doesn't exist.
 ## Commands you will need
 
 | Purpose | Command | Expected on success |
-|---------|---------|---------------------|
+| ------- | ------- | ------------------- |
 | None    | —       | — (docs-only)       |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `README.md`
 
 **Out of scope** (do NOT touch):
+
 - `src-tauri/tauri.conf.json` — this plan documents the decision; a
   future hardening plan may revisit it (see SECURITY-02 in the audit).
 

@@ -84,8 +84,10 @@ export function PaperList() {
         </Card>
       )}
 
-      {!loading && !error && savedOnly && (
-        savedIds.length === 0 ? (
+      {!loading &&
+        !error &&
+        savedOnly &&
+        (savedIds.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
               <Bookmark className="size-8 text-muted-foreground" />
@@ -98,8 +100,7 @@ export function PaperList() {
               <PaperCard key={id} paper={savedBy[id]} />
             ))}
           </div>
-        )
-      )}
+        ))}
 
       {!loading && !error && !savedOnly && papers.length === 0 && (
         <Card className="border-dashed">

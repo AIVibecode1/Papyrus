@@ -46,21 +46,23 @@ flow dies).
 
 ## Commands you will need
 
-| Purpose   | Command                              | Expected on success |
-|-----------|--------------------------------------|---------------------|
-| Rust test | `cd src-tauri && cargo test --lib`   | all pass            |
-| Rust check| `cd src-tauri && cargo check`        | Finished, no warnings |
-| Build     | `cd src-tauri && cargo build`        | exit 0              |
+| Purpose    | Command                            | Expected on success   |
+| ---------- | ---------------------------------- | --------------------- |
+| Rust test  | `cd src-tauri && cargo test --lib` | all pass              |
+| Rust check | `cd src-tauri && cargo check`      | Finished, no warnings |
+| Build      | `cd src-tauri && cargo build`      | exit 0                |
 
 ## Scope
 
 **In scope** (the only files you should modify):
+
 - `src-tauri/Cargo.toml`
 - `src-tauri/src/ai.rs` (if adopting the direct `keyring` crate)
 - `AGENTS.md` (correct the "official" claim)
 - `README.md` (Security notes: name the storage mechanism accurately)
 
 **Out of scope** (do NOT touch):
+
 - Any frontend file; the keychain API surface of the commands
   (`save_api_key`/`delete_api_key`/`has_api_key` signatures stay).
 
@@ -99,12 +101,11 @@ fn get_key(service: &str, account: &str) -> Result<Option<String>, String> {
 }
 ```
 
-   with parallel `set_password` / `delete_password` helpers, and update the
-   4 call sites (`load_key` at ai.rs:72-85, `save_api_key`, `delete_api_key`,
-   `has_api_key`). Keep all error strings close to today's.
-4. Remove `keyring:default` from capabilities if plan 007 hasn't landed
-   yet — coordinate: plan 007's file becomes redundant here; both plans
-   end with the same final state (no keyring plugin permission).
+with parallel `set_password` / `delete_password` helpers, and update the
+4 call sites (`load_key` at ai.rs:72-85, `save_api_key`, `delete_api_key`,
+`has_api_key`). Keep all error strings close to today's. 4. Remove `keyring:default` from capabilities if plan 007 hasn't landed
+yet — coordinate: plan 007's file becomes redundant here; both plans
+end with the same final state (no keyring plugin permission).
 
 **Verify**: `cd src-tauri && cargo check` → Finished, no warnings.
 `cargo test --lib` → all pass.
