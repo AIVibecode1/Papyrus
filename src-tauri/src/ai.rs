@@ -3,10 +3,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use futures_util::StreamExt;
+use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tauri::ipc::Channel;
-use tauri_plugin_keyring::KeyringExt;
 
 use crate::papers::{Paper, shared_client};
 
@@ -126,12 +126,40 @@ fn is_local_base_url(base_url: &str) -> bool {
     base_url.contains("localhost") || base_url.contains("127.0.0.1")
 }
 
+/// Reads a secret from the OS keychain (Windows Credential Manager / macOS
+/// Keychain). `Ok(None)` means no entry exists for the account; genuine
+/// keychain failures are returned as errors.
+fn get_key(service: &str, account: &str) -> Result<Option<String>, String> {
+    let entry = Entry::new(service, account)
+        .map_err(|e| format!("Failed to access the system keychain: {e}"))?;
+    match entry.get_password() {
+        Ok(p) => Ok(Some(p)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("Failed to read key from the system keychain: {e}")),
+    }
+}
+
+/// Saves a secret to the OS keychain, creating or replacing the entry.
+fn set_key(service: &str, account: &str, key: &str) -> Result<(), String> {
+    let entry = Entry::new(service, account)
+        .map_err(|e| format!("Failed to access the system keychain: {e}"))?;
+    entry
+        .set_password(key)
+        .map_err(|e| format!("Failed to save key to the system keychain: {e}"))
+}
+
+/// Removes a secret from the OS keychain.
+fn delete_key(service: &str, account: &str) -> Result<(), String> {
+    let entry = Entry::new(service, account)
+        .map_err(|e| format!("Failed to access the system keychain: {e}"))?;
+    entry
+        .delete_credential()
+        .map_err(|e| format!("Failed to remove key from the system keychain: {e}"))
+}
+
 /// Loads the stored API key for a provider. Local endpoints (Ollama etc.) may have no key.
-fn load_key(app: &tauri::AppHandle, provider: &ProviderConfig) -> Result<String, String> {
-    let key = app
-        .keyring()
-        .get_password(KEYRING_SERVICE, &provider.id)
-        .map_err(|e| format!("Failed to read key from the system keychain: {e}"))?;
+fn load_key(provider: &ProviderConfig) -> Result<String, String> {
+    let key = get_key(KEYRING_SERVICE, &provider.id)?;
     let is_local = is_local_base_url(&provider.base_url);
     match key {
         Some(k) => Ok(k),
@@ -323,7 +351,6 @@ fn validate_provider(provider: &ProviderConfig) -> Result<(), String> {
 /// Generates a streaming explanation of a paper in the current UI language.
 #[tauri::command]
 pub async fn explain_paper(
-    app: tauri::AppHandle,
     provider: ProviderConfig,
     paper: Paper,
     language: String,
@@ -332,7 +359,7 @@ pub async fn explain_paper(
     validate_provider(&provider)?;
     CANCEL_EXPLAIN.store(false, Ordering::SeqCst);
 
-    let key = load_key(&app, &provider)?;
+    let key = load_key(&provider)?;
     let url = build_chat_url(&provider.base_url)?;
     let client = shared_client();
 
@@ -352,12 +379,9 @@ pub async fn explain_paper(
 
 /// Sends a minimal request to verify a provider configuration.
 #[tauri::command]
-pub async fn test_provider(
-    app: tauri::AppHandle,
-    provider: ProviderConfig,
-) -> Result<String, String> {
+pub async fn test_provider(provider: ProviderConfig) -> Result<String, String> {
     validate_provider(&provider)?;
-    let key = load_key(&app, &provider)?;
+    let key = load_key(&provider)?;
     let url = build_chat_url(&provider.base_url)?;
     let client = shared_client();
 
@@ -380,37 +404,26 @@ pub fn stop_explaining() {
 
 /// Saves an API key to the OS keychain (Windows Credential Manager / macOS Keychain).
 #[tauri::command]
-pub async fn save_api_key(
-    app: tauri::AppHandle,
-    provider_id: String,
-    key: String,
-) -> Result<(), String> {
+pub async fn save_api_key(provider_id: String, key: String) -> Result<(), String> {
     if provider_id.is_empty() || provider_id.len() > 64 {
         return Err("Invalid provider id".into());
     }
     if key.trim().is_empty() {
         return Err("API key cannot be empty".into());
     }
-    app.keyring()
-        .set_password(KEYRING_SERVICE, &provider_id, key.trim())
-        .map_err(|e| format!("Failed to save key to the system keychain: {e}"))
+    set_key(KEYRING_SERVICE, &provider_id, key.trim())
 }
 
 /// Removes a stored API key from the OS keychain.
 #[tauri::command]
-pub async fn delete_api_key(app: tauri::AppHandle, provider_id: String) -> Result<(), String> {
-    app.keyring()
-        .delete_password(KEYRING_SERVICE, &provider_id)
-        .map_err(|e| format!("Failed to remove key from the system keychain: {e}"))
+pub async fn delete_api_key(provider_id: String) -> Result<(), String> {
+    delete_key(KEYRING_SERVICE, &provider_id)
 }
 
 /// Reports whether a key is stored for the provider — never exposes the key itself.
 #[tauri::command]
-pub async fn has_api_key(app: tauri::AppHandle, provider_id: String) -> Result<bool, String> {
-    app.keyring()
-        .get_password(KEYRING_SERVICE, &provider_id)
-        .map(|k| k.is_some())
-        .map_err(|e| format!("Failed to read key from the system keychain: {e}"))
+pub async fn has_api_key(provider_id: String) -> Result<bool, String> {
+    get_key(KEYRING_SERVICE, &provider_id).map(|k| k.is_some())
 }
 
 #[cfg(test)]

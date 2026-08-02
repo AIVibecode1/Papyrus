@@ -5,7 +5,6 @@ mod papers;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_keyring::init())
         .invoke_handler(tauri::generate_handler![
             papers::fetch_papers,
             ai::explain_paper,

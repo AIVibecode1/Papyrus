@@ -32,7 +32,7 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
 
 - Always prioritize security practices.
 - Never hardcode API keys or secrets.
-- Store all user API keys using Tauri's secure storage / OS keychain.
+- Store all user API keys using the OS keychain via the `keyring` crate (Windows Credential Manager / macOS Keychain).
 - Never log or expose API keys in the console or UI.
 - Validate and sanitize all external inputs (especially paper content and AI responses).
 - Follow the principle of least privilege in Tauri capabilities.
@@ -62,7 +62,7 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
 - **Paper Source**: arXiv API (primary). Semantic Scholar / OpenAlex can be added later
 - **AI Layer**: OpenAI-compatible client (supports OpenRouter, DeepSeek, OpenCode, Ollama, custom base URLs, etc.)
 - **Backend Logic**: Rust commands (pure Rust preferred over Python sidecar — one toolchain, simpler packaging)
-- **Secure Storage**: Tauri official secure storage / keychain plugins
+- **Secure Storage**: OS keychain via the `keyring` crate (Windows Credential Manager / macOS Keychain)
 
 ---
 
