@@ -123,17 +123,31 @@ async fn stream_chat(
 
     if content_type.contains("text/event-stream") {
         let mut stream = response.bytes_stream();
-        let mut buf = String::new();
+        let mut buf: Vec<u8> = Vec::new();
         loop {
-            let chunk = stream
-                .next()
-                .await
-                .ok_or_else(|| "Stream ended unexpectedly".to_string())?
-                .map_err(|e| format!("Stream error: {e}"))?;
-            buf.push_str(&String::from_utf8_lossy(&chunk));
-            while let Some(pos) = buf.find('\n') {
-                let line = buf[..pos].trim_end_matches('\r').to_string();
+            let chunk = match stream.next().await {
+                Some(Ok(chunk)) => chunk,
+                Some(Err(e)) => return Err(format!("Stream error: {e}")),
+                // Stream ended without a [DONE] marker: treat it as a clean
+                // close if we already received content, otherwise error.
+                None => {
+                    if full.is_empty() {
+                        return Err("Stream ended unexpectedly".to_string());
+                    }
+                    return Ok(full);
+                }
+            };
+            // Buffer raw bytes and decode only complete lines, so a multi-byte
+            // UTF-8 character split across two chunks is not corrupted.
+            buf.extend_from_slice(&chunk);
+            while let Some(pos) = buf.iter().position(|&b| b == b'\n') {
+                let line_bytes = buf[..pos].to_vec();
                 buf.drain(..=pos);
+                let line_bytes = line_bytes.strip_suffix(b"\r").unwrap_or(&line_bytes);
+                let Ok(line) = std::str::from_utf8(line_bytes) else {
+                    // Invalid UTF-8 within a line is malformed SSE — skip it.
+                    continue;
+                };
                 if let Some(data) = line.strip_prefix("data:") {
                     let data = data.trim();
                     if data == "[DONE]" {
@@ -354,6 +368,13 @@ mod tests {
 
     /// Spawns a minimal OpenAI-compatible server that answers one request with `response`.
     fn spawn_mock_server(response: String) -> String {
+        spawn_mock_server_chunked(vec![response.into_bytes()])
+    }
+
+    /// Like `spawn_mock_server`, but writes each response part with a separate
+    /// `write_all` call (with a small delay between writes) to emulate a
+    /// streaming provider that fragments its response across TCP chunks.
+    fn spawn_mock_server_chunked(parts: Vec<Vec<u8>>) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         thread::spawn(move || {
@@ -402,7 +423,10 @@ mod tests {
                         }
                     }
                 }
-                let _ = stream.write_all(response.as_bytes());
+                for part in parts {
+                    let _ = stream.write_all(&part);
+                    thread::sleep(Duration::from_millis(5));
+                }
             }
         });
         format!("http://{addr}")
@@ -433,6 +457,51 @@ mod tests {
             .expect("stream should succeed");
         assert_eq!(full, "Hello world");
         assert_eq!(chunks, vec!["Hello", " world"]);
+    }
+
+    #[test]
+    fn streams_utf8_split_across_chunks() {
+        // A multi-byte Arabic character split across two TCP chunks must not
+        // become a replacement-character garbage sequence: the parser buffers
+        // bytes and decodes only complete lines.
+        let arabic = "مرحبا بالعالم";
+        let mut response = Vec::new();
+        response.extend_from_slice(
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n",
+        );
+        response.extend_from_slice(br#"data: {"choices":[{"delta":{"content":""#);
+        response.extend_from_slice(arabic.as_bytes());
+        response.extend_from_slice(b"\"}}]}\n\n");
+        response.extend_from_slice(b"data: [DONE]\n\n");
+
+        // Split the response in the middle of the first Arabic character
+        // (a 3-byte UTF-8 sequence) so the two halves are both invalid UTF-8.
+        let content_pos = response
+            .windows(arabic.len())
+            .position(|w| w == arabic.as_bytes())
+            .expect("arabic content present");
+        let split_at = content_pos + 1;
+        let url = spawn_mock_server_chunked(vec![
+            response[..split_at].to_vec(),
+            response[split_at..].to_vec(),
+        ]);
+
+        let client = reqwest::Client::new();
+        let mut chunks = Vec::new();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let full = runtime
+            .block_on(stream_chat(
+                &client,
+                &format!("{url}/v1/chat/completions"),
+                "test-key",
+                json!({ "model": "mock", "messages": [] }),
+                &mut |c| chunks.push(c.to_string()),
+            ))
+            .expect("stream should succeed");
+        // full must equal the exact original string: the old parser emitted
+        // a replacement character at the split point instead.
+        assert_eq!(full, arabic);
+        assert_eq!(chunks.concat(), arabic);
     }
 
     #[test]
