@@ -3,6 +3,9 @@
     "name": "Papyrus",
     "tagline": "Latest research, explained simply"
   },
+  "a11y": {
+    "skipToContent": "Skip to content"
+  },
   "nav": {
     "settings": "Settings"
   },

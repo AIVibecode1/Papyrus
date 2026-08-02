@@ -20,9 +20,9 @@ export function Sidebar() {
             type="button"
             onClick={() => setCategory(cat.code)}
             className={cn(
-              "flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors",
+              "relative flex items-center justify-between rounded-md px-3 py-2 text-sm transition-all duration-200",
               category === cat.code
-                ? "bg-accent font-medium text-accent-foreground"
+                ? "bg-accent font-medium text-accent-foreground before:absolute before:start-1.5 before:top-1/2 before:size-1 before:-translate-y-1/2 before:rounded-full before:bg-primary"
                 : "text-foreground/80 hover:bg-accent/50 hover:text-foreground",
             )}
             aria-pressed={category === cat.code}

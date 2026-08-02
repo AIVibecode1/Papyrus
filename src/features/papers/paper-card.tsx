@@ -1,4 +1,4 @@
-import { Bookmark, BookmarkCheck, ExternalLink, Sparkles } from "lucide-react";
+import { Bookmark, BookmarkCheck, ExternalLink, Lightbulb } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -65,13 +65,16 @@ export function PaperCard({ paper }: PaperCardProps) {
   return (
     <Card
       className={cn(
-        "transition-colors hover:border-foreground/20",
+        "transition-all duration-200 hover:-translate-y-px hover:border-foreground/20 hover:shadow-sm",
         expanded && "border-primary/50",
       )}
     >
       <CardContent className="flex flex-col gap-2.5 p-5">
         <div className="flex items-start justify-between gap-3">
-          <h3 dir="ltr" className="font-semibold leading-snug">
+          <h3
+            dir="ltr"
+            className="text-[15px] font-semibold leading-snug tracking-tight text-balance"
+          >
             {paper.title}
           </h3>
           <Badge variant="secondary" className="shrink-0 font-mono text-xs" dir="ltr">
@@ -122,7 +125,7 @@ export function PaperCard({ paper }: PaperCardProps) {
             onClick={handleExplain}
             aria-expanded={expanded}
           >
-            <Sparkles className="size-3.5" />
+            <Lightbulb className="size-3.5" />
             {t("papers.explain")}
           </Button>
         </div>
