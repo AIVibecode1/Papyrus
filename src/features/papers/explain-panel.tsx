@@ -1,5 +1,6 @@
 import { AlertCircle, Loader2, RotateCcw, Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Markdown } from "@/components/markdown/markdown";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -93,11 +94,11 @@ export function ExplainPanel({ paper }: ExplainPanelProps) {
       {explanation && explanation.text.length > 0 && (
         <div
           className={cn(
-            "max-h-96 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm leading-relaxed",
+            "max-h-96 overflow-y-auto rounded-md bg-muted/50 p-4",
             status === "streaming" && "border border-primary/30",
           )}
         >
-          {explanation.text}
+          <Markdown>{explanation.text}</Markdown>
           {status === "streaming" && (
             <span className="inline-block h-4 w-1.5 animate-pulse bg-primary align-middle" />
           )}
