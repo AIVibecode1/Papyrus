@@ -53,6 +53,7 @@
     "testFailed": "Connection failed",
     "setActive": "Use for explanations",
     "confirmDelete": "Confirm?",
+    "deleteKeyFailed": "Could not remove the API key from your system keychain: {{error}}",
     "preset": "Preset",
     "custom": "Custom",
     "name": "Name",

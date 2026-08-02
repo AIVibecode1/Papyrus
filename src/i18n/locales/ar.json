@@ -53,6 +53,7 @@
     "testFailed": "فشل الاتصال",
     "setActive": "استخدام للشروحات",
     "confirmDelete": "تأكيد؟",
+    "deleteKeyFailed": "تعذّر حذف مفتاح API من سلسلة المفاتيح: {{error}}",
     "preset": "قالب جاهز",
     "custom": "مخصص",
     "name": "الاسم",

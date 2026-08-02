@@ -56,6 +56,7 @@ export function SettingsPage() {
   const [keyStates, setKeyStates] = useState<Record<string, boolean>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; msg: string }>>({});
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const refreshKeyStates = () => {
     for (const p of providers) {
@@ -81,6 +82,7 @@ export function SettingsPage() {
     setForm(emptyForm);
     setPreset("custom");
     setShowKey(false);
+    setDeleteError(null);
     setFormOpen(true);
   };
 
@@ -89,6 +91,7 @@ export function SettingsPage() {
     setForm({ name: p.name, baseUrl: p.baseUrl, model: p.model, key: "" });
     setPreset("custom");
     setShowKey(false);
+    setDeleteError(null);
     setFormOpen(true);
   };
 
@@ -138,7 +141,14 @@ export function SettingsPage() {
       setConfirmDeleteId(id);
       return;
     }
-    await deleteKey(id).catch(() => undefined);
+    setDeleteError(null);
+    try {
+      await deleteKey(id);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : String(err));
+      setConfirmDeleteId(null);
+      return; // provider row stays; key was not removed
+    }
     removeProvider(id);
     setConfirmDeleteId(null);
   };
@@ -162,6 +172,12 @@ export function SettingsPage() {
 
       {providers.length === 0 && !formOpen && (
         <p className="mt-4 text-sm text-muted-foreground">{t("settings.noProviders")}</p>
+      )}
+
+      {deleteError && (
+        <p className="mt-4 text-xs text-destructive">
+          {t("settings.deleteKeyFailed", { error: deleteError })}
+        </p>
       )}
 
       <div className="mt-3 flex flex-col gap-3">
