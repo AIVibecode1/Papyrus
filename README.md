@@ -169,6 +169,59 @@ Papyrus was built in phases, each verified before moving on:
    for future features. Every plan landed as its own commit with tests.
    The git history reads as a story of the project.
 
+## What changed since the first version
+
+This log is updated with every change, fix, or upgrade. If you notice it
+is out of date, update it (see AGENTS.md, "Keep the changelog current").
+
+### Version 0.1.0 (the first version)
+
+The original release contained: latest papers from arXiv in 6 fields,
+AI explanations with streaming in English and Arabic, provider management
+with keys in the OS keychain, light and dark mode, a custom icon,
+installers for Windows, and the MIT license.
+
+### Problems found and how they were solved
+
+| Problem                                                                                                                               | How it was solved                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Arabic explanations arrived garbled: multi-byte characters split across network chunks were decoded wrongly by the Rust stream parser | The parser now buffers raw bytes and decodes only complete lines, so split characters survive. A regression test splits a response in the middle of an Arabic letter.                                                  |
+| Switching fields quickly could show the wrong list: a slow response for an old field overwrote the new one                            | The papers store now drops stale responses with a sequence token; only the newest request can update the list.                                                                                                         |
+| The Stop button could mislabel provider errors as stops, and cancelling had a race window                                             | A typed cancellation marker (a machine-readable constant) replaces word matching, and per-paper generation counters make late chunks harmless.                                                                         |
+| Deleting a provider could silently orphan its API key in the keychain                                                                 | The settings UI now surfaces keychain delete failures and keeps the provider row until the key is actually removed.                                                                                                    |
+| English paper text was right-aligned and misordered inside the Arabic layout                                                          | Paper titles, authors, abstracts and category codes are wrapped in `dir="ltr"`, so English content stays left-to-right inside the RTL interface.                                                                       |
+| The day picker only showed days that had papers, and the arrows could stick under rapid clicking or while loading                     | The picker now lists the full 14-day history, the arrows read the live store state (one day per click, no collapse), they no longer freeze during fetches, and collected days render instantly from the history cache. |
+| Key-shaped strings could appear in provider error messages                                                                            | Error bodies are redacted before they reach the interface, in both the Rust and browser paths.                                                                                                                         |
+| A provider URL over plain HTTP would send the API key in clear text                                                                   | Remote URLs must now be HTTPS; plain HTTP is only accepted for loopback servers such as Ollama.                                                                                                                        |
+| PDF links from arXiv could come back as plain HTTP                                                                                    | All arXiv PDF links are normalized to HTTPS at parse time.                                                                                                                                                             |
+| The Stop button did nothing in the browser development preview                                                                        | The browser stream is now aborted with an AbortController that surfaces the same typed cancellation marker.                                                                                                            |
+| Corrupted or hand-edited localStorage could crash the settings page                                                                   | Provider data is validated on load: malformed entries are dropped and dangling active-provider ids are repaired.                                                                                                       |
+| The keychain plugin was an unmaintained community plugin                                                                              | It was replaced with the maintained `keyring` crate, used directly against Windows Credential Manager and macOS Keychain.                                                                                              |
+| The webview had a full keychain permission it never used                                                                              | The capability was removed (least privilege), leaving only `core:default` and `opener:allow-open-url`.                                                                                                                 |
+| The app started with no frontend tests and no quality gates                                                                           | Vitest was added (50 frontend tests today), the Rust suite grew to 29 tests, and ESLint, Prettier, strict typecheck, clippy and rustfmt run on every commit through pre-commit hooks.                                  |
+| The repo had no automated builds                                                                                                      | A GitHub Actions workflow now runs the full gate suite and builds installers on Windows and macOS.                                                                                                                     |
+| The mock AI server refused browser requests (CORS)                                                                                    | CORS headers and preflight handling were added, so the dev preview can stream test explanations.                                                                                                                       |
+
+### New features added after the first version
+
+- **Keyword search** across arXiv (title, abstract, authors), debounced
+  while you type.
+- **Favorites**: bookmark any paper and filter the list to show only
+  saved ones.
+- **Browse by day**: step through any past day with the arrows, or pick
+  a day from the collected history.
+- **Auto-collected daily history**: the app gathers each field's papers
+  day by day (14 days backfilled on first launch, 30 days kept) and shows
+  them with paper counts.
+- **Day views are instant**: collected days render from the history cache
+  while the live refresh happens in the background.
+- **Pre-commit hooks and CI** (Windows + macOS) with lint, formatting,
+  typecheck, clippy and rustfmt.
+- **Reusable screenshot capture** script for keeping the README images
+  current.
+- **Design specs** for two future features: provider failover and a
+  second paper source (Semantic Scholar / OpenAlex).
+
 ## Technical choices and why
 
 | Choice                                        | Why                                                                                                                                                                                                                                              |
@@ -185,7 +238,7 @@ Papyrus was built in phases, each verified before moving on:
 | The keyring crate for keys                    | The standard Rust library for OS credential vaults: Windows Credential Manager and macOS Keychain. Keys never touch app storage or the web view.                                                                                                 |
 | Streaming with SSE over a Tauri channel       | Explanations appear as they are generated, which feels fast, and cancellation is clean and typed.                                                                                                                                                |
 | Mock AI server for development                | A small OpenAI-compatible server (dev/mock-ai-server.mjs) lets you exercise the full explain flow, in both languages, without spending tokens.                                                                                                   |
-| Testing and quality gates                     | 25 Rust tests and 40 frontend tests cover parsing, streaming, error paths, stores and edge cases. ESLint, Prettier, strict typecheck, clippy and rustfmt run on every commit through pre-commit hooks, and CI repeats them on Windows and macOS. |
+| Testing and quality gates                     | 29 Rust tests and 50 frontend tests cover parsing, streaming, error paths, stores and edge cases. ESLint, Prettier, strict typecheck, clippy and rustfmt run on every commit through pre-commit hooks, and CI repeats them on Windows and macOS. |
 
 ## Project layout
 

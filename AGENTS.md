@@ -61,7 +61,7 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
 - **Internationalization**: react-i18next with full RTL support
 - **Paper Source**: arXiv API (primary). Semantic Scholar / OpenAlex can be added later
 - **AI Layer**: OpenAI-compatible client (supports OpenRouter, DeepSeek, OpenCode, Ollama, custom base URLs, etc.)
-- **Backend Logic**: Rust commands (pure Rust preferred over Python sidecar — one toolchain, simpler packaging)
+- **Backend Logic**: Rust commands (pure Rust preferred over Python sidecar: one toolchain, simpler packaging)
 - **Secure Storage**: OS keychain via the `keyring` crate (Windows Credential Manager / macOS Keychain)
 
 ---
@@ -105,6 +105,18 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
 - Prefer readability over cleverness.
 - Use early returns and guard clauses.
 - Add comments only when the "why" is not obvious.
+
+## Changelog Rule (must follow)
+
+- `README.md` contains a **"What changed since the first version"**
+  section: a changelog of problems solved and features added.
+- **Every change, fix, or upgrade MUST update that section** in the same
+  commit: for fixes, add the problem and how it was solved; for features,
+  add what was added.
+- Keep the test counts in the "Technical choices" table ("Testing and
+  quality gates" row) in sync with reality whenever tests are added.
+- If a change is too small to warrant a changelog row, say so in the
+  commit message instead of silently skipping the rule.
 
 ---
 
