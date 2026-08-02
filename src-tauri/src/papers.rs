@@ -12,6 +12,17 @@ const MAX_RESULTS_LIMIT: usize = 50;
 
 static LAST_REQUEST: OnceLock<Mutex<Instant>> = OnceLock::new();
 
+/// Shared HTTP client with keep-alive across commands.
+pub fn shared_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .user_agent(USER_AGENT)
+            .build()
+            .expect("reqwest client build cannot fail at runtime")
+    })
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Paper {
@@ -62,14 +73,9 @@ pub async fn fetch_papers(
         "{ARXIV_API}?search_query=cat:{category}&sortBy=submittedDate&sortOrder=descending&max_results={max}"
     );
 
-    let client = reqwest::Client::builder()
-        .user_agent(USER_AGENT)
-        .timeout(REQUEST_TIMEOUT)
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
-
-    let response = client
+    let response = shared_client()
         .get(&url)
+        .timeout(REQUEST_TIMEOUT)
         .send()
         .await
         .map_err(|e| format!("Network error while contacting arXiv: {e}"))?;

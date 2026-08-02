@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use tauri::ipc::Channel;
 use tauri_plugin_keyring::KeyringExt;
 
-use crate::papers::Paper;
+use crate::papers::{shared_client, Paper};
 
 const KEYRING_SERVICE: &str = "papyrus";
 const EXPLAIN_TIMEOUT: Duration = Duration::from_secs(120);
@@ -120,9 +120,10 @@ async fn stream_chat(
     url: &str,
     key: &str,
     body: Value,
+    timeout: Duration,
     on_chunk: &mut (dyn FnMut(&str) + Send),
 ) -> Result<String, String> {
-    let mut request = client.post(url);
+    let mut request = client.post(url).timeout(timeout);
     if !key.is_empty() {
         request = request.bearer_auth(key);
     }
@@ -262,10 +263,7 @@ pub async fn explain_paper(
 
     let key = load_key(&app, &provider)?;
     let url = build_chat_url(&provider.base_url)?;
-    let client = reqwest::Client::builder()
-        .timeout(EXPLAIN_TIMEOUT)
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+    let client = shared_client();
 
     let body = json!({
         "model": provider.model,
@@ -274,7 +272,7 @@ pub async fn explain_paper(
         "temperature": 0.4,
     });
 
-    stream_chat(&client, &url, &key, body, &mut |chunk| {
+    stream_chat(&client, &url, &key, body, EXPLAIN_TIMEOUT, &mut |chunk| {
         let _ = on_chunk.send(chunk.to_string());
     })
     .await
@@ -290,10 +288,7 @@ pub async fn test_provider(
     validate_provider(&provider)?;
     let key = load_key(&app, &provider)?;
     let url = build_chat_url(&provider.base_url)?;
-    let client = reqwest::Client::builder()
-        .timeout(TEST_TIMEOUT)
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+    let client = shared_client();
 
     let body = json!({
         "model": provider.model,
@@ -302,7 +297,7 @@ pub async fn test_provider(
         "max_tokens": 8,
     });
 
-    let reply = stream_chat(&client, &url, &key, body, &mut |_| {}).await?;
+    let reply = stream_chat(&client, &url, &key, body, TEST_TIMEOUT, &mut |_| {}).await?;
     Ok(reply.trim().to_string())
 }
 
@@ -500,6 +495,7 @@ mod tests {
                 &format!("{url}/v1/chat/completions"),
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
+                Duration::from_secs(10),
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("stream should succeed");
@@ -543,6 +539,7 @@ mod tests {
                 &format!("{url}/v1/chat/completions"),
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
+                Duration::from_secs(10),
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("stream should succeed");
@@ -570,6 +567,7 @@ mod tests {
                 &format!("{url}/v1/chat/completions"),
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
+                Duration::from_secs(10),
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("non-streaming should succeed");
@@ -588,6 +586,7 @@ mod tests {
             &format!("{url}/v1/chat/completions"),
             "bad-key",
             json!({ "model": "mock", "messages": [] }),
+            Duration::from_secs(10),
             &mut |_| {},
         ));
         let msg = result.expect_err("should fail with 401");
