@@ -19,6 +19,7 @@ export function Sidebar() {
             key={cat.code}
             type="button"
             onClick={() => setCategory(cat.code)}
+            title={cat.code}
             className={cn(
               "relative flex items-center justify-between rounded-md px-3 py-2 text-sm transition-all duration-200",
               category === cat.code
@@ -28,7 +29,6 @@ export function Sidebar() {
             aria-pressed={category === cat.code}
           >
             <span>{t(cat.key)}</span>
-            <span className="font-mono text-xs text-muted-foreground">{cat.code}</span>
           </button>
         ))}
       </nav>
