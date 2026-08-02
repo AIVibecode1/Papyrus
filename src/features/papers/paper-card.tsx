@@ -70,7 +70,10 @@ export function PaperCard({ paper }: PaperCardProps) {
       )}
     >
       <CardContent className="flex flex-col gap-2.5 p-5">
-        <div className="flex items-start justify-between gap-3">
+        {/* English paper content stays left-to-right inside the RTL layout:
+            the title row and the meta row are anchored LTR, so the title
+            reads from the left even in Arabic mode. */}
+        <div dir="ltr" className="flex items-start justify-between gap-3">
           <h3
             dir="ltr"
             className="text-[15px] font-semibold leading-snug tracking-tight text-balance"
@@ -82,7 +85,7 @@ export function PaperCard({ paper }: PaperCardProps) {
           </Badge>
         </div>
 
-        <p className="text-xs text-muted-foreground">
+        <p dir="ltr" className="text-xs text-muted-foreground">
           <time dateTime={paper.published}>{published}</time>
           {paper.authors.length > 0 && (
             <>
