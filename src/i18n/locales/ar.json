@@ -1,0 +1,79 @@
+{
+  "app": {
+    "name": "Papyrus",
+    "tagline": "أحدث الأبحاث، بشرحٍ بسيط"
+  },
+  "nav": {
+    "settings": "الإعدادات"
+  },
+  "topbar": {
+    "language": "اللغة",
+    "theme": "تبديل المظهر"
+  },
+  "categories": {
+    "title": "المجالات",
+    "csAI": "الذكاء الاصطناعي",
+    "csLG": "تعلّم الآلة",
+    "csCL": "معالجة اللغة (NLP)",
+    "csCV": "الرؤية الحاسوبية",
+    "csNE": "الحوسبة العصبية والتطورية",
+    "statML": "الإحصاء وتعلّم الآلة"
+  },
+  "papers": {
+    "refresh": "تحديث",
+    "loading": "جارٍ تحميل أحدث الأبحاث…",
+    "error": "تعذّر تحميل الأبحاث",
+    "retry": "إعادة المحاولة",
+    "empty": "لا توجد أبحاث",
+    "noAbstract": "لا يتوفر ملخص.",
+    "openPdf": "فتح PDF",
+    "explain": "اشرح",
+    "updated": "آخر تحديث {{time}}"
+  },
+  "presets": {
+    "openai": "OpenAI",
+    "openrouter": "OpenRouter",
+    "deepseek": "DeepSeek",
+    "groq": "Groq",
+    "ollama": "Ollama (محلي)"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "securityNote": "تُخزَّن مفاتيح API في سلسلة المفاتيح الآمنة بنظامك (إدارة بيانات الاعتماد في Windows / سلسلة المفاتيح في macOS). يرسلها Papyrus إلى المزوّد الذي أضفته أنت فقط — ولا أحد غيره.",
+    "providers": "مزوّدو الذكاء الاصطناعي",
+    "addProvider": "إضافة مزوّد",
+    "editProvider": "تعديل المزوّد",
+    "noProviders": "لا يوجد مزوّدون بعد. أضف واحدًا لتبدأ شرح الأوراق.",
+    "active": "نشط",
+    "keySaved": "تم حفظ المفتاح",
+    "keyMissing": "لا يوجد مفتاح",
+    "test": "اختبار",
+    "testing": "جارٍ الاختبار…",
+    "testOk": "الاتصال ناجح — الرد: {{reply}}",
+    "testFailed": "فشل الاتصال",
+    "setActive": "استخدام للشروحات",
+    "confirmDelete": "تأكيد؟",
+    "preset": "قالب جاهز",
+    "custom": "مخصص",
+    "name": "الاسم",
+    "baseUrl": "رابط الأساس",
+    "model": "النموذج",
+    "apiKey": "مفتاح API",
+    "keyHint": "يُخزَّن بأمان في سلسلة مفاتيح نظامك. اتركه فارغًا للنماذج المحلية مثل Ollama.",
+    "showKey": "إظهار المفتاح",
+    "hideKey": "إخفاء المفتاح",
+    "save": "حفظ",
+    "cancel": "إلغاء"
+  },
+  "explain": {
+    "selectProvider": "اختر المزوّد",
+    "explaining": "جارٍ الشرح…",
+    "stop": "إيقاف",
+    "stopped": "تم الإيقاف.",
+    "regenerate": "إعادة الشرح",
+    "noProvider": "لا يوجد مزوّد ذكاء اصطناعي",
+    "goToSettings": "فتح الإعدادات",
+    "error": "فشل الشرح",
+    "retry": "إعادة المحاولة"
+  }
+}

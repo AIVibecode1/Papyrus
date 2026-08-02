@@ -1,0 +1,79 @@
+{
+  "app": {
+    "name": "Papyrus",
+    "tagline": "Latest research, explained simply"
+  },
+  "nav": {
+    "settings": "Settings"
+  },
+  "topbar": {
+    "language": "Language",
+    "theme": "Toggle theme"
+  },
+  "categories": {
+    "title": "Fields",
+    "csAI": "Artificial Intelligence",
+    "csLG": "Machine Learning",
+    "csCL": "Language (NLP)",
+    "csCV": "Computer Vision",
+    "csNE": "Neural & Evolutionary",
+    "statML": "Statistics & ML"
+  },
+  "papers": {
+    "refresh": "Refresh",
+    "loading": "Loading latest papers…",
+    "error": "Couldn't load papers",
+    "retry": "Try again",
+    "empty": "No papers found",
+    "noAbstract": "No abstract available.",
+    "openPdf": "Open PDF",
+    "explain": "Explain",
+    "updated": "Updated {{time}}"
+  },
+  "presets": {
+    "openai": "OpenAI",
+    "openrouter": "OpenRouter",
+    "deepseek": "DeepSeek",
+    "groq": "Groq",
+    "ollama": "Ollama (local)"
+  },
+  "settings": {
+    "title": "Settings",
+    "securityNote": "API keys are stored in your OS keychain (Windows Credential Manager / macOS Keychain). Papyrus only sends them to the provider you configured — never to anyone else.",
+    "providers": "AI Providers",
+    "addProvider": "Add provider",
+    "editProvider": "Edit provider",
+    "noProviders": "No providers yet. Add one to start explaining papers.",
+    "active": "Active",
+    "keySaved": "Key saved",
+    "keyMissing": "No key",
+    "test": "Test",
+    "testing": "Testing…",
+    "testOk": "Connection OK — reply: {{reply}}",
+    "testFailed": "Connection failed",
+    "setActive": "Use for explanations",
+    "confirmDelete": "Confirm?",
+    "preset": "Preset",
+    "custom": "Custom",
+    "name": "Name",
+    "baseUrl": "Base URL",
+    "model": "Model",
+    "apiKey": "API key",
+    "keyHint": "Stored securely in your system keychain. Leave empty for local models like Ollama.",
+    "showKey": "Show key",
+    "hideKey": "Hide key",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "explain": {
+    "selectProvider": "Choose provider",
+    "explaining": "Explaining…",
+    "stop": "Stop",
+    "stopped": "Stopped.",
+    "regenerate": "Regenerate",
+    "noProvider": "No AI provider configured",
+    "goToSettings": "Open Settings",
+    "error": "Explanation failed",
+    "retry": "Retry"
+  }
+}
