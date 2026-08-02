@@ -1,8 +1,9 @@
 import { AlertCircle, Bookmark, BookOpenText, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFavoritesStore } from "@/stores/favorites";
 import { usePapersStore } from "@/stores/papers";
@@ -31,13 +32,23 @@ function PaperSkeleton() {
 export function PaperList() {
   const { t } = useTranslation();
   const { papers, loading, error, refresh, lastUpdated } = usePapersStore();
+  const setQuery = usePapersStore((s) => s.setQuery);
   const savedIds = useFavoritesStore((s) => s.ids);
   const savedBy = useFavoritesStore((s) => s.byId);
   const [savedOnly, setSavedOnly] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+
+  // Debounce the search box: typing updates local state immediately, but the
+  // store only refreshes 400 ms after the user stops typing. The cleanup
+  // clears the pending timer so it can never fire after unmount.
+  useEffect(() => {
+    const handle = setTimeout(() => setQuery(searchInput), 400);
+    return () => clearTimeout(handle);
+  }, [searchInput, setQuery]);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-muted-foreground">
           {lastUpdated &&
             t("papers.updated", {
@@ -46,6 +57,13 @@ export function PaperList() {
               }).format(new Date(lastUpdated)),
             })}
         </div>
+        <Input
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder={t("papers.searchPlaceholder")}
+          aria-label={t("papers.searchPlaceholder")}
+          className="h-9 w-full max-w-xs"
+        />
         <div className="flex items-center gap-2">
           <Button
             variant={savedOnly ? "secondary" : "ghost"}

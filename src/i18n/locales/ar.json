@@ -29,6 +29,7 @@
     "openPdf": "فتح PDF",
     "explain": "اشرح",
     "updated": "آخر تحديث {{time}}",
+    "searchPlaceholder": "ابحث في arXiv…",
     "save": "حفظ",
     "saved": "تم الحفظ",
     "savedOnly": "المحفوظة",

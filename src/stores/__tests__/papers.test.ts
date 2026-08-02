@@ -36,6 +36,7 @@ describe("papers store", () => {
     // actually fires a refresh (setCategory no-ops on the same category).
     usePapersStore.setState({
       category: "cs.MATH",
+      query: "",
       papers: [],
       loading: false,
       error: null,
@@ -82,5 +83,52 @@ describe("papers store", () => {
     const state = usePapersStore.getState();
     expect(state.papers).toEqual([]);
     expect(state.category).toBe("cs.LG");
+  });
+
+  it("setQuery triggers refresh with the query", async () => {
+    const fetchMock = vi.mocked(fetchPapers).mockResolvedValue([aiPaper]);
+
+    usePapersStore.getState().setQuery("transformer");
+
+    // refresh() calls fetchPapers synchronously; the query must reach it.
+    expect(fetchMock).toHaveBeenCalledWith("cs.MATH", 20, "transformer");
+    await Promise.resolve();
+
+    const state = usePapersStore.getState();
+    expect(state.query).toBe("transformer");
+    expect(state.papers).toEqual([aiPaper]);
+    expect(state.loading).toBe(false);
+  });
+
+  it("drops stale search responses", async () => {
+    let call = 0;
+    vi.mocked(fetchPapers).mockImplementation(() => {
+      call += 1;
+      return new Promise<Paper[]>((resolve) => {
+        if (call === 1) resolveFirst = resolve;
+        else resolveSecond = resolve;
+      });
+    });
+
+    usePapersStore.getState().setQuery("transformer");
+    usePapersStore.getState().setQuery("attention");
+
+    // Resolve the FIRST (stale) search after the second one started:
+    // its result must be dropped entirely.
+    resolveFirst([aiPaper]);
+    await Promise.resolve();
+
+    const mid = usePapersStore.getState();
+    expect(mid.papers).toEqual([]);
+    expect(mid.loading).toBe(true);
+    expect(mid.query).toBe("attention");
+
+    // The newest search still lands.
+    resolveSecond([lgPaper]);
+    await Promise.resolve();
+
+    const after = usePapersStore.getState();
+    expect(after.papers).toEqual([lgPaper]);
+    expect(after.loading).toBe(false);
   });
 });

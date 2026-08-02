@@ -29,6 +29,7 @@
     "openPdf": "Open PDF",
     "explain": "Explain",
     "updated": "Updated {{time}}",
+    "searchPlaceholder": "Search arXiv…",
     "save": "Save",
     "saved": "Saved",
     "savedOnly": "Saved",

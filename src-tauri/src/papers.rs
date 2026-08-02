@@ -53,29 +53,59 @@ async fn rate_limit() {
     }
 }
 
-/// Fetches the latest papers for an arXiv category, newest first.
-#[tauri::command]
-pub async fn fetch_papers(
-    category: String,
-    max_results: Option<usize>,
-) -> Result<Vec<Paper>, String> {
-    // Validate input before hitting the network.
-    let category = category.trim().to_string();
-    let valid = !category.is_empty()
+/// Builds the arXiv API query URL for a category browse or a free-text
+/// search. A search query replaces the category term entirely with
+/// arXiv's `all:` field (title + abstract + authors).
+///
+/// Both inputs are validated here so malformed `search_query` grammar
+/// never reaches arXiv: categories must look like `cat:` codes, and query
+/// strings reject the characters arXiv's query parser treats as operators
+/// (`"`, `(`, `)`, `:`, `&`) plus over-long or empty terms.
+fn build_fetch_url(category: &str, query: Option<&str>, max: usize) -> Result<String, String> {
+    let category = category.trim();
+    let valid_category = !category.is_empty()
         && category.len() <= 32
         && category
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_');
-    if !valid {
+    if !valid_category {
         return Err("Invalid category".into());
     }
+
+    if let Some(query) = query {
+        let query = query.trim();
+        let valid_query = !query.is_empty()
+            && query.len() <= 200
+            && !query
+                .chars()
+                .any(|c| matches!(c, '"' | '(' | ')' | ':' | '&'));
+        if !valid_query {
+            return Err("Invalid search query".into());
+        }
+        return Ok(format!(
+            "{ARXIV_API}?search_query=all:{query}&sortBy=submittedDate&sortOrder=descending&max_results={max}"
+        ));
+    }
+
+    Ok(format!(
+        "{ARXIV_API}?search_query=cat:{category}&sortBy=submittedDate&sortOrder=descending&max_results={max}"
+    ))
+}
+
+/// Fetches the latest papers for an arXiv category, newest first. When
+/// `query` is given, the category is ignored and arXiv's `all:` field
+/// (title + abstract + authors) is searched instead.
+#[tauri::command]
+pub async fn fetch_papers(
+    category: String,
+    max_results: Option<usize>,
+    query: Option<String>,
+) -> Result<Vec<Paper>, String> {
+    // Validate input before hitting the network.
     let max = max_results.unwrap_or(20).clamp(1, MAX_RESULTS_LIMIT);
+    let url = build_fetch_url(&category, query.as_deref(), max)?;
 
     rate_limit().await;
-
-    let url = format!(
-        "{ARXIV_API}?search_query=cat:{category}&sortBy=submittedDate&sortOrder=descending&max_results={max}"
-    );
 
     let response = shared_client()
         .get(&url)
@@ -294,6 +324,56 @@ mod tests {
     }
 
     #[test]
+    fn fetch_url_without_query_uses_category() {
+        let url = build_fetch_url("cs.AI", None, 20).expect("category URL should build");
+        assert!(url.contains("search_query=cat:cs.AI"));
+        assert!(!url.contains("search_query=all:"));
+        assert!(url.contains("sortBy=submittedDate&sortOrder=descending&max_results=20"));
+        // Invalid categories are still rejected at the same boundary.
+        assert_eq!(
+            build_fetch_url("cs.AI; DROP TABLE", None, 20),
+            Err("Invalid category".into())
+        );
+    }
+
+    #[test]
+    fn fetch_url_with_query_uses_all_field() {
+        let url =
+            build_fetch_url("cs.AI", Some("transformer"), 20).expect("query URL should build");
+        assert!(url.contains("search_query=all:transformer"));
+        // The category term is replaced, not combined.
+        assert!(!url.contains("cat:cs.AI"));
+        assert!(url.contains("sortBy=submittedDate&sortOrder=descending&max_results=20"));
+    }
+
+    #[test]
+    fn fetch_url_rejects_invalid_queries() {
+        // Characters arXiv's query grammar treats as operators must be
+        // rejected before they reach the API.
+        for bad in ['"', '(', ')', ':', '&'] {
+            let url = build_fetch_url("cs.AI", Some(&format!("transformer{bad}")), 20);
+            assert_eq!(
+                url,
+                Err("Invalid search query".into()),
+                "charset must reject {bad:?}"
+            );
+        }
+        // Over-long and blank queries are rejected too…
+        assert_eq!(
+            build_fetch_url("cs.AI", Some(&"a".repeat(201)), 20),
+            Err("Invalid search query".into())
+        );
+        assert_eq!(
+            build_fetch_url("cs.AI", Some("   "), 20),
+            Err("Invalid search query".into())
+        );
+        // …but surrounding whitespace is trimmed before validation.
+        let url = build_fetch_url("cs.AI", Some("  attention  "), 20)
+            .expect("trimmed query should build");
+        assert!(url.contains("search_query=all:attention"));
+    }
+
+    #[test]
     fn rejects_garbage_xml() {
         assert!(parse_feed("not xml at all {{{").is_err());
     }
@@ -304,7 +384,7 @@ mod tests {
     fn live_fetch_from_arxiv() {
         let papers = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(fetch_papers("cs.AI".into(), Some(5)))
+            .block_on(fetch_papers("cs.AI".into(), Some(5), None))
             .expect("live fetch should succeed");
         assert!(!papers.is_empty(), "expected at least one paper");
         let p = &papers[0];
