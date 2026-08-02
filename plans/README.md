@@ -19,7 +19,7 @@ STOP conditions, and update your row when done.
 | 004 | Characterization tests (stores + SSE parser) | P1 | M | 002 | TODO |
 | 005 | Typed cancellation (stop race + marker contract) | P1 | S | 002, 004 | TODO |
 | 006 | Keychain-delete failure surfaced in UI | P1 | S | — | DONE |
-| 008 | HTTPS enforcement + arXiv PDF normalization | P2 | S | — | TODO |
+| 008 | HTTPS enforcement + arXiv PDF normalization | P2 | S | — | DONE |
 | 009 | Shared reqwest client | P2 | S | — | TODO |
 | 010 | Rust test gaps (fragmented streams, cancel, units) | P2 | S | 001 | TODO |
 | 011 | Browser-preview Stop via AbortController | P2 | S | 002, 004, 005 | TODO |

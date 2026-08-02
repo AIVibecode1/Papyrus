@@ -130,7 +130,7 @@ pub fn parse_feed(xml: &str) -> Result<Vec<Paper>, String> {
             .filter(|n| n.tag_name().name() == "link")
             .find(|n| n.attribute("type") == Some("application/pdf"))
             .and_then(|l| l.attribute("href"))
-            .map(str::to_string)
+            .map(normalize_pdf_url)
             .unwrap_or_else(|| format!("https://arxiv.org/pdf/{id}"));
 
         let categories: Vec<String> = children
@@ -159,6 +159,18 @@ pub fn parse_feed(xml: &str) -> Result<Vec<Paper>, String> {
 
 fn normalize_whitespace(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Upgrades arXiv PDF links to https so paper downloads never ride on
+/// plaintext transport (downgrade/MITM protection).
+fn normalize_pdf_url(url: &str) -> String {
+    if let Some(rest) = url.strip_prefix("http://arxiv.org/") {
+        format!("https://arxiv.org/{rest}")
+    } else if let Some(rest) = url.strip_prefix("http://export.arxiv.org/") {
+        format!("https://export.arxiv.org/{rest}")
+    } else {
+        url.to_string()
+    }
 }
 
 #[cfg(test)]
@@ -193,8 +205,31 @@ mod tests {
         assert_eq!(p.published, "2026-07-31T17:59:59Z");
         assert_eq!(p.authors, vec!["Jane Doe", "John Smith"]);
         assert!(p.summary.contains("transformer architecture"));
-        assert_eq!(p.pdf_url, "http://arxiv.org/pdf/2607.12345v1");
+        // The fixture deliberately ships an http:// pdf link; it must come
+        // out normalized to https.
+        assert_eq!(p.pdf_url, "https://arxiv.org/pdf/2607.12345v1");
         assert_eq!(p.categories, vec!["cs.AI", "cs.CL"]);
+    }
+
+    #[test]
+    fn normalizes_arxiv_pdf_links_to_https() {
+        assert_eq!(
+            normalize_pdf_url("http://arxiv.org/pdf/2607.12345v1"),
+            "https://arxiv.org/pdf/2607.12345v1"
+        );
+        assert_eq!(
+            normalize_pdf_url("http://export.arxiv.org/pdf/2607.12345v1"),
+            "https://export.arxiv.org/pdf/2607.12345v1"
+        );
+        // Already-secure and non-arXiv links are left untouched.
+        assert_eq!(
+            normalize_pdf_url("https://arxiv.org/pdf/2607.12345v1"),
+            "https://arxiv.org/pdf/2607.12345v1"
+        );
+        assert_eq!(
+            normalize_pdf_url("https://example.com/paper.pdf"),
+            "https://example.com/paper.pdf"
+        );
     }
 
     #[test]

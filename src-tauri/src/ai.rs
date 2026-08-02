@@ -35,10 +35,39 @@ pub struct ProviderConfig {
     pub model: String,
 }
 
+/// Reports whether a host is a loopback address, where plaintext HTTP is
+/// acceptable because no on-path observer can read the API key.
+fn is_loopback_host(host: &str) -> bool {
+    // Strip IPv6 brackets, keeping any port that follows (e.g. [::1]:8080).
+    let host = host
+        .strip_prefix('[')
+        .and_then(|h| h.split(']').next())
+        .unwrap_or(host);
+    // Drop the port for non-IPv6 hosts (e.g. localhost:11434).
+    let host = if host.starts_with("::") {
+        host
+    } else {
+        host.split(':').next().unwrap_or(host)
+    };
+    matches!(host, "localhost" | "127.0.0.1" | "::1")
+}
+
 /// Normalizes a user-provided base URL into a full chat-completions URL.
+///
+/// HTTPS is required for any remote host; plaintext `http://` is only
+/// accepted for loopback servers, since the API key is sent as a bearer
+/// token over this URL.
 fn build_chat_url(base: &str) -> Result<String, String> {
     let base = base.trim().trim_end_matches('/');
-    if !base.starts_with("http://") && !base.starts_with("https://") {
+    if let Some(rest) = base.strip_prefix("http://") {
+        let host = rest.split('/').next().unwrap_or(rest);
+        if !is_loopback_host(host) {
+            return Err(
+                "HTTP (plaintext) base URLs are only allowed for local servers (localhost). Use https:// for remote providers."
+                    .into(),
+            );
+        }
+    } else if !base.starts_with("https://") {
         return Err("Base URL must start with http:// or https://".into());
     }
     if base.ends_with("/chat/completions") {
@@ -353,6 +382,25 @@ mod tests {
         );
         assert!(build_chat_url("ftp://bad").is_err());
         assert!(build_chat_url("not a url").is_err());
+        // Plaintext http:// is only allowed for loopback servers.
+        assert_eq!(
+            build_chat_url("http://localhost:11434/v1").unwrap(),
+            "http://localhost:11434/v1/chat/completions"
+        );
+        assert_eq!(
+            build_chat_url("http://127.0.0.1:11434/v1").unwrap(),
+            "http://127.0.0.1:11434/v1/chat/completions"
+        );
+        assert_eq!(
+            build_chat_url("http://[::1]:11434/v1").unwrap(),
+            "http://[::1]:11434/v1/chat/completions"
+        );
+        let remote_err = "HTTP (plaintext) base URLs are only allowed for local servers (localhost). Use https:// for remote providers.";
+        assert_eq!(build_chat_url("http://192.168.1.5/v1"), Err(remote_err.into()));
+        assert_eq!(
+            build_chat_url("http://api.example.com/v1"),
+            Err(remote_err.into())
+        );
     }
 
     #[test]
