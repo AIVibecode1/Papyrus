@@ -38,7 +38,7 @@ STOP conditions, and update your row when done.
 | 025 | Keyword search (DIR-1) | P2 | S-M | 002, 003 | TODO |
 | 026 | Favorites / reading list (DIR-2) | P2 | S | 002, 012 | TODO |
 | 027 | Provider failover — design spike (DIR-3) | P3 | S-M | 005, 007 | DONE (spike; feature pending maintainer decision) |
-| 028 | Second paper source — design spike (DIR-4) | P3 | M | 025 | TODO |
+| 028 | Second paper source — design spike (DIR-4) | P3 | M | 025 | DONE (spike; feature pending maintainer decision) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale).
 
