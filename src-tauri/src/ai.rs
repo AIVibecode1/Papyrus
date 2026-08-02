@@ -402,6 +402,205 @@ pub fn stop_explaining() {
     CANCEL_EXPLAIN.store(true, Ordering::SeqCst);
 }
 
+fn prompt_for(language: &str, en: &'static str, ar: &'static str) -> &'static str {
+    if language == "ar" { ar } else { en }
+}
+
+fn full_paper_prompt(language: &str) -> &'static str {
+    prompt_for(
+        language,
+        prompts()["fullPaperStructureEn"]
+            .as_str()
+            .expect("prompts.json fullPaperStructureEn"),
+        prompts()["fullPaperStructureAr"]
+            .as_str()
+            .expect("prompts.json fullPaperStructureAr"),
+    )
+}
+
+fn qa_prompt(language: &str) -> &'static str {
+    prompt_for(
+        language,
+        prompts()["qaPromptEn"]
+            .as_str()
+            .expect("prompts.json qaPromptEn"),
+        prompts()["qaPromptAr"]
+            .as_str()
+            .expect("prompts.json qaPromptAr"),
+    )
+}
+
+fn synthesis_prompt(language: &str) -> &'static str {
+    prompt_for(
+        language,
+        prompts()["synthesisPromptEn"]
+            .as_str()
+            .expect("prompts.json synthesisPromptEn"),
+        prompts()["synthesisPromptAr"]
+            .as_str()
+            .expect("prompts.json synthesisPromptAr"),
+    )
+}
+
+/// Safety cap for paper text sent to a provider (defensive; the frontend
+/// splits sections well below this).
+const MAX_PAPER_TEXT_CHARS: usize = 60_000;
+
+/// Mentor walkthrough message for ONE section of the paper. The format
+/// string must stay in sync with the browser path in src/lib/reader-ai.ts
+/// (ai-contract tests cross-check the shape).
+fn build_section_messages(
+    paper: &Paper,
+    section_index: usize,
+    total_sections: usize,
+    section_text: &str,
+    language: &str,
+) -> Vec<Value> {
+    let system = format!(
+        "{}\n\nThe user will send you ONE section of the paper at a time. Apply the section structure to that section only. Respond in the same language as the user's request.",
+        full_paper_prompt(language)
+    );
+    let user = format!(
+        "Paper title: {}\nAuthors: {}\n\nSection {} of {}:\n{}",
+        paper.title,
+        paper.authors.join(", "),
+        section_index,
+        total_sections,
+        truncate(section_text, MAX_PAPER_TEXT_CHARS)
+    );
+    vec![
+        json!({ "role": "system", "content": system }),
+        json!({ "role": "user", "content": user }),
+    ]
+}
+
+/// End-of-paper synthesis message (whole text as context).
+fn build_synthesis_messages(paper: &Paper, sections_text: &str, language: &str) -> Vec<Value> {
+    let user = format!(
+        "Paper title: {}\nAuthors: {}\n\nFull text of the paper:\n{}",
+        paper.title,
+        paper.authors.join(", "),
+        truncate(sections_text, MAX_PAPER_TEXT_CHARS)
+    );
+    vec![
+        json!({ "role": "system", "content": synthesis_prompt(language) }),
+        json!({ "role": "user", "content": user }),
+    ]
+}
+
+/// Question-answer message: the question plus (optionally) the selected
+/// passage and the relevant section as grounding context.
+fn build_qa_messages(
+    paper: &Paper,
+    question: &str,
+    selection: Option<&str>,
+    context: Option<&str>,
+    language: &str,
+) -> Vec<Value> {
+    let mut user = format!(
+        "Paper title: {}\nAuthors: {}\n",
+        paper.title,
+        paper.authors.join(", ")
+    );
+    if let Some(selection) = selection {
+        user.push_str(&format!(
+            "\nSelected passage from the paper:\n{selection}\n"
+        ));
+    }
+    if let Some(context) = context {
+        user.push_str(&format!(
+            "\nRelevant part of the paper:\n{}\n",
+            truncate(context, MAX_PAPER_TEXT_CHARS)
+        ));
+    }
+    user.push_str(&format!("\nQuestion: {question}"));
+    vec![
+        json!({ "role": "system", "content": qa_prompt(language) }),
+        json!({ "role": "user", "content": user }),
+    ]
+}
+
+/// Streams a chat completion with a prebuilt message list, sharing the
+/// cancellation flag and timeout of the main explain command.
+async fn stream_messages(
+    provider: &ProviderConfig,
+    messages: Vec<Value>,
+    on_chunk: Channel<String>,
+) -> Result<(), String> {
+    validate_provider(provider)?;
+    CANCEL_EXPLAIN.store(false, Ordering::SeqCst);
+    let key = load_key(provider)?;
+    let url = build_chat_url(&provider.base_url)?;
+    let client = shared_client();
+    let body = json!({
+        "model": provider.model,
+        "messages": messages,
+        "stream": true,
+        "temperature": 0.4,
+    });
+    stream_chat(client, &url, &key, body, EXPLAIN_TIMEOUT, &mut |chunk| {
+        let _ = on_chunk.send(chunk.to_string());
+    })
+    .await
+    .map(|_| ())
+}
+
+/// Mentor walkthrough of a single paper section (whole-paper reader).
+#[tauri::command]
+pub async fn explain_section(
+    provider: ProviderConfig,
+    paper: Paper,
+    section_index: usize,
+    total_sections: usize,
+    section_text: String,
+    language: String,
+    on_chunk: Channel<String>,
+) -> Result<(), String> {
+    let messages = build_section_messages(
+        &paper,
+        section_index,
+        total_sections,
+        &section_text,
+        &language,
+    );
+    stream_messages(&provider, messages, on_chunk).await
+}
+
+/// Final synthesis after all sections were walked through.
+#[tauri::command]
+pub async fn explain_synthesis(
+    provider: ProviderConfig,
+    paper: Paper,
+    sections_text: String,
+    language: String,
+    on_chunk: Channel<String>,
+) -> Result<(), String> {
+    let messages = build_synthesis_messages(&paper, &sections_text, &language);
+    stream_messages(&provider, messages, on_chunk).await
+}
+
+/// Answers a question about the paper, grounded in the selected passage
+/// and the relevant section context.
+#[tauri::command]
+pub async fn ask_about_paper(
+    provider: ProviderConfig,
+    paper: Paper,
+    question: String,
+    selection: Option<String>,
+    context: Option<String>,
+    language: String,
+    on_chunk: Channel<String>,
+) -> Result<(), String> {
+    let messages = build_qa_messages(
+        &paper,
+        &question,
+        selection.as_deref(),
+        context.as_deref(),
+        &language,
+    );
+    stream_messages(&provider, messages, on_chunk).await
+}
+
 /// Saves an API key to the OS keychain (Windows Credential Manager / macOS Keychain).
 #[tauri::command]
 pub async fn save_api_key(provider_id: String, key: String) -> Result<(), String> {
@@ -940,5 +1139,128 @@ mod tests {
                 "{label} should be rejected"
             );
         }
+    }
+
+    // --- whole-paper reader message builders (Phases 3-4) ---
+
+    fn reader_sample_paper() -> Paper {
+        Paper {
+            id: "2607.00001".into(),
+            title: "A Sample Paper".into(),
+            authors: vec!["Jane Doe".into()],
+            published: "2026-07-30T00:00:00Z".into(),
+            summary: "A sample abstract.".into(),
+            pdf_url: "https://arxiv.org/pdf/2607.00001".into(),
+            categories: vec!["cs.AI".into()],
+        }
+    }
+
+    #[test]
+    fn section_messages_mark_section_and_include_text() {
+        let messages = build_section_messages(
+            &reader_sample_paper(),
+            2,
+            5,
+            "The method uses a transformer.",
+            "en",
+        );
+        let system = messages[0]["content"].as_str().unwrap();
+        let user = messages[1]["content"].as_str().unwrap();
+        assert!(system.contains("ONE section of the paper at a time"));
+        assert!(system.contains("research mentor"));
+        assert!(user.contains("Paper title: A Sample Paper"));
+        assert!(user.contains("Section 2 of 5:"));
+        assert!(user.contains("The method uses a transformer."));
+    }
+
+    #[test]
+    fn section_messages_truncate_very_long_sections() {
+        let huge = "x".repeat(100_000);
+        let messages = build_section_messages(&reader_sample_paper(), 1, 1, &huge, "en");
+        let user = messages[1]["content"].as_str().unwrap();
+        assert!(user.len() < 70_000, "section text must be capped");
+    }
+
+    #[test]
+    fn synthesis_messages_include_full_text() {
+        let messages = build_synthesis_messages(
+            &reader_sample_paper(),
+            "Section 1 text. Section 2 text.",
+            "ar",
+        );
+        let system = messages[0]["content"].as_str().unwrap();
+        let user = messages[1]["content"].as_str().unwrap();
+        assert!(system.contains("الخلاصة النهائية"));
+        assert!(user.contains("Full text of the paper:"));
+        assert!(user.contains("Section 2 text."));
+    }
+
+    #[test]
+    fn qa_messages_include_selection_context_and_question() {
+        let messages = build_qa_messages(
+            &reader_sample_paper(),
+            "Why does the method work?",
+            Some("The transformer encodes tokens."),
+            Some("Section 2: the method."),
+            "en",
+        );
+        let user = messages[1]["content"].as_str().unwrap();
+        assert!(user.contains("Selected passage from the paper:\nThe transformer encodes tokens."));
+        assert!(user.contains("Relevant part of the paper:\nSection 2: the method."));
+        assert!(user.contains("Question: Why does the method work?"));
+    }
+
+    #[test]
+    fn qa_messages_work_without_selection_or_context() {
+        let messages = build_qa_messages(
+            &reader_sample_paper(),
+            "What is the main idea?",
+            None,
+            None,
+            "en",
+        );
+        let user = messages[1]["content"].as_str().unwrap();
+        assert!(!user.contains("Selected passage"));
+        assert!(!user.contains("Relevant part"));
+        assert!(user.contains("Question: What is the main idea?"));
+    }
+
+    #[test]
+    fn section_streaming_roundtrip_over_mock_server() {
+        // The reader commands share stream_chat; verify a section request
+        // streams content through the same SSE path as explain_paper.
+        // Raw string literal + explicit CRLF escapes (editing tools
+        // mangle bare \r escapes on this machine).
+        let sse = concat!(
+            r#"HTTP/1.1 200 OK"#,
+            "\u{000d}\u{000a}",
+            r#"Content-Type: text/event-stream"#,
+            "\u{000d}\u{000a}",
+            r#"Connection: close"#,
+            "\u{000d}\u{000a}\u{000d}\u{000a}",
+            r#"data: {"choices":[{"delta":{"content":"Section"}}]}"#,
+            "\u{000a}\u{000a}",
+            r#"data: {"choices":[{"delta":{"content":" explained."}}]}"#,
+            "\u{000a}\u{000a}",
+            "data: [DONE]\u{000a}\u{000a}"
+        );
+        let url = spawn_mock_server(sse.into());
+        let client = reqwest::Client::new();
+        let messages = build_section_messages(&reader_sample_paper(), 1, 2, "Intro text.", "en");
+        let body = json!({ "model": "mock", "messages": messages, "stream": true });
+        let mut chunks = Vec::new();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let full = runtime
+            .block_on(stream_chat(
+                &client,
+                &format!("{url}/v1/chat/completions"),
+                "test-key",
+                body,
+                Duration::from_secs(10),
+                &mut |c| chunks.push(c.to_string()),
+            ))
+            .expect("stream should succeed");
+        assert_eq!(full, "Section explained.");
+        assert_eq!(chunks.join(""), "Section explained.");
     }
 }

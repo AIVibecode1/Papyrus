@@ -97,6 +97,8 @@ export async function streamExplanation(opts: ExplainOptions): Promise<void> {
   await streamExplanationBrowser(opts);
 }
 
+export { streamChatBrowser };
+
 export async function stopExplanation(): Promise<void> {
   if (isTauri()) {
     await invoke("stop_explaining");
@@ -115,8 +117,11 @@ export async function stopExplanation(): Promise<void> {
 // - Cancellation surfaces the CANCELLED_MARKER string (Rust: Err(marker);
 //   TS: throw Error(marker)).
 // - Delta payloads are JSON objects; content lives at choices[0].delta.content.
-async function streamExplanationBrowser(opts: ExplainOptions): Promise<void> {
-  const { provider, paper, language, onChunk } = opts;
+async function streamChatBrowser(
+  provider: ProviderConfig,
+  messages: { role: string; content: string }[],
+  onChunk: (chunk: string) => void,
+): Promise<void> {
   const key = getBrowserKey(provider.id);
 
   const controller = new AbortController();
@@ -130,7 +135,7 @@ async function streamExplanationBrowser(opts: ExplainOptions): Promise<void> {
       },
       body: JSON.stringify({
         model: provider.model,
-        messages: buildMessages(paper, language),
+        messages,
         stream: true,
         temperature: 0.4,
       }),
@@ -177,6 +182,11 @@ async function streamExplanationBrowser(opts: ExplainOptions): Promise<void> {
   } finally {
     activeController = null;
   }
+}
+
+async function streamExplanationBrowser(opts: ExplainOptions): Promise<void> {
+  const { provider, paper, language, onChunk } = opts;
+  await streamChatBrowser(provider, buildMessages(paper, language), onChunk);
 }
 
 /** Minimal chat request used by the Settings "Test" button (browser preview). */

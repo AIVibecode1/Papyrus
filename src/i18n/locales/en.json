@@ -6,6 +6,38 @@
   "a11y": {
     "skipToContent": "Skip to content"
   },
+  "reader": {
+    "back": "Back to papers",
+    "loadingPdf": "Loading PDF and extracting text…",
+    "pdfError": "Could not load the PDF.",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "searchInPdf": "Search in PDF",
+    "closeSearch": "Close search",
+    "nextMatch": "Next match",
+    "matches": "matches",
+    "noMatches": "No matches",
+    "walkthroughTab": "Walkthrough",
+    "askTab": "Ask",
+    "explainWhole": "Explain the whole paper",
+    "explainWholeHint": "The mentor reads the paper section by section and explains each one before moving on.",
+    "sectionOf": "Section {{current}} of {{total}}",
+    "explainingSection": "The mentor is reading this section…",
+    "continue": "Continue to the next section",
+    "finishSynthesis": "Show the final summary",
+    "synthesis": "Final summary of the whole paper",
+    "walkthroughDone": "Walkthrough complete. Ask questions in the Ask tab.",
+    "selectionLabel": "Selected passage",
+    "clearSelection": "Clear selection",
+    "emptyChat": "Ask anything about the paper, or select a passage and ask about it.",
+    "thinking": "Thinking…",
+    "askPlaceholder": "Ask about the paper…"
+  },
+  "markdown": {
+    "diagramError": "Diagram could not be rendered"
+  },
   "nav": {
     "settings": "Settings"
   },
@@ -39,6 +71,7 @@
     "noFavorites": "No saved papers yet. Tap the bookmark on any paper.",
     "latest": "Latest",
     "today": "Today",
+    "read": "Read",
     "prevDay": "Previous day",
     "nextDay": "Next day",
     "browseByDay": "Browse by day",

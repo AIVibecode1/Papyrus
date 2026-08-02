@@ -1,4 +1,4 @@
-import { Bookmark, BookmarkCheck, ExternalLink, Lightbulb } from "lucide-react";
+import { Bookmark, BookmarkCheck, BookOpenText, ExternalLink, Lightbulb } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -8,7 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExplainPanel } from "@/features/papers/explain-panel";
 import { useExplanationStore } from "@/stores/explanation";
 import { useFavoritesStore } from "@/stores/favorites";
+import { useReaderStore } from "@/stores/reader";
 import { useSettingsStore } from "@/stores/settings";
+import { useUiStore } from "@/stores/ui";
 import type { Paper } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +23,8 @@ export function PaperCard({ paper }: PaperCardProps) {
   const { providers, activeProviderId } = useSettingsStore();
   const isFavorite = useFavoritesStore((s) => s.isFavorite);
   const toggleFavorite = useFavoritesStore((s) => s.toggle);
+  const openReader = useReaderStore((s) => s.open);
+  const setView = useUiStore((s) => s.setView);
   const expandedId = useExplanationStore((s) => s.expandedId);
   const toggle = useExplanationStore((s) => s.toggle);
   const start = useExplanationStore((s) => s.start);
@@ -120,6 +124,17 @@ export function PaperCard({ paper }: PaperCardProps) {
               <ExternalLink className="size-3.5" />
               {t("papers.openPdf")}
             </a>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void openReader(paper);
+              setView("reader");
+            }}
+          >
+            <BookOpenText className="size-3.5" />
+            {t("papers.read")}
           </Button>
           <Button
             size="sm"

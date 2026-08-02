@@ -1,0 +1,428 @@
+import { create } from "zustand";
+
+import { CANCELLED_MARKER, stopExplanation } from "@/lib/ai";
+import { getPdfBytes } from "@/lib/pdf";
+import { extractTextFromPdf } from "@/lib/pdf-text";
+import { capTotal, findContextSection, splitIntoSections } from "@/lib/paper-text";
+import { streamAsk, streamSectionExplanation, streamSynthesis } from "@/lib/reader-ai";
+import type { Paper, ProviderConfig } from "@/lib/types";
+
+export type ReaderStatus = "idle" | "loading" | "ready" | "error";
+export type StreamStatus = "idle" | "loading" | "streaming" | "done" | "error" | "stopped";
+
+export interface SectionEntry {
+  text: string;
+  status: StreamStatus;
+  error: string | null;
+}
+
+export interface ChatMessage {
+  id: number;
+  role: "user" | "assistant";
+  text: string;
+  status: StreamStatus;
+  error: string | null;
+  selection: string | null;
+}
+
+const CHAT_STORAGE_KEY = "papyrus-reader-chat-v1";
+const CHAT_PERSIST_LIMIT = 30;
+const FLUSH_INTERVAL_MS = 50;
+
+interface ReaderState {
+  paper: Paper | null;
+  pdfBytes: Uint8Array | null;
+  loadStatus: ReaderStatus;
+  loadError: string | null;
+  sections: string[];
+  /** Index of the next section to explain (0-based). */
+  sectionIndex: number;
+  /** Explanations for the sections completed so far. */
+  sectionEntries: SectionEntry[];
+  synthesis: SectionEntry | null;
+  chat: ChatMessage[];
+  selection: string | null;
+  open: (paper: Paper) => Promise<void>;
+  close: () => void;
+  setSelection: (text: string | null) => void;
+  clearSelection: () => void;
+  startWalkthrough: (provider: ProviderConfig, language: string) => Promise<void>;
+  continueWalkthrough: (provider: ProviderConfig, language: string) => Promise<void>;
+  ask: (question: string, provider: ProviderConfig, language: string) => Promise<void>;
+  stop: () => Promise<void>;
+}
+
+let messageId = 1;
+
+function loadChat(paperId: string): ChatMessage[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) ?? "{}") as Record<
+      string,
+      ChatMessage[]
+    >;
+    const list = raw[paperId] ?? [];
+    return list.filter((m) => m && typeof m.text === "string");
+  } catch {
+    return [];
+  }
+}
+
+function persistChat(paperId: string, messages: ChatMessage[]) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) ?? "{}") as Record<
+      string,
+      ChatMessage[]
+    >;
+    raw[paperId] = messages.slice(-CHAT_PERSIST_LIMIT);
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(raw));
+  } catch {
+    // Storage full or unavailable: chat history is best-effort.
+  }
+}
+
+export const useReaderStore = create<ReaderState>((set, get) => {
+  // Generation counters: bumping one invalidates in-flight chunks from
+  // a superseded run (same pattern as the explanation store).
+  let wtGen = 0;
+  let chatGen = 0;
+
+  return {
+    paper: null,
+    pdfBytes: null,
+    loadStatus: "idle",
+    loadError: null,
+    sections: [],
+    sectionIndex: 0,
+    sectionEntries: [],
+    synthesis: null,
+    chat: [],
+    selection: null,
+
+    open: async (paper) => {
+      set({ paper, pdfBytes: null, loadStatus: "loading", loadError: null });
+      try {
+        const bytes = await getPdfBytes(paper.id, paper.pdfUrl);
+        const text = await extractTextFromPdf(bytes);
+        const sections = splitIntoSections(text);
+        if (sections.length === 0) {
+          set({
+            loadStatus: "error",
+            loadError: "No readable text could be extracted from this PDF.",
+          });
+          return;
+        }
+        set({
+          pdfBytes: bytes,
+          sections,
+          sectionIndex: 0,
+          sectionEntries: [],
+          synthesis: null,
+          chat: loadChat(paper.id),
+          selection: null,
+          loadStatus: "ready",
+        });
+      } catch (err) {
+        set({
+          loadStatus: "error",
+          loadError: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+
+    close: () =>
+      set({
+        paper: null,
+        pdfBytes: null,
+        loadStatus: "idle",
+        loadError: null,
+        sections: [],
+        sectionIndex: 0,
+        sectionEntries: [],
+        synthesis: null,
+        chat: [],
+        selection: null,
+      }),
+
+    setSelection: (text) => set({ selection: text }),
+    clearSelection: () => set({ selection: null }),
+
+    startWalkthrough: async (provider, language) => {
+      const { sections } = get();
+      if (sections.length === 0) return;
+      set({ sectionEntries: [], synthesis: null, sectionIndex: 0 });
+      await get().continueWalkthrough(provider, language);
+    },
+
+    continueWalkthrough: async (provider, language) => {
+      const { paper, sections, sectionIndex, synthesis } = get();
+      if (!paper) return;
+
+      if (sectionIndex < sections.length) {
+        const i = sectionIndex;
+        const gen = ++wtGen;
+        set((s) => ({
+          sectionIndex: i + 1,
+          sectionEntries: [...s.sectionEntries, { text: "", status: "loading", error: null }],
+        }));
+
+        let pending: string[] = [];
+        let flushTimer: ReturnType<typeof setTimeout> | null = null;
+        const clearTimer = () => {
+          if (flushTimer !== null) {
+            clearTimeout(flushTimer);
+            flushTimer = null;
+          }
+        };
+        const flush = () => {
+          flushTimer = null;
+          const buf = pending;
+          pending = [];
+          if (buf.length === 0) return;
+          set((s) => {
+            const entry = s.sectionEntries[i];
+            if (!entry || entry.status !== "loading") return s;
+            const entries = [...s.sectionEntries];
+            entries[i] = { ...entry, text: entry.text + buf.join(""), status: "streaming" };
+            return { sectionEntries: entries };
+          });
+        };
+
+        try {
+          await streamSectionExplanation({
+            provider,
+            paper,
+            sectionIndex: i + 1,
+            totalSections: sections.length,
+            sectionText: sections[i],
+            language,
+            onChunk: (chunk) => {
+              if (wtGen !== gen) return;
+              pending.push(chunk);
+              if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
+            },
+          });
+          if (wtGen !== gen) return;
+          clearTimer();
+          flush();
+          set((s) => {
+            const entries = [...s.sectionEntries];
+            const entry = entries[i];
+            if (entry) entries[i] = { ...entry, status: "done" };
+            return { sectionEntries: entries };
+          });
+        } catch (err) {
+          if (wtGen !== gen) return;
+          clearTimer();
+          const message = err instanceof Error ? err.message : String(err);
+          const stopped = message.startsWith(CANCELLED_MARKER);
+          set((s) => {
+            const entries = [...s.sectionEntries];
+            const entry = entries[i];
+            if (entry) {
+              entries[i] = {
+                ...entry,
+                status: stopped ? "stopped" : "error",
+                error: stopped ? null : message,
+              };
+            }
+            return { sectionEntries: entries };
+          });
+        }
+        return;
+      }
+
+      if (!synthesis || synthesis.status !== "done") {
+        const gen = ++wtGen;
+        set({ synthesis: { text: "", status: "loading", error: null } });
+        let pending: string[] = [];
+        let flushTimer: ReturnType<typeof setTimeout> | null = null;
+        const clearTimer = () => {
+          if (flushTimer !== null) {
+            clearTimeout(flushTimer);
+            flushTimer = null;
+          }
+        };
+        const flush = () => {
+          flushTimer = null;
+          const buf = pending;
+          pending = [];
+          if (buf.length === 0) return;
+          set((s) => {
+            const cur = s.synthesis;
+            if (!cur || cur.status !== "loading") return s;
+            return { synthesis: { ...cur, text: cur.text + buf.join(""), status: "streaming" } };
+          });
+        };
+        try {
+          await streamSynthesis({
+            provider,
+            paper,
+            sectionsText: capTotal(sections.join("\n\n")),
+            language,
+            onChunk: (chunk) => {
+              if (wtGen !== gen) return;
+              pending.push(chunk);
+              if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
+            },
+          });
+          if (wtGen !== gen) return;
+          clearTimer();
+          flush();
+          set((s) => (s.synthesis ? { synthesis: { ...s.synthesis, status: "done" } } : {}));
+        } catch (err) {
+          if (wtGen !== gen) return;
+          clearTimer();
+          const message = err instanceof Error ? err.message : String(err);
+          const stopped = message.startsWith(CANCELLED_MARKER);
+          set((s) =>
+            s.synthesis
+              ? {
+                  synthesis: {
+                    ...s.synthesis,
+                    status: stopped ? "stopped" : "error",
+                    error: stopped ? null : message,
+                  },
+                }
+              : {},
+          );
+        }
+      }
+    },
+
+    ask: async (question, provider, language) => {
+      const { paper, sections, selection } = get();
+      if (!paper || !question.trim()) return;
+      const gen = ++chatGen;
+      const id = messageId++;
+      const selectionSnapshot = selection;
+
+      set((s) => ({
+        chat: [
+          ...s.chat,
+          {
+            id,
+            role: "user",
+            text: question.trim(),
+            status: "done",
+            error: null,
+            selection: selectionSnapshot,
+          },
+          {
+            id: id + 1,
+            role: "assistant",
+            text: "",
+            status: "loading",
+            error: null,
+            selection: null,
+          },
+        ],
+      }));
+
+      let pending: string[] = [];
+      let flushTimer: ReturnType<typeof setTimeout> | null = null;
+      const clearTimer = () => {
+        if (flushTimer !== null) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+      };
+      const flush = () => {
+        flushTimer = null;
+        const buf = pending;
+        pending = [];
+        if (buf.length === 0) return;
+        set((s) => {
+          const list = [...s.chat];
+          const msg = list.find((m) => m.id === id + 1);
+          if (!msg || msg.status !== "loading") return s;
+          msg.text += buf.join("");
+          msg.status = "streaming";
+          return { chat: list };
+        });
+      };
+
+      // Ground the answer: the section containing the selection (or the
+      // first section when there is no selection), so the model never
+      // answers without paper context.
+      const context = findContextSection(sections, selectionSnapshot ?? "");
+
+      try {
+        await streamAsk({
+          provider,
+          paper,
+          question: question.trim(),
+          selection: selectionSnapshot,
+          context,
+          language,
+          onChunk: (chunk) => {
+            if (chatGen !== gen) return;
+            pending.push(chunk);
+            if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
+          },
+        });
+        if (chatGen !== gen) return;
+        clearTimer();
+        flush();
+        set((s) => {
+          const list = s.chat.map((m) => (m.id === id + 1 ? { ...m, status: "done" as const } : m));
+          persistChat(paper.id, list);
+          return { chat: list };
+        });
+      } catch (err) {
+        if (chatGen !== gen) return;
+        clearTimer();
+        const message = err instanceof Error ? err.message : String(err);
+        const stopped = message.startsWith(CANCELLED_MARKER);
+        const status: StreamStatus = stopped ? "stopped" : "error";
+        set((s) => {
+          const list = s.chat.map((m) =>
+            m.id === id + 1 ? { ...m, status, error: stopped ? null : message } : m,
+          );
+          persistChat(paper.id, list);
+          return { chat: list };
+        });
+      }
+    },
+
+    stop: async () => {
+      const { sectionEntries, synthesis, chat, sections, paper } = get();
+      const wtBusy =
+        sectionEntries.some((e) => e.status === "loading" || e.status === "streaming") ||
+        (synthesis !== null &&
+          (synthesis.status === "loading" || synthesis.status === "streaming"));
+      const chatBusy = chat.some((m) => m.status === "loading" || m.status === "streaming");
+
+      if (wtBusy) {
+        wtGen += 1;
+        await stopExplanation();
+        set((s) => ({
+          sectionEntries: s.sectionEntries.map((e) =>
+            e.status === "loading" || e.status === "streaming"
+              ? { ...e, status: "stopped" as const }
+              : e,
+          ),
+          synthesis:
+            s.synthesis && (s.synthesis.status === "loading" || s.synthesis.status === "streaming")
+              ? { ...s.synthesis, status: "stopped" as const }
+              : s.synthesis,
+        }));
+      } else if (chatBusy) {
+        chatGen += 1;
+        await stopExplanation();
+        if (paper) {
+          set((s) => {
+            const list = s.chat.map((m) =>
+              m.status === "loading" || m.status === "streaming"
+                ? { ...m, status: "stopped" as const }
+                : m,
+            );
+            persistChat(paper.id, list);
+            return { chat: list };
+          });
+        }
+      }
+
+      void sections;
+    },
+  };
+});

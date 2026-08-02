@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useTheme } from "@/hooks/use-theme";
 
@@ -22,6 +23,7 @@ interface MermaidBlockProps {
  * a silent blank.
  */
 export function MermaidBlock({ code }: MermaidBlockProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export function MermaidBlock({ code }: MermaidBlockProps) {
         dir="ltr"
         className="my-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive"
       >
-        <p className="mb-1 font-medium">Diagram could not be rendered</p>
+        <p className="mb-1 font-medium">{t("markdown.diagramError")}</p>
         <pre className="whitespace-pre-wrap">{code}</pre>
       </div>
     );

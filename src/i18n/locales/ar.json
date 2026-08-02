@@ -6,6 +6,38 @@
   "a11y": {
     "skipToContent": "تخطَّ إلى المحتوى"
   },
+  "reader": {
+    "back": "العودة إلى الأوراق",
+    "loadingPdf": "جارٍ تحميل ملف PDF واستخراج النص…",
+    "pdfError": "تعذّر تحميل ملف PDF.",
+    "prevPage": "الصفحة السابقة",
+    "nextPage": "الصفحة التالية",
+    "zoomIn": "تكبير",
+    "zoomOut": "تصغير",
+    "searchInPdf": "ابحث في ملف PDF",
+    "closeSearch": "إغلاق البحث",
+    "nextMatch": "النتيجة التالية",
+    "matches": "نتيجة",
+    "noMatches": "لا توجد نتائج",
+    "walkthroughTab": "الشرح الموجّه",
+    "askTab": "اسأل",
+    "explainWhole": "اشرح الورقة كاملة",
+    "explainWholeHint": "يقرأ المرشد الورقة قسمًا قسمًا ويشرح كل قسم قبل الانتقال إلى التالي.",
+    "sectionOf": "القسم {{current}} من {{total}}",
+    "explainingSection": "يقرأ المرشد هذا القسم…",
+    "continue": "متابعة إلى القسم التالي",
+    "finishSynthesis": "اعرض الخلاصة النهائية",
+    "synthesis": "الخلاصة النهائية للورقة كاملة",
+    "walkthroughDone": "اكتمل الشرح الموجّه. يمكنك طرح الأسئلة في تبويب اسأل.",
+    "selectionLabel": "المقطع المحدد",
+    "clearSelection": "مسح التحديد",
+    "emptyChat": "اسأل أي شيء عن الورقة، أو حدّد مقطعًا واسأل عنه.",
+    "thinking": "يفكّر…",
+    "askPlaceholder": "اسأل عن الورقة…"
+  },
+  "markdown": {
+    "diagramError": "تعذّر عرض الرسم البياني"
+  },
   "nav": {
     "settings": "الإعدادات"
   },
@@ -39,6 +71,7 @@
     "noFavorites": "لا توجد أوراق محفوظة بعد. اضغط على الإشارة المرجعية لأي ورقة.",
     "latest": "الأحدث",
     "today": "اليوم",
+    "read": "اقرأ",
     "prevDay": "اليوم السابق",
     "nextDay": "اليوم التالي",
     "browseByDay": "تصفح حسب اليوم",

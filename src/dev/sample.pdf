@@ -1,0 +1,50 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Length 667 >>
+stream
+BT /F1 12 Tf 72 760 Td 18 TL
+(1. Introduction) Tj T*
+(This is a sample paper used by the browser preview to test the Papyrus reader. It has two sections and some text about transformers and attention.) Tj T*
+(The authors propose a simple method that improves the results on standard benchmarks. The key idea is to normalize the inputs before the core model runs.) Tj T*
+(2. Method) Tj T*
+(The method section explains the approach in detail. First the encoder maps the tokens to vectors. Then the core model processes them. Finally the decoder ranks the outputs.) Tj T*
+(We evaluate on three datasets. The results show a clear improvement over the baselines.) Tj T*
+ET
+endstream
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 2 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+5 0 obj
+<< /Length 303 >>
+stream
+BT /F1 12 Tf 72 760 Td 18 TL
+(3. Results) Tj T*
+(The experiments confirm the claims. The table shows the scores for every model.) Tj T*
+(4. Conclusion) Tj T*
+(We conclude that the method is simple, effective, and easy to reproduce. Future work will extend it to larger models and other fields.) Tj T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000839 00000 n 
+0000000965 00000 n 
+0000001319 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1445
+%%EOF

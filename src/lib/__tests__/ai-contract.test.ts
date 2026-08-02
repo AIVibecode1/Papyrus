@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 // src-tauri/src/ai.rs) — these tests pin the cross-language contract.
 import prompts from "../../../src-tauri/prompts.json";
 import { CANCELLED_MARKER, normalizeBaseUrl, streamExplanation } from "@/lib/ai";
+import { buildQaUser, buildSectionUser } from "@/lib/reader-ai";
 import type { Paper, ProviderConfig } from "@/lib/types";
 
 // isTauri() checks "__TAURI_INTERNALS__" in window; node has no window, so
@@ -63,6 +64,36 @@ describe("shared AI resource (src-tauri/prompts.json)", () => {
     expect(prompts.fullPaperStructureEn).toContain("Equations");
     expect(prompts.fullPaperStructureAr).toContain("المعادلات");
     expect(prompts.fullPaperStructureAr).toContain("مرشدي البحثي");
+  });
+
+  it("provides qa and synthesis prompts in both languages", () => {
+    expect(prompts.qaPromptEn).toContain("research mentor");
+    expect(prompts.qaPromptEn).toContain("question");
+    expect(prompts.qaPromptAr).toContain("مرشد بحثي");
+    expect(prompts.synthesisPromptEn).toContain("five most important ideas");
+    expect(prompts.synthesisPromptAr).toContain("أهم خمس أفكار");
+  });
+
+  it("reader message builders match the Rust format strings", () => {
+    // Mirrors build_section_messages / build_qa_messages in ai.rs.
+    const paper: Paper = {
+      id: "2607.00001",
+      title: "A Test Paper",
+      authors: ["Jane Doe"],
+      published: "2026-07-30T00:00:00Z",
+      summary: "Abstract.",
+      pdfUrl: "https://arxiv.org/pdf/2607.00001",
+      categories: ["cs.AI"],
+    };
+    const section = buildSectionUser(paper, 2, 5, "The method uses a transformer.");
+    expect(section).toContain("Paper title: A Test Paper");
+    expect(section).toContain("Section 2 of 5:");
+    expect(section).toContain("The method uses a transformer.");
+
+    const qa = buildQaUser(paper, "Why does it work?", "Selected text.", "Section context.");
+    expect(qa).toContain("Selected passage from the paper:\nSelected text.");
+    expect(qa).toContain("Relevant part of the paper:\nSection context.");
+    expect(qa).toContain("Question: Why does it work?");
   });
 });
 

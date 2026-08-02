@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { TopBar } from "@/components/layout/top-bar";
 import { PaperList } from "@/features/papers/paper-list";
 import { Sidebar } from "@/features/papers/sidebar";
+import { ReaderView } from "@/features/reader/reader-view";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { useFavoritesStore } from "@/stores/favorites";
 import { usePapersStore } from "@/stores/papers";
@@ -38,6 +39,8 @@ export default function App() {
             <PaperList />
           </main>
         </div>
+      ) : view === "reader" ? (
+        <ReaderView />
       ) : (
         <SettingsPage />
       )}
