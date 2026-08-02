@@ -97,13 +97,19 @@ fn build_messages(paper: &Paper, language: &str) -> Vec<Value> {
     ]
 }
 
+/// Reports whether a base URL points at a local server (Ollama etc.),
+/// where an API key may be omitted.
+fn is_local_base_url(base_url: &str) -> bool {
+    base_url.contains("localhost") || base_url.contains("127.0.0.1")
+}
+
 /// Loads the stored API key for a provider. Local endpoints (Ollama etc.) may have no key.
 fn load_key(app: &tauri::AppHandle, provider: &ProviderConfig) -> Result<String, String> {
     let key = app
         .keyring()
         .get_password(KEYRING_SERVICE, &provider.id)
         .map_err(|e| format!("Failed to read key from the system keychain: {e}"))?;
-    let is_local = provider.base_url.contains("localhost") || provider.base_url.contains("127.0.0.1");
+    let is_local = is_local_base_url(&provider.base_url);
     match key {
         Some(k) => Ok(k),
         None if is_local => Ok(String::new()),
@@ -591,5 +597,177 @@ mod tests {
         ));
         let msg = result.expect_err("should fail with 401");
         assert!(msg.contains("401"), "got: {msg}");
+    }
+
+    #[test]
+    fn streams_content_split_mid_line() {
+        // A `data:` line cut across two TCP writes must still assemble
+        // into the full text: the parser buffers bytes and only decodes
+        // complete lines.
+        let first_event = "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}";
+        let sse = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n\
+             {first_event}\n\n\
+             data: {{\"choices\":[{{\"delta\":{{\"content\":\" world\"}}}}]}}\n\n\
+             data: [DONE]\n\n"
+        );
+        // Cut the first `data:` line in half, right through the JSON.
+        let cut = sse.find(first_event).unwrap() + first_event.len() / 2;
+        let url = spawn_mock_server_chunked(vec![
+            sse[..cut].as_bytes().to_vec(),
+            sse[cut..].as_bytes().to_vec(),
+        ]);
+
+        let client = reqwest::Client::new();
+        let mut chunks = Vec::new();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let full = runtime
+            .block_on(stream_chat(
+                &client,
+                &format!("{url}/v1/chat/completions"),
+                "test-key",
+                json!({ "model": "mock", "messages": [] }),
+                Duration::from_secs(10),
+                &mut |c| chunks.push(c.to_string()),
+            ))
+            .expect("split stream should succeed");
+        assert_eq!(full, "Hello world");
+        assert_eq!(chunks, vec!["Hello", " world"]);
+    }
+
+    #[test]
+    fn ignores_keepalive_and_comment_lines() {
+        // Providers emit `: ping` comment lines and stray blank lines
+        // between events; neither may leak into the assembled text.
+        let sse = concat!(
+            "HTTP/1.1 200 OK\r\n",
+            "Content-Type: text/event-stream\r\n",
+            "Connection: close\r\n\r\n",
+            ": ping\n\n",
+            "\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
+            ": keep-alive\n\n",
+            "\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n\n",
+            "data: [DONE]\n\n",
+        );
+        let url = spawn_mock_server(sse.into());
+        let client = reqwest::Client::new();
+        let mut chunks = Vec::new();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let full = runtime
+            .block_on(stream_chat(
+                &client,
+                &format!("{url}/v1/chat/completions"),
+                "test-key",
+                json!({ "model": "mock", "messages": [] }),
+                Duration::from_secs(10),
+                &mut |c| chunks.push(c.to_string()),
+            ))
+            .expect("stream with keep-alives should succeed");
+        assert_eq!(full, "Hello world");
+        assert_eq!(chunks, vec!["Hello", " world"]);
+    }
+
+    #[test]
+    fn clean_close_without_done_returns_content() {
+        // A provider that closes the connection after the last event
+        // (no [DONE] marker) must still yield the content received so far.
+        let sse = concat!(
+            "HTTP/1.1 200 OK\r\n",
+            "Content-Type: text/event-stream\r\n",
+            "Connection: close\r\n\r\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Partial answer\"}}]}\n\n",
+        );
+        let url = spawn_mock_server(sse.into());
+        let client = reqwest::Client::new();
+        let mut chunks = Vec::new();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let full = runtime
+            .block_on(stream_chat(
+                &client,
+                &format!("{url}/v1/chat/completions"),
+                "test-key",
+                json!({ "model": "mock", "messages": [] }),
+                Duration::from_secs(10),
+                &mut |c| chunks.push(c.to_string()),
+            ))
+            .expect("clean close without [DONE] should succeed");
+        assert_eq!(full, "Partial answer");
+        assert_eq!(chunks, vec!["Partial answer"]);
+    }
+
+    #[test]
+    fn detects_local_base_urls() {
+        // load_key's local-endpoint detection: plaintext local servers may
+        // omit the API key, remote endpoints may not.
+        assert!(is_local_base_url("http://localhost:11434/v1"));
+        assert!(is_local_base_url("http://127.0.0.1:11434/v1"));
+        assert!(!is_local_base_url("https://api.x.com/v1"));
+        assert!(!is_local_base_url("https://api.openai.com/v1"));
+    }
+
+    #[test]
+    fn validate_provider_accepts_valid_config() {
+        let provider = ProviderConfig {
+            id: "openai".into(),
+            name: "OpenAI".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            model: "gpt-4o".into(),
+        };
+        assert!(validate_provider(&provider).is_ok());
+    }
+
+    #[test]
+    fn validate_provider_rejects_invalid_config() {
+        let valid = || ProviderConfig {
+            id: "openai".into(),
+            name: "OpenAI".into(),
+            base_url: "https://api.openai.com/v1".into(),
+            model: "gpt-4o".into(),
+        };
+        let cases = [
+            (
+                "empty id",
+                ProviderConfig {
+                    id: String::new(),
+                    ..valid()
+                },
+            ),
+            (
+                "blank name",
+                ProviderConfig {
+                    name: "  ".into(),
+                    ..valid()
+                },
+            ),
+            (
+                "empty model",
+                ProviderConfig {
+                    model: String::new(),
+                    ..valid()
+                },
+            ),
+            (
+                "bad scheme",
+                ProviderConfig {
+                    base_url: "ftp://bad".into(),
+                    ..valid()
+                },
+            ),
+            (
+                "remote plaintext",
+                ProviderConfig {
+                    base_url: "http://api.example.com/v1".into(),
+                    ..valid()
+                },
+            ),
+        ];
+        for (label, provider) in cases {
+            assert!(
+                validate_provider(&provider).is_err(),
+                "{label} should be rejected"
+            );
+        }
     }
 }

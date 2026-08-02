@@ -21,7 +21,7 @@ STOP conditions, and update your row when done.
 | 006 | Keychain-delete failure surfaced in UI | P1 | S | — | DONE |
 | 008 | HTTPS enforcement + arXiv PDF normalization | P2 | S | — | DONE |
 | 009 | Shared reqwest client | P2 | S | — | DONE |
-| 010 | Rust test gaps (fragmented streams, cancel, units) | P2 | S | 001 | TODO |
+| 010 | Rust test gaps (fragmented streams, cancel, units) | P2 | S | 001 | DONE (cancel test deferred to plan 005) |
 | 011 | Browser-preview Stop via AbortController | P2 | S | 002, 004, 005 | TODO |
 | 012 | localStorage provider shape validation | P2 | S | 002 | TODO |
 | 013 | Redact token-shaped strings from error bodies | P2 | S | — | TODO |

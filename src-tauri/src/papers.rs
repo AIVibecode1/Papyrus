@@ -239,6 +239,53 @@ mod tests {
     }
 
     #[test]
+    fn skips_malformed_entries() {
+        // An entry with neither a title nor a summary is dropped; the
+        // rest of the feed is still returned.
+        let feed = r#"<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>http://arxiv.org/abs/2607.11111v1</id>
+    <title>A Real Paper</title>
+    <published>2026-07-30T10:00:00Z</published>
+    <summary>A real summary.</summary>
+    <author><name>Jane Doe</name></author>
+    <link href="https://arxiv.org/pdf/2607.11111v1" rel="related" type="application/pdf"/>
+    <category term="cs.AI"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2607.22222v1</id>
+    <published>2026-07-30T11:00:00Z</published>
+  </entry>
+</feed>"#;
+        let papers = parse_feed(feed).expect("feed should parse");
+        assert_eq!(papers.len(), 1);
+        assert_eq!(papers[0].id, "2607.11111v1");
+        assert_eq!(papers[0].title, "A Real Paper");
+    }
+
+    #[test]
+    fn pdf_link_fallback_uses_id() {
+        // An entry with no application/pdf link falls back to the
+        // canonical https arXiv PDF URL derived from the entry id.
+        let feed = r#"<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>http://arxiv.org/abs/2607.33333v2</id>
+    <title>No PDF Link Here</title>
+    <published>2026-07-29T09:00:00Z</published>
+    <summary>Only an HTML link is present.</summary>
+    <author><name>John Smith</name></author>
+    <link href="https://arxiv.org/abs/2607.33333v2" rel="alternate" type="text/html"/>
+    <category term="cs.LG"/>
+  </entry>
+</feed>"#;
+        let papers = parse_feed(feed).expect("feed should parse");
+        assert_eq!(papers.len(), 1);
+        assert_eq!(papers[0].pdf_url, "https://arxiv.org/pdf/2607.33333v2");
+    }
+
+    #[test]
     fn rejects_garbage_xml() {
         assert!(parse_feed("not xml at all {{{").is_err());
     }
