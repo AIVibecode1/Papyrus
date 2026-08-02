@@ -1,3 +1,4 @@
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -15,22 +16,42 @@ const TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 static CANCEL_EXPLAIN: AtomicBool = AtomicBool::new(false);
 
-/// Typed cancellation marker: emitted instead of a human-readable string when
-/// a user stops an explanation. The frontend classifies a stop by this exact
-/// prefix (mirrored as `CANCELLED_MARKER` in src/lib/ai.ts), so provider
-/// errors that merely contain the word "stop" can never be mislabeled.
-pub const CANCELLED_MARKER: &str = "\u{1F6D1}PAPYRUS_CANCELLED"; // 🛑 prefix; collision-proof
+/// Shared AI-layer resource (system prompts + cancellation marker) — the
+/// single source of truth for both languages. Rust reads it via
+/// `include_str!`; TypeScript imports the same file from src/lib/ai.ts
+/// (`../../src-tauri/prompts.json`). Edit the JSON, never the code.
+const PROMPTS_JSON: &str = include_str!("../prompts.json");
 
-const SYSTEM_PROMPT_EN: &str = "You are Papyrus, an assistant that explains academic research \
-papers to a general audience. Explain the paper in simple, clear language. Structure your \
-answer as short paragraphs covering: (1) What the paper is about — the main idea, (2) How it \
-works — the method in plain terms, (3) Key results, (4) Why it matters. Keep it around \
-200-300 words. Do not use markdown tables. Always respond in English.";
+static PROMPTS: OnceLock<serde_json::Value> = OnceLock::new();
 
-const SYSTEM_PROMPT_AR: &str = "أنت «بابيروس»، مساعد يشرح الأوراق البحثية الأكاديمية لعامة \
-الجمهور بلغة بسيطة وواضحة. نظّم إجابتك في فقرات قصيرة تغطي: (1) ما موضوع الورقة — الفكرة \
-الرئيسية، (2) كيف تعمل — المنهج بعبارات بسيطة، (3) النتائج الرئيسية، (4) لماذا هي مهمة. \
-اجعل الشرح حوالي ٢٠٠-٣٠٠ كلمة. لا تستخدم جداول ماركداون. أجب دائمًا باللغة العربية الفصحى.";
+fn prompts() -> &'static serde_json::Value {
+    PROMPTS.get_or_init(|| {
+        serde_json::from_str(PROMPTS_JSON).expect("src-tauri/prompts.json must be valid JSON")
+    })
+}
+
+/// System prompt for the given UI language, from the shared resource.
+fn system_prompt(language: &str) -> &'static str {
+    let key = if language == "ar" {
+        "systemPromptAr"
+    } else {
+        "systemPromptEn"
+    };
+    prompts()[key]
+        .as_str()
+        .expect("prompts.json must contain a string systemPromptEn/systemPromptAr")
+}
+
+/// Typed cancellation marker from the shared resource. Emitted instead of a
+/// human-readable string when a user stops an explanation. The frontend
+/// classifies a stop by this exact prefix (exported as `CANCELLED_MARKER` in
+/// src/lib/ai.ts), so provider errors that merely contain the word "stop"
+/// can never be mislabeled.
+fn cancelled_marker() -> &'static str {
+    prompts()["cancelledMarker"]
+        .as_str()
+        .expect("prompts.json must contain a string cancelledMarker")
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -84,11 +105,7 @@ fn build_chat_url(base: &str) -> Result<String, String> {
 }
 
 fn build_messages(paper: &Paper, language: &str) -> Vec<Value> {
-    let system = if language == "ar" {
-        SYSTEM_PROMPT_AR
-    } else {
-        SYSTEM_PROMPT_EN
-    };
+    let system = system_prompt(language);
     let user = format!(
         "Title: {}\nAuthors: {}\nPublished: {}\nCategories: {}\n\nAbstract:\n{}",
         paper.title,
@@ -125,6 +142,16 @@ fn load_key(app: &tauri::AppHandle, provider: &ProviderConfig) -> Result<String,
     }
 }
 
+// SSE parser contract (both languages MUST match):
+// - Lines are split on \n (stripping trailing \r).
+// - Only lines starting with "data:" carry payloads; ": " comments and
+//   blanks are ignored.
+// - "[DONE]" ends the stream successfully.
+// - A clean close WITHOUT [DONE] is SUCCESS if content was received
+//   (Rust: Ok(full); TS: resolve) and an error if nothing was received.
+// - Cancellation surfaces the CANCELLED_MARKER string (Rust: Err(marker);
+//   TS: throw Error(marker)).
+// - Delta payloads are JSON objects; content lives at choices[0].delta.content.
 /// Streams a chat completion from any OpenAI-compatible endpoint, invoking `on_chunk`
 /// for each content delta. Returns the full assembled text.
 async fn stream_chat(
@@ -201,7 +228,7 @@ async fn stream_chat(
                             .and_then(|c| c.as_str())
                         {
                             if CANCEL_EXPLAIN.load(Ordering::SeqCst) {
-                                return Err(CANCELLED_MARKER.into());
+                                return Err(cancelled_marker().into());
                             }
                             full.push_str(content);
                             on_chunk(content);
@@ -210,7 +237,7 @@ async fn stream_chat(
                 }
             }
             if CANCEL_EXPLAIN.load(Ordering::SeqCst) {
-                return Err(CANCELLED_MARKER.into());
+                return Err(cancelled_marker().into());
             }
         }
     } else {
@@ -226,7 +253,7 @@ async fn stream_chat(
             .and_then(|c| c.as_str())
         {
             if CANCEL_EXPLAIN.load(Ordering::SeqCst) {
-                return Err(CANCELLED_MARKER.into());
+                return Err(cancelled_marker().into());
             }
             full.push_str(content);
             on_chunk(content);
@@ -824,7 +851,7 @@ mod tests {
         );
         assert_eq!(
             result.expect_err("cancelled stream must fail with the marker"),
-            CANCELLED_MARKER
+            cancelled_marker()
         );
     }
 

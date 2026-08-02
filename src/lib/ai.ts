@@ -1,10 +1,14 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type { Paper, ProviderConfig } from "@/lib/types";
+// Single source of truth for the AI layer (system prompts + cancellation
+// marker) — the same file the Rust backend reads via include_str! in
+// src-tauri/src/ai.rs. Edit the JSON, never the code.
+import prompts from "../../src-tauri/prompts.json";
 
-// Mirrors CANCELLED_MARKER in src-tauri/src/ai.rs — the typed cancellation
-// contract: Rust emits this exact string when a user stops an explanation,
-// and the store classifies a stop by matching it as a prefix.
-export const CANCELLED_MARKER = "\u{1F6D1}PAPYRUS_CANCELLED";
+// The typed cancellation contract: Rust emits this exact string (from the
+// shared resource) when a user stops an explanation, and the store classifies
+// a stop by matching it as a prefix.
+export const CANCELLED_MARKER = prompts.cancelledMarker;
 
 // Registry of the in-flight browser stream so stopExplanation() can abort it.
 // Assumes a single active stream (matches the MVP single-stream design).
@@ -33,6 +37,11 @@ export function isTauri(): boolean {
   return "__TAURI_INTERNALS__" in window;
 }
 
+// Divergence from the Rust URL contract (build_chat_url, plan 008): Rust
+// rejects plaintext http:// for remote hosts and allows it only for loopback
+// servers; the browser dev path keeps the simpler rule (no scheme validation)
+// because it only talks to local preview servers. The https path is shared
+// and cross-checked by ai-contract.test.ts.
 export function normalizeBaseUrl(base: string): string {
   const trimmed = base.trim().replace(/\/+$/, "");
   if (trimmed.endsWith("/chat/completions")) return trimmed;
@@ -51,15 +60,9 @@ export function redactTokens(text: string): string {
   );
 }
 
-// Keep in sync with src-tauri/src/ai.rs (SYSTEM_PROMPT_EN / SYSTEM_PROMPT_AR).
-const SYSTEM_PROMPT_EN =
-  "You are Papyrus, an assistant that explains academic research papers to a general audience. Explain the paper in simple, clear language. Structure your answer as short paragraphs covering: (1) What the paper is about — the main idea, (2) How it works — the method in plain terms, (3) Key results, (4) Why it matters. Keep it around 200-300 words. Do not use markdown tables. Always respond in English.";
-
-const SYSTEM_PROMPT_AR =
-  "أنت «بابيروس»، مساعد يشرح الأوراق البحثية الأكاديمية لعامة الجمهور بلغة بسيطة وواضحة. نظّم إجابتك في فقرات قصيرة تغطي: (1) ما موضوع الورقة — الفكرة الرئيسية، (2) كيف تعمل — المنهج بعبارات بسيطة، (3) النتائج الرئيسية، (4) لماذا هي مهمة. اجعل الشرح حوالي ٢٠٠-٣٠٠ كلمة. لا تستخدم جداول ماركداون. أجب دائمًا باللغة العربية الفصحى.";
-
 function buildMessages(paper: Paper, language: string) {
-  const system = language === "ar" ? SYSTEM_PROMPT_AR : SYSTEM_PROMPT_EN;
+  const system =
+    language === "ar" ? prompts.systemPromptAr : prompts.systemPromptEn;
   const user = [
     `Title: ${paper.title}`,
     `Authors: ${paper.authors.join(", ")}`,
@@ -106,6 +109,16 @@ export async function stopExplanation(): Promise<void> {
   activeController?.abort();
 }
 
+// SSE parser contract (both languages MUST match):
+// - Lines are split on \n (stripping trailing \r).
+// - Only lines starting with "data:" carry payloads; ": " comments and
+//   blanks are ignored.
+// - "[DONE]" ends the stream successfully.
+// - A clean close WITHOUT [DONE] is SUCCESS if content was received
+//   (Rust: Ok(full); TS: resolve) and an error if nothing was received.
+// - Cancellation surfaces the CANCELLED_MARKER string (Rust: Err(marker);
+//   TS: throw Error(marker)).
+// - Delta payloads are JSON objects; content lives at choices[0].delta.content.
 async function streamExplanationBrowser(opts: ExplainOptions): Promise<void> {
   const { provider, paper, language, onChunk } = opts;
   const key = getBrowserKey(provider.id);

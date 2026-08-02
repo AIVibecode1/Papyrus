@@ -27,7 +27,7 @@ STOP conditions, and update your row when done.
 | 013 | Redact token-shaped strings from error bodies | P2 | S | — | DONE (TS tests in standalone ai-redact.test.ts) |
 | 014 | Remove dead code + dangling lint suppression | P2 | S | — | DONE |
 | 015 | Chunk coalescing in explanation store | P2 | S | 004, 005 | DONE |
-| 016 | De-duplicate AI layer (prompts/URL/contract) | P2 | M | 001, 004, 005 | TODO |
+| 016 | De-duplicate AI layer (prompts/URL/contract) | P2 | M | 001, 004, 005 | DONE (shared resource src-tauri/prompts.json; prompts+marker identical in both languages — no drift found; URL divergence documented in ai.ts) |
 | 017 | Split settings-page god component | P3 | M | 004, 006, 014 | DONE (per-card confirm arm; formKey remount to preserve open-reset semantics) |
 | 018 | Lint, format, hooks, typecheck-in-dev, CI | P2 | M | 014 | TODO |
 | 020 | README: document pnpm prerequisite | P3 | S | — | DONE |
