@@ -36,7 +36,7 @@ STOP conditions, and update your row when done.
 | 021 | README screenshots (EN/AR, light/dark) | P3 | S | — | TODO |
 | 024 | Keyring dependency posture (vendor `keyring` crate) | P2 | S-M | — | TODO |
 | 025 | Keyword search (DIR-1) | P2 | S-M | 002, 003 | TODO |
-| 026 | Favorites / reading list (DIR-2) | P2 | S | 002, 012 | TODO |
+| 026 | Favorites / reading list (DIR-2) | P2 | S | 002, 012 | DONE (light inline Paper shape check — plan 012's isProviderConfig is provider-specific) |
 | 027 | Provider failover — design spike (DIR-3) | P3 | S-M | 005, 007 | DONE (spike; feature pending maintainer decision) |
 | 028 | Second paper source — design spike (DIR-4) | P3 | M | 025 | DONE (spike; feature pending maintainer decision) |
 

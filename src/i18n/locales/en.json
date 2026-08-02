@@ -28,7 +28,11 @@
     "noAbstract": "No abstract available.",
     "openPdf": "Open PDF",
     "explain": "Explain",
-    "updated": "Updated {{time}}"
+    "updated": "Updated {{time}}",
+    "save": "Save",
+    "saved": "Saved",
+    "savedOnly": "Saved",
+    "noFavorites": "No saved papers yet. Tap the bookmark on any paper."
   },
   "presets": {
     "openai": "OpenAI",

@@ -1,8 +1,10 @@
-import { AlertCircle, BookOpenText, RefreshCw } from "lucide-react";
+import { AlertCircle, Bookmark, BookOpenText, RefreshCw } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useFavoritesStore } from "@/stores/favorites";
 import { usePapersStore } from "@/stores/papers";
 import { PaperCard } from "@/features/papers/paper-card";
 
@@ -29,6 +31,9 @@ function PaperSkeleton() {
 export function PaperList() {
   const { t } = useTranslation();
   const { papers, loading, error, refresh, lastUpdated } = usePapersStore();
+  const savedIds = useFavoritesStore((s) => s.ids);
+  const savedBy = useFavoritesStore((s) => s.byId);
+  const [savedOnly, setSavedOnly] = useState(false);
 
   return (
     <div className="flex flex-col gap-4">
@@ -41,10 +46,21 @@ export function PaperList() {
               }).format(new Date(lastUpdated)),
             })}
         </div>
-        <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={loading}>
-          <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
-          {t("papers.refresh")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={savedOnly ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setSavedOnly((v) => !v)}
+            aria-pressed={savedOnly}
+          >
+            <Bookmark className="size-4" />
+            {t("papers.savedOnly")}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={loading}>
+            <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
+            {t("papers.refresh")}
+          </Button>
+        </div>
       </div>
 
       {loading && (
@@ -68,7 +84,24 @@ export function PaperList() {
         </Card>
       )}
 
-      {!loading && !error && papers.length === 0 && (
+      {!loading && !error && savedOnly && (
+        savedIds.length === 0 ? (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+              <Bookmark className="size-8 text-muted-foreground" />
+              <p className="text-sm font-medium text-muted-foreground">{t("papers.noFavorites")}</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {savedIds.map((id) => (
+              <PaperCard key={id} paper={savedBy[id]} />
+            ))}
+          </div>
+        )
+      )}
+
+      {!loading && !error && !savedOnly && papers.length === 0 && (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <BookOpenText className="size-8 text-muted-foreground" />
@@ -77,7 +110,7 @@ export function PaperList() {
         </Card>
       )}
 
-      {!loading && !error && papers.length > 0 && (
+      {!loading && !error && !savedOnly && papers.length > 0 && (
         <div className="flex flex-col gap-4">
           {papers.map((paper) => (
             <PaperCard key={paper.id} paper={paper} />

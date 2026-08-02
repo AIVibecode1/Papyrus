@@ -1,4 +1,4 @@
-import { ExternalLink, Sparkles } from "lucide-react";
+import { Bookmark, BookmarkCheck, ExternalLink, Sparkles } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExplainPanel } from "@/features/papers/explain-panel";
 import { useExplanationStore } from "@/stores/explanation";
+import { useFavoritesStore } from "@/stores/favorites";
 import { useSettingsStore } from "@/stores/settings";
 import type { Paper } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -18,10 +19,13 @@ interface PaperCardProps {
 export function PaperCard({ paper }: PaperCardProps) {
   const { t, i18n } = useTranslation();
   const { providers, activeProviderId } = useSettingsStore();
+  const isFavorite = useFavoritesStore((s) => s.isFavorite);
+  const toggleFavorite = useFavoritesStore((s) => s.toggle);
   const expandedId = useExplanationStore((s) => s.expandedId);
   const toggle = useExplanationStore((s) => s.toggle);
   const start = useExplanationStore((s) => s.start);
   const expanded = expandedId === paper.id;
+  const favorited = isFavorite(paper.id);
 
   const published = new Intl.DateTimeFormat(i18n.language, {
     dateStyle: "medium",
@@ -51,6 +55,13 @@ export function PaperCard({ paper }: PaperCardProps) {
     }
   };
 
+  const handleToggleFavorite = (e: MouseEvent<HTMLButtonElement>) => {
+    // The card root has no click handler today, but keep the bookmark's
+    // click isolated so a future card-level expand handler can't fire.
+    e.stopPropagation();
+    toggleFavorite(paper);
+  };
+
   return (
     <Card className={cn("transition-colors hover:border-foreground/20", expanded && "border-primary/50")}>
       <CardContent className="flex flex-col gap-2.5 p-5">
@@ -78,6 +89,20 @@ export function PaperCard({ paper }: PaperCardProps) {
         </p>
 
         <div className="mt-1 flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleToggleFavorite}
+            aria-pressed={favorited}
+            aria-label={favorited ? t("papers.saved") : t("papers.save")}
+            className={favorited ? "text-primary" : "text-muted-foreground"}
+          >
+            {favorited ? (
+              <BookmarkCheck className="size-4" />
+            ) : (
+              <Bookmark className="size-4" />
+            )}
+          </Button>
           <Button variant="outline" size="sm" asChild>
             <a href={paper.pdfUrl} target="_blank" rel="noreferrer" onClick={handleOpenPdf}>
               <ExternalLink className="size-3.5" />

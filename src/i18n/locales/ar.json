@@ -28,7 +28,11 @@
     "noAbstract": "لا يتوفر ملخص.",
     "openPdf": "فتح PDF",
     "explain": "اشرح",
-    "updated": "آخر تحديث {{time}}"
+    "updated": "آخر تحديث {{time}}",
+    "save": "حفظ",
+    "saved": "تم الحفظ",
+    "savedOnly": "المحفوظة",
+    "noFavorites": "لا توجد أوراق محفوظة بعد. اضغط على الإشارة المرجعية لأي ورقة."
   },
   "presets": {
     "openai": "OpenAI",
