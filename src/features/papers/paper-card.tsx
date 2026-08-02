@@ -71,8 +71,10 @@ export function PaperCard({ paper }: PaperCardProps) {
     >
       <CardContent className="flex flex-col gap-2.5 p-5">
         <div className="flex items-start justify-between gap-3">
-          <h3 className="font-semibold leading-snug">{paper.title}</h3>
-          <Badge variant="secondary" className="shrink-0 font-mono text-xs">
+          <h3 dir="ltr" className="font-semibold leading-snug">
+            {paper.title}
+          </h3>
+          <Badge variant="secondary" className="shrink-0 font-mono text-xs" dir="ltr">
             {paper.categories[0] ?? paper.id.split("v")[0]}
           </Badge>
         </div>
@@ -82,14 +84,17 @@ export function PaperCard({ paper }: PaperCardProps) {
           {paper.authors.length > 0 && (
             <>
               {" · "}
-              <span className="line-clamp-1" title={paper.authors.join(", ")}>
+              <span dir="ltr" className="line-clamp-1" title={paper.authors.join(", ")}>
                 {paper.authors.join(", ")}
               </span>
             </>
           )}
         </p>
 
-        <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
+        <p
+          dir={paper.summary ? "ltr" : undefined}
+          className="line-clamp-3 text-sm leading-relaxed text-muted-foreground"
+        >
           {paper.summary || t("papers.noAbstract")}
         </p>
 
