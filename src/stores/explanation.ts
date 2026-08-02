@@ -4,6 +4,10 @@ import type { Paper, ProviderConfig } from "@/lib/types";
 
 export type ExplainStatus = "idle" | "loading" | "streaming" | "done" | "error" | "stopped";
 
+/** Chunk-coalescing window: store updates are bounded to ~1 per 50 ms
+ * regardless of how fast the provider emits deltas (UX/perf knob). */
+const FLUSH_INTERVAL_MS = 50;
+
 interface PaperExplanation {
   status: ExplainStatus;
   text: string;
@@ -33,6 +37,42 @@ export const useExplanationStore = create<ExplanationState>((set, get) => ({
   start: async (paper, provider, language) => {
     const id = paper.id;
     const gen = (get().generations[id] ?? 0) + 1;
+    // Chunks land in a buffer and are committed in one set() per flush
+    // window, bounding store updates (~20/s) regardless of chunk rate.
+    let pending: string[] = [];
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearFlushTimer = () => {
+      if (flushTimer !== null) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+    };
+
+    const flush = () => {
+      flushTimer = null;
+      const buf = pending;
+      pending = [];
+      if (buf.length === 0) return;
+      set((s) => {
+        // Plan 005 compose: a flush that fires after stop()/restart must
+        // drop its buffer — the generation no longer matches.
+        if (s.generations[id] !== gen) return s;
+        const cur = s.byPaper[id] ?? {
+          status: "streaming" as const,
+          text: "",
+          error: null,
+          providerId: provider.id,
+        };
+        return {
+          byPaper: {
+            ...s.byPaper,
+            [id]: { ...cur, status: "streaming", text: cur.text + buf.join("") },
+          },
+        };
+      });
+    };
+
     set((s) => ({
       expandedId: id,
       generations: { ...s.generations, [id]: gen },
@@ -47,25 +87,18 @@ export const useExplanationStore = create<ExplanationState>((set, get) => ({
         provider,
         paper,
         language,
-        onChunk: (chunk) =>
-          set((s) => {
-            // A chunk from a superseded run (Stop happened, or a new start)
-            // must be dropped: the status stays "stopped".
-            if (s.generations[id] !== gen) return s;
-            const cur = s.byPaper[id] ?? {
-              status: "streaming" as const,
-              text: "",
-              error: null,
-              providerId: provider.id,
-            };
-            return {
-              byPaper: {
-                ...s.byPaper,
-                [id]: { ...cur, status: "streaming", text: cur.text + chunk },
-              },
-            };
-          }),
+        onChunk: (chunk) => {
+          // A chunk from a superseded run (Stop happened, or a new start)
+          // must be dropped: the status stays "stopped".
+          if (get().generations[id] !== gen) return;
+          pending.push(chunk);
+          if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
+        },
       });
+      // Done: commit the tail first so the final chunk is not lost, then
+      // mark done. A stale timer must not fire after completion.
+      clearFlushTimer();
+      flush();
       set((s) => ({
         byPaper: {
           ...s.byPaper,
@@ -73,6 +106,9 @@ export const useExplanationStore = create<ExplanationState>((set, get) => ({
         },
       }));
     } catch (err) {
+      // No flush after an ended stream: a stale timer could otherwise
+      // resurrect a stopped/errored entry.
+      clearFlushTimer();
       const message = err instanceof Error ? err.message : String(err);
       const stopped = message.startsWith(CANCELLED_MARKER);
       const status: ExplainStatus = stopped ? "stopped" : "error";

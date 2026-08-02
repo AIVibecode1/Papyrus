@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Paper, ProviderConfig } from "@/lib/types";
 
 const { streamExplanationMock, stopExplanationMock, CANCELLED_MARKER } = vi.hoisted(
@@ -41,6 +41,9 @@ describe("explanation store", () => {
   let onChunk!: (chunk: string) => void;
 
   beforeEach(() => {
+    // Chunk appends are coalesced into a 50 ms flush window (plan 015), so
+    // tests that assert text need deterministic timer control.
+    vi.useFakeTimers();
     streamExplanationMock.mockReset();
     stopExplanationMock.mockReset();
     streamExplanationMock.mockImplementation(
@@ -53,6 +56,10 @@ describe("explanation store", () => {
       },
     );
     useExplanationStore.setState({ byPaper: {}, expandedId: null, generations: {} });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("start sets loading then done", async () => {
@@ -74,6 +81,8 @@ describe("explanation store", () => {
     const p = useExplanationStore.getState().start(paper, provider, "en");
     onChunk("a");
     onChunk("b");
+    // Plan 015: chunks commit on the flush window, not per chunk.
+    vi.advanceTimersByTime(50);
 
     const mid = useExplanationStore.getState().byPaper[paper.id];
     expect(mid?.status).toBe("streaming");
@@ -86,9 +95,34 @@ describe("explanation store", () => {
     );
   });
 
+  it("chunks within the same flush window are batched into one store update", async () => {
+    // Plan 015: two chunks arriving inside one flush window must produce a
+    // single state change, not one per chunk.
+    const texts: (string | undefined)[] = [];
+    const unsubscribe = useExplanationStore.subscribe((s) => {
+      texts.push(s.byPaper[paper.id]?.text);
+    });
+
+    const p = useExplanationStore.getState().start(paper, provider, "en");
+    expect(texts).toEqual([""]); // only the start() update so far
+
+    onChunk("a");
+    onChunk("b");
+    expect(texts).toEqual([""]); // buffered — nothing committed yet
+
+    vi.advanceTimersByTime(50);
+    expect(texts).toEqual(["", "ab"]); // one batched update for both chunks
+
+    resolveStream();
+    await p;
+    unsubscribe();
+  });
+
   it("stop marks stopped and prevents further chunk appends", async () => {
     const p = useExplanationStore.getState().start(paper, provider, "en");
     onChunk("a");
+    // Plan 015: commit the pre-stop chunk by advancing the flush window.
+    vi.advanceTimersByTime(50);
     await useExplanationStore.getState().stop();
     expect(useExplanationStore.getState().byPaper[paper.id]?.status).toBe(
       "stopped",

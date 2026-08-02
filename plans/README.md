@@ -26,7 +26,7 @@ STOP conditions, and update your row when done.
 | 012 | localStorage provider shape validation | P2 | S | 002 | DONE |
 | 013 | Redact token-shaped strings from error bodies | P2 | S | — | DONE (TS tests in standalone ai-redact.test.ts) |
 | 014 | Remove dead code + dangling lint suppression | P2 | S | — | DONE |
-| 015 | Chunk coalescing in explanation store | P2 | S | 004, 005 | TODO |
+| 015 | Chunk coalescing in explanation store | P2 | S | 004, 005 | DONE |
 | 016 | De-duplicate AI layer (prompts/URL/contract) | P2 | M | 001, 004, 005 | TODO |
 | 017 | Split settings-page god component | P3 | M | 004, 006, 014 | TODO |
 | 018 | Lint, format, hooks, typecheck-in-dev, CI | P2 | M | 014 | TODO |
