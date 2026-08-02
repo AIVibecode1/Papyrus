@@ -33,7 +33,7 @@ STOP conditions, and update your row when done.
 | 020 | README: document pnpm prerequisite | P3 | S | — | DONE |
 | 022 | Archive REF1/REF2 research artifacts | P2 | S | — | DONE |
 | 023 | Document the null-CSP decision | P3 | S | 007 | DONE |
-| 021 | README screenshots (EN/AR, light/dark) | P3 | S | — | TODO |
+| 021 | README screenshots (EN/AR, light/dark) | P3 | S | — | DONE |
 | 024 | Keyring dependency posture (vendor `keyring` crate) | P2 | S-M | — | TODO |
 | 025 | Keyword search (DIR-1) | P2 | S-M | 002, 003 | TODO |
 | 026 | Favorites / reading list (DIR-2) | P2 | S | 002, 012 | DONE (light inline Paper shape check — plan 012's isProviderConfig is provider-specific) |

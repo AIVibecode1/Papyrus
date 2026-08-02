@@ -24,7 +24,13 @@ Built with **Tauri 2 · React · TypeScript · Tailwind CSS · shadcn/ui · Zust
 
 ## Screenshots
 
-Coming soon.
+| Papers (EN) | Explanation (AR, dark) |
+|---|---|
+| ![Papers](docs/screenshots/papers-en-light.png) | ![Explanation](docs/screenshots/explain-ar-dark.png) |
+
+| Settings (AR) | Dark mode (EN) |
+|---|---|
+| ![Settings](docs/screenshots/settings-ar-light.png) | ![Dark](docs/screenshots/papers-en-dark.png) |
 
 ## Development
 
@@ -48,6 +54,15 @@ pnpm mock-ai
 #   Base URL: http://localhost:8765/v1
 #   Model:    mock-model
 #   API key:  anything (or empty)
+```
+
+### Regenerating the screenshots
+
+With the dev server and mock AI server running (see above), re-capture the
+README screenshots at any time:
+
+```bash
+pnpm exec node dev/capture-screenshots.mjs
 ```
 
 ## Tests
