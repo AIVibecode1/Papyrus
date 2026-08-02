@@ -21,6 +21,8 @@ react-i18next. Backend logic is written in Rust.
 | Feature             | What it does                                                                                                                                                  |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Latest papers       | Fetches the newest arXiv papers, newest first, for 6 fields (AI, machine learning, language, vision, neural networks, statistics) plus free keyword search    |
+| Browse by day       | Step back through any past day (arXiv date-range queries), or pick a day from the collected history list                                                      |
+| Daily history       | The app automatically collects each day's papers for the current field (last 14 days on first launch, 30 days kept), so past days are always available        |
 | AI explanations     | Explains any paper in 200 to 300 plain words, streamed live, in the language of the interface (English or Arabic)                                             |
 | Your providers      | Works with OpenAI, OpenRouter, DeepSeek, Groq, Mistral, Ollama (local) or any custom base URL and model name                                                  |
 | Privacy first       | API keys live in the OS keychain (Windows Credential Manager / macOS Keychain). Paper fetching and AI calls happen in the Rust backend, never in the web page |
@@ -106,16 +108,22 @@ only ever knows whether a key exists, never its value.
 
 ## How many papers do you get?
 
-Every time you open a field, search, or press refresh, Papyrus fetches the
-**20 newest papers** for that field (arXiv returns them newest first). You
-can refresh as often as you like. arXiv has no daily quota; it only asks
-for politeness (about one request every 3 seconds), and the app enforces
-that for you automatically.
+Today's view is the latest 20 papers for the field you are looking at,
+newest first. You can refresh as often as you like. arXiv has no daily
+quota; it only asks for politeness (about one request every 3 seconds),
+and the app enforces that for you automatically.
 
-So there is no fixed "papers per day" number. Today you get up to 20
-papers per view, on demand, unlimited times. A future feature on the
-roadmap is a daily digest: a small fixed list of the most interesting
-papers, delivered once a day.
+There is also a history feature. Every time you open a field, the app
+quietly collects that field's papers day by day: on the first launch it
+backfills the last 14 days (up to 50 papers per day), and it keeps 30
+days of history per field. The day picker next to the paper list shows
+every collected day with its paper count ("Jul 30 (23)"). Click a day to
+browse it, or use the arrows to step through any past day, even ones
+older than the collected history (those are fetched live from arXiv).
+
+So there is no fixed "papers per day" number. You get up to 20 papers
+per view in the latest view, up to 50 per day in the history, and you
+can browse any past day at any time.
 
 ## How explanations work
 
@@ -281,7 +289,8 @@ cargo test --manifest-path src-tauri/Cargo.toml live_fetch_from_arxiv -- --ignor
   automatically (design spec ready in docs/spikes).
 - Second paper source: Semantic Scholar or OpenAlex for citation counts
   and richer metadata (design spec ready in docs/spikes).
-- Daily digest: a fixed list of the most interesting papers once a day.
+- Daily digest: pick the most interesting papers of the day (history is
+  already collected; the digest would select and surface them).
 - macOS signing and notarization for a smoother install experience.
 
 ## License
