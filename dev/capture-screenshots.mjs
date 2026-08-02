@@ -82,17 +82,15 @@ async function captureExplain(browser, file) {
   }
 
   // Wait for the mock stream to finish: the Stop button (إيقاف) disappears
-  // and the explanation block holds real text.
+  // and the markdown-rendered explanation heading is on screen.
   await page.waitForFunction(
     () => {
       const stopBtn = [...document.querySelectorAll("button")].some((b) =>
         b.textContent.includes("إيقاف"),
       );
       if (stopBtn) return false;
-      const blocks = [...document.querySelectorAll("div")].filter((d) =>
-        (d.className ?? "").includes("whitespace-pre-wrap"),
-      );
-      return blocks.some((b) => b.textContent.trim().length > 100);
+      // Arabic mock reply: "شرح تجريبي" is the rendered heading.
+      return document.body.textContent.includes("شرح تجريبي");
     },
     { timeout: 30000 },
   );
@@ -129,6 +127,33 @@ async function captureSettings(browser, file) {
   await page.close();
 }
 
+async function captureReader(browser, file) {
+  const page = await newPage(browser, { theme: "light", lang: "en" });
+  await gotoPapers(page);
+
+  // Open the first paper in the in-app reader.
+  const clicked = await findButtonByText(page, "Read");
+  if (!clicked) {
+    throw new Error("Read button not found on the papers view");
+  }
+
+  // Wait for the PDF to load and render: canvas pages + selectable text
+  // layer + the side panel with the walkthrough tab.
+  await page.waitForFunction(
+    () => {
+      const canvases = document.querySelectorAll("canvas").length;
+      const layers = document.querySelectorAll(".textLayer").length;
+      const sidePanel = document.body.textContent.includes("Walkthrough");
+      return canvases > 0 && layers > 0 && sidePanel;
+    },
+    { timeout: 45000 },
+  );
+  await new Promise((r) => setTimeout(r, 1500));
+
+  await page.screenshot({ path: path.join(OUT_DIR, file) });
+  await page.close();
+}
+
 async function main() {
   const executablePath = BROWSER_CANDIDATES.find((p) => fs.existsSync(p));
   if (!executablePath) {
@@ -147,6 +172,7 @@ async function main() {
     await capturePapers(browser, "papers-en-dark.png", "dark", "en");
     await captureExplain(browser, "explain-ar-dark.png");
     await captureSettings(browser, "settings-ar-light.png");
+    await captureReader(browser, "reader-en-light.png");
   } finally {
     await browser.close();
   }
@@ -157,6 +183,7 @@ async function main() {
     "papers-en-dark.png",
     "explain-ar-dark.png",
     "settings-ar-light.png",
+    "reader-en-light.png",
   ]) {
     const p = path.join(OUT_DIR, f);
     const size = fs.statSync(p).size;

@@ -24,6 +24,10 @@ react-i18next. Backend logic is written in Rust.
 | Browse by day       | Step back through any past day (arXiv date-range queries), or pick a day from the collected history list                                                      |
 | Daily history       | The app automatically collects each day's papers for the current field (last 14 days on first launch, 30 days kept), so past days are always available        |
 | AI explanations     | Explains any paper in 200 to 300 plain words, streamed live, in the language of the interface (English or Arabic)                                             |
+| Markdown answers    | AI answers render as real markdown: headings, lists, tables, math equations (KaTeX) and mermaid diagrams, styled to the app and RTL-aware                     |
+| In-app PDF reader   | Open any paper's PDF inside the app: page navigation, zoom, find-in-page search with highlights, and text selection. PDFs are cached on disk                  |
+| Whole-paper mentor  | The mentor reads the paper section by section and explains each one (press Continue between sections), then gives a final synthesis of the whole paper        |
+| Paper chat          | Ask anything about the paper in the Ask tab. Answers are grounded in the paper, and any passage you select in the PDF becomes context for your question       |
 | Your providers      | Works with OpenAI, OpenRouter, DeepSeek, Groq, Mistral, Ollama (local) or any custom base URL and model name                                                  |
 | Privacy first       | API keys live in the OS keychain (Windows Credential Manager / macOS Keychain). Paper fetching and AI calls happen in the Rust backend, never in the web page |
 | Bilingual           | Instant English to Arabic switching, full RTL layout, Cairo font                                                                                              |
@@ -36,9 +40,9 @@ react-i18next. Backend logic is written in Rust.
 | ----------------------------------------------- | ---------------------------------------------------- |
 | ![Papers](docs/screenshots/papers-en-light.png) | ![Explanation](docs/screenshots/explain-ar-dark.png) |
 
-| Settings (Arabic)                                   | Dark mode (English)                          |
-| --------------------------------------------------- | -------------------------------------------- |
-| ![Settings](docs/screenshots/settings-ar-light.png) | ![Dark](docs/screenshots/papers-en-dark.png) |
+| Settings (Arabic)                                   | Reader (English)                                |
+| --------------------------------------------------- | ----------------------------------------------- |
+| ![Settings](docs/screenshots/settings-ar-light.png) | ![Reader](docs/screenshots/reader-en-light.png) |
 
 ## How it works
 
@@ -95,14 +99,25 @@ only ever knows whether a key exists, never its value.
 3. **Browse papers.** Pick a field from the sidebar. The 20 newest papers
    appear, newest first. Use the search box to look for any topic. Press
    the refresh button to check for new uploads.
-4. **Read and save.** Click a paper title area to open the abstract. The
-   PDF button opens the paper on arXiv. The bookmark button saves it to
-   your favorites, and the "Saved" toggle shows only saved papers.
+4. **Read a paper.** Press "Read" to open the paper's PDF inside the app:
+   flip pages, zoom, and search inside the PDF. The PDF button next to it
+   still opens the paper on arXiv in your browser. The bookmark button
+   saves it to your favorites, and the "Saved" toggle shows only saved
+   papers.
 5. **Explain a paper.** Press "Explain". The explanation streams in,
-   written in the current interface language. Use "Stop" to cancel or
-   "Regenerate" to ask again. You can switch providers from inside the
-   explanation panel.
-6. **Switch language and theme.** Use the toggles in the top bar. The
+   written in the current interface language, using the research-mentor
+   style (every technical term explained, no AI-sounding text). Use
+   "Stop" to cancel or "Regenerate" to ask again. You can switch
+   providers from inside the explanation panel.
+6. **Walk through a whole paper.** Inside the reader, press "Explain the
+   whole paper". The mentor explains the paper section by section; press
+   "Continue" when you are ready for the next section, and it finishes
+   with a final summary of the whole paper.
+7. **Ask questions about a paper.** Open the "Ask" tab inside the reader
+   and type any question. The answer is grounded in the paper's text.
+   Select a passage in the PDF first and the question is answered with
+   that passage as context. Your chat history is kept per paper.
+8. **Switch language and theme.** Use the toggles in the top bar. The
    whole interface flips to Arabic with full RTL, and explanations are
    then written in Arabic. Your choice is remembered.
 
@@ -127,18 +142,35 @@ can browse any past day at any time.
 
 ## How explanations work
 
-When you press Explain, the backend sends the paper's title and abstract
-to your provider with a system prompt that asks for:
+When you press Explain, the backend reads your key from the OS keychain,
+sends the paper's title and abstract to your provider with a system prompt
+that turns the model into a **research mentor**, not a summarizer. The
+mentor is asked to:
 
-1. What the paper is about (the main idea)
-2. How it works (the method in plain terms)
-3. The key results
-4. Why it matters
+1. Explain what the paper is about and how it works in plain terms
+2. Explain every technical term the first time it appears
+3. Use analogies and simple, natural language (no AI-sounding cliches)
+4. Point out the paper's assumptions and weaknesses
+5. Never invent details that are not in the paper
 
-The answer is 200 to 300 words, in short paragraphs, with no tables, in
-the language of the interface (English or Arabic). The text appears
-progressively as the provider generates it. You can stop or regenerate at
-any time.
+The answer is 200 to 300 words, in short paragraphs, in the language of
+the interface (English or Arabic), and it renders as real markdown:
+headings, lists, tables, math equations and even diagrams. The text
+appears progressively as the provider generates it. You can stop or
+regenerate at any time.
+
+**Whole-paper walkthroughs** work the same way, but the mentor receives
+the actual text of the paper, section by section. The reader extracts the
+text from the PDF, splits it into sections, and the mentor explains each
+section using a full teaching structure before you press Continue. At the
+end it produces a final synthesis: the five most important ideas, the
+three biggest limitations, how the paper differs from earlier work, what
+to learn next, and five questions to check understanding.
+
+**The Ask tab** is a grounded chat: your question (plus any passage you
+selected in the PDF) is sent together with the relevant section of the
+paper, and the mentor answers only from that context, honestly saying
+when the answer is not in the paper.
 
 The explanation uses your provider and your model, so the cost (if any) is
 exactly what your provider charges for the tokens used, typically a small
@@ -168,6 +200,9 @@ Papyrus was built in phases, each verified before moving on:
    for Windows and macOS, keyword search, favorites, and two design specs
    for future features. Every plan landed as its own commit with tests.
    The git history reads as a story of the project.
+6. **The reader.** An in-app PDF reader (pdf.js), a whole-paper mentor
+   walkthrough that explains the paper section by section, and a grounded
+   chat where selections in the PDF become answer context.
 
 ## What changed since the first version
 
@@ -262,15 +297,17 @@ installers for Windows, and the MIT license.
 ```
 src/                React frontend
   components/         shared UI components (shadcn/ui)
-  features/           papers (list, card, explain) and settings
+  components/markdown  markdown renderer (tables, KaTeX, mermaid)
+  components/pdf-viewer embedded pdf.js reader
+  features/           papers (list, card, explain) and reader (viewer + AI panel)
   hooks/              theme hook
   i18n/               English and Arabic strings
-  lib/                types, arXiv client, AI client, utilities
-  stores/             Zustand stores (papers, settings, explanation, ui, favorites)
+  lib/                types, arXiv client, AI client, PDF bytes, text splitting
+  stores/             Zustand stores (papers, settings, explanation, reader, ui, favorites)
 src-tauri/          Rust backend
-  src/                papers.rs (arXiv), ai.rs (AI streaming + keychain)
+  src/                papers.rs (arXiv), ai.rs (AI streaming + keychain), pdf.rs (PDF fetch + cache)
   capabilities/       webview permissions (least privilege)
-dev/                Development-only tools (mock AI server, screenshot capture)
+dev/                Development-only tools (mock AI server, screenshot capture, sample PDF)
 docs/               Screenshots and design specs
 plans/              The 28 improvement plans that shaped the final version
 ```
@@ -340,18 +377,23 @@ cargo test --manifest-path src-tauri/Cargo.toml live_fetch_from_arxiv -- --ignor
   to the web view at all.
 - The webview ships without a Content-Security-Policy (`"csp": null` in
   `src-tauri/tauri.conf.json`) by design. The UI loads only local bundled
-  assets, AI responses are rendered as plain text (never HTML), and users
-  configure arbitrary provider base URLs, which a static `connect-src`
-  whitelist cannot express. Revisit this if HTML rendering (for example
-  markdown) is ever added.
+  assets, and users configure arbitrary provider base URLs, which a
+  static `connect-src` whitelist cannot express.
+- AI responses are rendered as markdown, not raw HTML: the renderer
+  escapes any HTML tags the model produces (no raw-HTML passthrough),
+  mermaid diagrams run in strict security mode, and links open through
+  the operating system's browser. PDF text is only ever shown inside
+  the pdf.js viewer and sent to the AI backend; it is never injected
+  into the page as HTML.
 - Remote provider URLs must use HTTPS. Plain HTTP is only accepted for
   local servers such as Ollama, so keys are never sent in clear text.
 - Provider error messages are redacted: key-shaped strings are masked
   before they reach the interface.
 - arXiv's rate limit (about one request per 3 seconds) is enforced in the
   Rust fetcher.
-- Paper content and AI responses are rendered as plain text, so no HTML
-  sanitizer is needed.
+- Paper content and AI responses are handled as untrusted data: markdown
+  rendering escapes HTML, and PDF downloads are capped in size and
+  rendered sandboxed in the viewer.
 
 ## Roadmap
 
