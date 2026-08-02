@@ -28,7 +28,10 @@ Coming soon.
 
 ## Development
 
-Prerequisites: [Rust](https://rustup.rs), Node.js ≥ 20, and on Windows: Visual Studio Build Tools (C++) + WebView2.
+Prerequisites: [Rust](https://rustup.rs), Node.js ≥ 20 (which ships
+[corepack](https://nodejs.org/api/corepack.html) — run `corepack enable pnpm`
+to get pnpm), [pnpm](https://pnpm.io/installation) ≥ 9, and on Windows:
+Visual Studio Build Tools (C++) + WebView2.
 
 ```bash
 pnpm install

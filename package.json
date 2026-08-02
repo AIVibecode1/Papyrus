@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "packageManager": "pnpm@10.7.1",
   "scripts": {
     "dev": "pnpm exec vite",
     "build": "pnpm exec tsc --noEmit && pnpm exec vite build",

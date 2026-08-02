@@ -30,7 +30,7 @@ STOP conditions, and update your row when done.
 | 016 | De-duplicate AI layer (prompts/URL/contract) | P2 | M | 001, 004, 005 | TODO |
 | 017 | Split settings-page god component | P3 | M | 004, 006, 014 | TODO |
 | 018 | Lint, format, hooks, typecheck-in-dev, CI | P2 | M | 014 | TODO |
-| 020 | README: document pnpm prerequisite | P3 | S | — | TODO |
+| 020 | README: document pnpm prerequisite | P3 | S | — | DONE |
 | 022 | Archive REF1/REF2 research artifacts | P2 | S | — | TODO |
 | 023 | Document the null-CSP decision | P3 | S | 007 | TODO |
 | 021 | README screenshots (EN/AR, light/dark) | P3 | S | — | TODO |
