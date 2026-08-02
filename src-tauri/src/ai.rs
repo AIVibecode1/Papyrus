@@ -186,6 +186,7 @@ async fn stream_chat(
     key: &str,
     body: Value,
     timeout: Duration,
+    cancel_flag: &AtomicBool,
     on_chunk: &mut (dyn FnMut(&str) + Send),
 ) -> Result<String, String> {
     let mut request = client.post(url).timeout(timeout);
@@ -253,7 +254,7 @@ async fn stream_chat(
                             .pointer("/choices/0/delta/content")
                             .and_then(|c| c.as_str())
                     {
-                        if CANCEL_EXPLAIN.load(Ordering::SeqCst) {
+                        if cancel_flag.load(Ordering::SeqCst) {
                             return Err(cancelled_marker().into());
                         }
                         full.push_str(content);
@@ -261,7 +262,7 @@ async fn stream_chat(
                     }
                 }
             }
-            if CANCEL_EXPLAIN.load(Ordering::SeqCst) {
+            if cancel_flag.load(Ordering::SeqCst) {
                 return Err(cancelled_marker().into());
             }
         }
@@ -277,7 +278,7 @@ async fn stream_chat(
             .pointer("/choices/0/message/content")
             .and_then(|c| c.as_str())
         {
-            if CANCEL_EXPLAIN.load(Ordering::SeqCst) {
+            if cancel_flag.load(Ordering::SeqCst) {
                 return Err(cancelled_marker().into());
             }
             full.push_str(content);
@@ -370,9 +371,17 @@ pub async fn explain_paper(
         "temperature": 0.4,
     });
 
-    stream_chat(client, &url, &key, body, EXPLAIN_TIMEOUT, &mut |chunk| {
-        let _ = on_chunk.send(chunk.to_string());
-    })
+    stream_chat(
+        client,
+        &url,
+        &key,
+        body,
+        EXPLAIN_TIMEOUT,
+        &CANCEL_EXPLAIN,
+        &mut |chunk| {
+            let _ = on_chunk.send(chunk.to_string());
+        },
+    )
     .await
     .map(|_| ())
 }
@@ -392,7 +401,16 @@ pub async fn test_provider(provider: ProviderConfig) -> Result<String, String> {
         "max_tokens": 8,
     });
 
-    let reply = stream_chat(client, &url, &key, body, TEST_TIMEOUT, &mut |_| {}).await?;
+    let reply = stream_chat(
+        client,
+        &url,
+        &key,
+        body,
+        TEST_TIMEOUT,
+        &CANCEL_EXPLAIN,
+        &mut |_| {},
+    )
+    .await?;
     Ok(reply.trim().to_string())
 }
 
@@ -538,9 +556,17 @@ async fn stream_messages(
         "stream": true,
         "temperature": 0.4,
     });
-    stream_chat(client, &url, &key, body, EXPLAIN_TIMEOUT, &mut |chunk| {
-        let _ = on_chunk.send(chunk.to_string());
-    })
+    stream_chat(
+        client,
+        &url,
+        &key,
+        body,
+        EXPLAIN_TIMEOUT,
+        &CANCEL_EXPLAIN,
+        &mut |chunk| {
+            let _ = on_chunk.send(chunk.to_string());
+        },
+    )
     .await
     .map(|_| ())
 }
@@ -782,6 +808,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
+                &CANCEL_EXPLAIN,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("stream should succeed");
@@ -826,6 +853,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
+                &CANCEL_EXPLAIN,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("stream should succeed");
@@ -854,6 +882,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
+                &CANCEL_EXPLAIN,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("non-streaming should succeed");
@@ -873,6 +902,7 @@ mod tests {
             "bad-key",
             json!({ "model": "mock", "messages": [] }),
             Duration::from_secs(10),
+            &CANCEL_EXPLAIN,
             &mut |_| {},
         ));
         let msg = result.expect_err("should fail with 401");
@@ -942,6 +972,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
+                &CANCEL_EXPLAIN,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("split stream should succeed");
@@ -976,6 +1007,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
+                &CANCEL_EXPLAIN,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("stream with keep-alives should succeed");
@@ -1004,6 +1036,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
+                &CANCEL_EXPLAIN,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("clean close without [DONE] should succeed");
@@ -1036,6 +1069,10 @@ mod tests {
         let client = reqwest::Client::new();
         let (first_chunk_tx, first_chunk_rx) = std::sync::mpsc::channel();
         let runtime = tokio::runtime::Runtime::new().unwrap();
+        // Local flag: cancellation is injected per stream, so this test can
+        // never race other tests that stream concurrently.
+        let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag_for_thread = std::sync::Arc::clone(&cancel_flag);
         let handle = std::thread::spawn(move || {
             runtime.block_on(stream_chat(
                 &client,
@@ -1043,6 +1080,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
+                &flag_for_thread,
                 &mut |c| {
                     let _ = first_chunk_tx.send(c.to_string());
                 },
@@ -1052,10 +1090,8 @@ mod tests {
         // Wait until the first chunk arrived, then cancel: every content
         // event re-checks the flag, so the stream must abort with the marker.
         let first = first_chunk_rx.recv_timeout(Duration::from_secs(5));
-        CANCEL_EXPLAIN.store(true, Ordering::SeqCst);
+        cancel_flag.store(true, Ordering::SeqCst);
         let result = handle.join().expect("stream thread should not panic");
-        // Cleanup: never leave the flag set for other tests.
-        CANCEL_EXPLAIN.store(false, Ordering::SeqCst);
 
         assert!(
             first.is_ok(),
@@ -1257,6 +1293,7 @@ mod tests {
                 "test-key",
                 body,
                 Duration::from_secs(10),
+                &CANCEL_EXPLAIN,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("stream should succeed");
