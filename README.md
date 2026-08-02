@@ -51,6 +51,7 @@ pnpm mock-ai
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml   # Rust: parsing, streaming, error paths
+pnpm test                                          # Frontend unit tests (Vitest)
 pnpm run build                                     # TypeScript strict + production build
 ```
 

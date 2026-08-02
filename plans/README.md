@@ -14,7 +14,7 @@ STOP conditions, and update your row when done.
 | 001 | Fix Rust SSE UTF-8 corruption (Arabic) | P1 | S | — | DONE (helper takes Vec<Vec<u8>> so a mid-character byte split is expressible) |
 | 019 | Rust edition 2021 → 2024 | P2 | S | — | DONE |
 | 007 | Remove unused `keyring:default` capability | P1 | S | — | DONE |
-| 002 | Frontend test runner (Vitest) | P1 | M | — | TODO |
+| 002 | Frontend test runner (Vitest) | P1 | M | — | DONE |
 | 003 | Papers-store stale-response race | P1 | S | 002 | TODO |
 | 004 | Characterization tests (stores + SSE parser) | P1 | M | 002 | TODO |
 | 005 | Typed cancellation (stop race + marker contract) | P1 | S | 002, 004 | TODO |
