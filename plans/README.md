@@ -17,7 +17,7 @@ STOP conditions, and update your row when done.
 | 002 | Frontend test runner (Vitest) | P1 | M | — | DONE |
 | 003 | Papers-store stale-response race | P1 | S | 002 | DONE |
 | 004 | Characterization tests (stores + SSE parser) | P1 | M | 002 | DONE |
-| 005 | Typed cancellation (stop race + marker contract) | P1 | S | 002, 004 | TODO |
+| 005 | Typed cancellation (stop race + marker contract) | P1 | S | 002, 004 | DONE (marker also exported from src/lib/ai.ts per plan Step 2; 3 Rust marker sites, plan said 2) |
 | 006 | Keychain-delete failure surfaced in UI | P1 | S | — | DONE |
 | 008 | HTTPS enforcement + arXiv PDF normalization | P2 | S | — | DONE |
 | 009 | Shared reqwest client | P2 | S | — | DONE |

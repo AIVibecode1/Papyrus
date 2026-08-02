@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Paper, ProviderConfig } from "@/lib/types";
 
-const { streamExplanationMock, stopExplanationMock } = vi.hoisted(() => ({
-  streamExplanationMock: vi.fn(),
-  stopExplanationMock: vi.fn(),
-}));
+const { streamExplanationMock, stopExplanationMock, CANCELLED_MARKER } = vi.hoisted(
+  () => ({
+    streamExplanationMock: vi.fn(),
+    stopExplanationMock: vi.fn(),
+    // Must mirror src/lib/ai.ts — the store matches rejections against it.
+    CANCELLED_MARKER: "\u{1F6D1}PAPYRUS_CANCELLED",
+  }),
+);
 
 vi.mock("@/lib/ai", () => ({
   streamExplanation: streamExplanationMock,
   stopExplanation: stopExplanationMock,
+  CANCELLED_MARKER,
 }));
 
 import { useExplanationStore } from "@/stores/explanation";
@@ -47,7 +52,7 @@ describe("explanation store", () => {
         });
       },
     );
-    useExplanationStore.setState({ byPaper: {}, expandedId: null });
+    useExplanationStore.setState({ byPaper: {}, expandedId: null, generations: {} });
   });
 
   it("start sets loading then done", async () => {
@@ -89,13 +94,12 @@ describe("explanation store", () => {
       "stopped",
     );
 
-    // KNOWN BUG (plan 011/005 fixes: chunk after stop must be ignored).
-    // Current behavior: a late chunk still appends and flips status back to
-    // streaming — assert it so the fix can flip this test.
+    // Plan 005: a chunk already in flight from the pre-stop run must be
+    // dropped — text stays unchanged and the status stays "stopped".
     onChunk("b");
     const after = useExplanationStore.getState().byPaper[paper.id];
-    expect(after?.text).toBe("ab");
-    expect(after?.status).toBe("streaming");
+    expect(after?.text).toBe("a");
+    expect(after?.status).toBe("stopped");
 
     resolveStream();
     await p;
@@ -111,15 +115,27 @@ describe("explanation store", () => {
     expect(after?.error).toBe("boom");
   });
 
-  it('error containing "Stopped" is classified as stopped', async () => {
-    // KNOWN BUG (plan 005: typed cancellation) — classification relies on a
-    // fragile string contract. Keep asserting current behavior.
+  it('error containing the word but not the marker is an error', async () => {
+    // Plan 005: classification matches the typed marker, not the word — a
+    // provider error that merely contains "stopped" is NOT a user stop.
     const p = useExplanationStore.getState().start(paper, provider, "en");
-    rejectStream(new Error("Stopped by the user"));
+    rejectStream(new Error("stream stopped unexpectedly"));
+    await p;
+
+    const after = useExplanationStore.getState().byPaper[paper.id];
+    expect(after?.status).toBe("error");
+    expect(after?.error).toBe("stream stopped unexpectedly");
+  });
+
+  it("rejection with the exact marker is stopped with no error", async () => {
+    // Plan 005: the typed marker means a user stop — status "stopped" and
+    // the raw marker must not leak into the UI (error is null).
+    const p = useExplanationStore.getState().start(paper, provider, "en");
+    rejectStream(new Error(CANCELLED_MARKER));
     await p;
 
     const after = useExplanationStore.getState().byPaper[paper.id];
     expect(after?.status).toBe("stopped");
-    expect(after?.error).toBe("Stopped by the user");
+    expect(after?.error).toBeNull();
   });
 });

@@ -1,6 +1,11 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import type { Paper, ProviderConfig } from "@/lib/types";
 
+// Mirrors CANCELLED_MARKER in src-tauri/src/ai.rs — the typed cancellation
+// contract: Rust emits this exact string when a user stops an explanation,
+// and the store classifies a stop by matching it as a prefix.
+export const CANCELLED_MARKER = "\u{1F6D1}PAPYRUS_CANCELLED";
+
 // ---------------------------------------------------------------------------
 // Dev-only key store for the browser preview (when the app runs outside Tauri
 // there is no OS keychain). Keys stay in memory only — never persisted.

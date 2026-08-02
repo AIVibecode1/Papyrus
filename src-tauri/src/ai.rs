@@ -15,6 +15,12 @@ const TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 static CANCEL_EXPLAIN: AtomicBool = AtomicBool::new(false);
 
+/// Typed cancellation marker: emitted instead of a human-readable string when
+/// a user stops an explanation. The frontend classifies a stop by this exact
+/// prefix (mirrored as `CANCELLED_MARKER` in src/lib/ai.ts), so provider
+/// errors that merely contain the word "stop" can never be mislabeled.
+pub const CANCELLED_MARKER: &str = "\u{1F6D1}PAPYRUS_CANCELLED"; // 🛑 prefix; collision-proof
+
 const SYSTEM_PROMPT_EN: &str = "You are Papyrus, an assistant that explains academic research \
 papers to a general audience. Explain the paper in simple, clear language. Structure your \
 answer as short paragraphs covering: (1) What the paper is about — the main idea, (2) How it \
@@ -195,7 +201,7 @@ async fn stream_chat(
                             .and_then(|c| c.as_str())
                         {
                             if CANCEL_EXPLAIN.load(Ordering::SeqCst) {
-                                return Err("Stopped by the user".into());
+                                return Err(CANCELLED_MARKER.into());
                             }
                             full.push_str(content);
                             on_chunk(content);
@@ -204,7 +210,7 @@ async fn stream_chat(
                 }
             }
             if CANCEL_EXPLAIN.load(Ordering::SeqCst) {
-                return Err("Stopped by the user".into());
+                return Err(CANCELLED_MARKER.into());
             }
         }
     } else {
@@ -220,7 +226,7 @@ async fn stream_chat(
             .and_then(|c| c.as_str())
         {
             if CANCEL_EXPLAIN.load(Ordering::SeqCst) {
-                return Err("Stopped by the user".into());
+                return Err(CANCELLED_MARKER.into());
             }
             full.push_str(content);
             on_chunk(content);
@@ -695,6 +701,62 @@ mod tests {
             .expect("clean close without [DONE] should succeed");
         assert_eq!(full, "Partial answer");
         assert_eq!(chunks, vec!["Partial answer"]);
+    }
+
+    #[test]
+    fn cancel_returns_marker() {
+        // A mid-stream user stop must abort with the typed marker, not a
+        // human string: the frontend classifies stops by exact marker.
+        CANCEL_EXPLAIN.store(false, Ordering::SeqCst);
+
+        // The mock writes one content event every ~5ms, so the test can
+        // cancel while later events are still in flight (~300ms of stream
+        // time remains after the first chunk lands).
+        let mut parts: Vec<Vec<u8>> = vec![
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n"
+                .to_vec(),
+        ];
+        for i in 0..60 {
+            parts.push(
+                format!("data: {{\"choices\":[{{\"delta\":{{\"content\":\"c{i}\"}}}}]}}\n\n")
+                    .into_bytes(),
+            );
+        }
+        parts.push(b"data: [DONE]\n\n".to_vec());
+        let url = spawn_mock_server_chunked(parts);
+
+        let client = reqwest::Client::new();
+        let (first_chunk_tx, first_chunk_rx) = std::sync::mpsc::channel();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let handle = std::thread::spawn(move || {
+            runtime.block_on(stream_chat(
+                &client,
+                &format!("{url}/v1/chat/completions"),
+                "test-key",
+                json!({ "model": "mock", "messages": [] }),
+                Duration::from_secs(10),
+                &mut |c| {
+                    let _ = first_chunk_tx.send(c.to_string());
+                },
+            ))
+        });
+
+        // Wait until the first chunk arrived, then cancel: every content
+        // event re-checks the flag, so the stream must abort with the marker.
+        let first = first_chunk_rx.recv_timeout(Duration::from_secs(5));
+        CANCEL_EXPLAIN.store(true, Ordering::SeqCst);
+        let result = handle.join().expect("stream thread should not panic");
+        // Cleanup: never leave the flag set for other tests.
+        CANCEL_EXPLAIN.store(false, Ordering::SeqCst);
+
+        assert!(
+            first.is_ok(),
+            "first chunk should arrive before cancellation (got {first:?})"
+        );
+        assert_eq!(
+            result.expect_err("cancelled stream must fail with the marker"),
+            CANCELLED_MARKER
+        );
     }
 
     #[test]
