@@ -90,14 +90,18 @@ export function PaperList() {
   const today = todayStr();
   const backfillActive = progress !== null && progress.category === category;
 
+  // Read the CURRENT day from the store rather than this render's closure,
+  // so rapid clicks (double-click, held button) step one day per click
+  // instead of all collapsing onto the same day before React re-renders.
   const goPrevDay = () => {
-    const prev = date ? addDays(date, -1) : addDays(today, -1);
-    setDate(prev);
+    const current = usePapersStore.getState().date ?? today;
+    setDate(addDays(current, -1));
   };
 
   const goNextDay = () => {
-    if (!date || date >= today) return;
-    setDate(addDays(date, 1));
+    const current = usePapersStore.getState().date;
+    if (!current || current >= today) return;
+    setDate(addDays(current, 1));
   };
 
   return (
@@ -140,7 +144,6 @@ export function PaperList() {
           variant="ghost"
           size="icon-sm"
           onClick={goPrevDay}
-          disabled={loading}
           aria-label={t("papers.prevDay")}
           className="rtl:rotate-180"
         >
@@ -153,21 +156,18 @@ export function PaperList() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="latest">{t("papers.latest")}</SelectItem>
-            {digestDays
-              .slice(0, 14)
-              .filter((d) => dayCount(d) > 0)
-              .map((d) => (
-                <SelectItem key={d} value={d}>
-                  {formatDay(d, i18n.language)} ({dayCount(d)})
-                </SelectItem>
-              ))}
+            {digestDays.slice(0, 14).map((d) => (
+              <SelectItem key={d} value={d}>
+                {formatDay(d, i18n.language)} ({dayCount(d)})
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Button
           variant="ghost"
           size="icon-sm"
           onClick={goNextDay}
-          disabled={loading || !date || date >= today}
+          disabled={!date || date >= today}
           aria-label={t("papers.nextDay")}
           className="rtl:rotate-180"
         >

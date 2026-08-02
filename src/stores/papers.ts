@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { fetchPapers } from "@/lib/arxiv";
+import { useDigestStore } from "@/stores/digest";
 import type { Paper } from "@/lib/types";
 
 const DEFAULT_CATEGORY = "cs.AI";
@@ -56,6 +57,15 @@ export const usePapersStore = create<PapersState>((set, get) => ({
     const { category, query, date } = get();
     set({ loading: true, error: null });
     try {
+      // Day views are cache-first: if the auto-collected history already
+      // has this day, show it immediately and refresh in the background.
+      if (date && !query.trim()) {
+        const cached = useDigestStore.getState().byCategory[category]?.[date];
+        if (cached && cached.length > 0) {
+          if (seq !== requestSeq) return;
+          set({ papers: cached, loading: false, lastUpdated: Date.now() });
+        }
+      }
       const papers = await fetchPapers(
         category,
         PAGE_SIZE,
