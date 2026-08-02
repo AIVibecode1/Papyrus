@@ -35,6 +35,18 @@ export function normalizeBaseUrl(base: string): string {
   return `${trimmed}/chat/completions`;
 }
 
+// Keep in sync with redact_tokens in src-tauri/src/ai.rs — same pattern
+// list, same semantics (mask token-like runs of >= 6 chars, leave short
+// prefixes like "sk-8" alone). Applied to provider error bodies before
+// they surface in the UI, so a gateway that echoes the submitted key back
+// in a 401/400 body cannot leak it into the explanation panel.
+export function redactTokens(text: string): string {
+  return text.replace(
+    /(sk-|sk_|key-|key_|ghp_|xai-|Bearer\s|bearer\s)[A-Za-z0-9_-]{6,}/g,
+    "$1***",
+  );
+}
+
 // Keep in sync with src-tauri/src/ai.rs (SYSTEM_PROMPT_EN / SYSTEM_PROMPT_AR).
 const SYSTEM_PROMPT_EN =
   "You are Papyrus, an assistant that explains academic research papers to a general audience. Explain the paper in simple, clear language. Structure your answer as short paragraphs covering: (1) What the paper is about — the main idea, (2) How it works — the method in plain terms, (3) Key results, (4) Why it matters. Keep it around 200-300 words. Do not use markdown tables. Always respond in English.";
@@ -108,7 +120,7 @@ async function streamExplanationBrowser(opts: ExplainOptions): Promise<void> {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
+    throw new Error(`HTTP ${res.status}: ${redactTokens(text).slice(0, 300)}`);
   }
   if (!res.body) throw new Error("Provider returned an empty response.");
 
@@ -156,7 +168,7 @@ export async function testProviderBrowser(p: ProviderConfig): Promise<string> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
+    throw new Error(`HTTP ${res.status}: ${redactTokens(text).slice(0, 300)}`);
   }
   const json = await res.json();
   return json?.choices?.[0]?.message?.content?.trim() ?? "Connected";

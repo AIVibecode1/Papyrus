@@ -150,7 +150,7 @@ async fn stream_chat(
         let text = response.text().await.unwrap_or_default();
         return Err(format!(
             "Provider returned HTTP {status}: {}",
-            truncate(&text, 300)
+            truncate(&redact_tokens(&text), 300)
         ));
     }
 
@@ -245,6 +245,41 @@ fn truncate(s: &str, max: usize) -> String {
         let cut: String = s.chars().take(max).collect();
         format!("{cut}…")
     }
+}
+
+/// Masks token-like substrings (e.g. API keys) inside provider error text.
+///
+/// Some gateways echo the submitted key back in 401/400 bodies; the error
+/// text is surfaced in the UI, so key-shaped runs must be masked first.
+/// The pattern list must stay in sync with `redactTokens` in src/lib/ai.ts.
+fn redact_tokens(text: &str) -> String {
+    // Matches common key shapes: sk-..., key-..., ghp_..., xai-..., long base64-ish runs
+    let token_patterns = [
+        "sk-", "sk_", "key-", "key_", "ghp_", "xai-", "Bearer ", "bearer ",
+    ];
+    let mut out = text.to_string();
+    for pat in token_patterns {
+        // Resume after each replacement so the `***` marker we just wrote is
+        // not re-matched, and later tokens in the same body are still found.
+        let mut search_from = 0;
+        while let Some(rel) = out[search_from..].find(pat) {
+            let pos = search_from + rel;
+            let rest = &out[pos + pat.len()..];
+            let end = rest
+                .find(|c: char| {
+                    c.is_whitespace() || c == '"' || c == '\'' || c == '}' || c == ',' || c == ')'
+                })
+                .unwrap_or(rest.len());
+            let token = &rest[..end];
+            if token.len() >= 6 {
+                out.replace_range(pos..pos + pat.len() + end, &format!("{pat}***"));
+                search_from = pos + pat.len() + 3; // past the "***" marker
+            } else {
+                break; // not a real token; avoid mangling words like "sk-8"
+            }
+        }
+    }
+    out
 }
 
 fn validate_provider(provider: &ProviderConfig) -> Result<(), String> {
@@ -603,6 +638,40 @@ mod tests {
         ));
         let msg = result.expect_err("should fail with 401");
         assert!(msg.contains("401"), "got: {msg}");
+    }
+
+    #[test]
+    fn redact_tokens_masks_key_shaped_substrings() {
+        // A gateway echoing the submitted key back in a 401 body must not
+        // leak it into the surfaced error text.
+        let body = r#"{"error": "invalid key sk-abcdef123456"}"#;
+        let out = redact_tokens(body);
+        assert!(out.contains("sk-***"), "got: {out}");
+        assert!(!out.contains("abcdef123456"), "got: {out}");
+    }
+
+    #[test]
+    fn redact_tokens_leaves_plain_text_untouched() {
+        let body = "Provider returned HTTP 401: rate limit exceeded";
+        assert_eq!(redact_tokens(body), body);
+    }
+
+    #[test]
+    fn redact_tokens_masks_every_token_in_body() {
+        // The search must resume after each replacement, so a second token
+        // in the same body is not skipped.
+        let body = "invalid keys: sk-abcdef123456 and key_GHIJKLmnopqr";
+        let out = redact_tokens(body);
+        assert!(out.contains("sk-***"), "got: {out}");
+        assert!(out.contains("key_***"), "got: {out}");
+        assert!(!out.contains("abcdef123456"), "got: {out}");
+        assert!(!out.contains("GHIJKLmnopqr"), "got: {out}");
+    }
+
+    #[test]
+    fn redact_tokens_ignores_short_prefixes() {
+        // "sk-8" is not a token; masking it would mangle legitimate text.
+        assert_eq!(redact_tokens("The sk-8 model"), "The sk-8 model");
     }
 
     #[test]
