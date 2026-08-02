@@ -12,7 +12,7 @@ STOP conditions, and update your row when done.
 | # | Plan | Priority | Effort | Depends on | Status |
 |---|------|----------|--------|------------|--------|
 | 001 | Fix Rust SSE UTF-8 corruption (Arabic) | P1 | S | — | TODO |
-| 019 | Rust edition 2021 → 2024 | P2 | S | — | TODO |
+| 019 | Rust edition 2021 → 2024 | P2 | S | — | DONE |
 | 007 | Remove unused `keyring:default` capability | P1 | S | — | TODO |
 | 002 | Frontend test runner (Vitest) | P1 | M | — | TODO |
 | 003 | Papers-store stale-response race | P1 | S | 002 | TODO |
