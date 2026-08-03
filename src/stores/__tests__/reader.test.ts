@@ -157,6 +157,48 @@ describe("reader store", () => {
     expect(s.sectionEntries[0].error).toBe("provider exploded");
   });
 
+  it("regenerate replaces the last section entry in place", async () => {
+    await useReaderStore.getState().open(paper);
+    vi.mocked(streamSectionExplanation).mockImplementation(chunkStream(["first try"]));
+
+    await useReaderStore.getState().startWalkthrough(provider, "en");
+    let s = useReaderStore.getState();
+    expect(s.sectionEntries).toHaveLength(1);
+    expect(s.sectionEntries[0].text).toBe("first try");
+    expect(s.sectionIndex).toBe(1);
+
+    // Redo the same section: the entry is replaced, not appended.
+    vi.mocked(streamSectionExplanation).mockImplementation(chunkStream(["second try"]));
+    await useReaderStore.getState().regenerateSection(provider, "en");
+
+    s = useReaderStore.getState();
+    expect(s.sectionEntries).toHaveLength(1);
+    expect(s.sectionEntries[0].text).toBe("second try");
+    expect(s.sectionEntries[0].status).toBe("done");
+    expect(s.sectionIndex).toBe(1);
+  });
+
+  it("regenerate works on a stopped section too", async () => {
+    await useReaderStore.getState().open(paper);
+    vi.mocked(streamSectionExplanation).mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          // Simulates Stop: the stream rejects with the cancelled marker.
+          reject(new Error("🛑PAPYRUS_CANCELLED"));
+        }),
+    );
+
+    await useReaderStore.getState().startWalkthrough(provider, "en");
+    expect(useReaderStore.getState().sectionEntries[0].status).toBe("stopped");
+
+    vi.mocked(streamSectionExplanation).mockImplementation(chunkStream(["redone"]));
+    await useReaderStore.getState().regenerateSection(provider, "en");
+    const s = useReaderStore.getState();
+    expect(s.sectionEntries).toHaveLength(1);
+    expect(s.sectionEntries[0].text).toBe("redone");
+    expect(s.sectionEntries[0].status).toBe("done");
+  });
+
   it("stopping marks the active section as stopped", async () => {
     await useReaderStore.getState().open(paper);
     vi.mocked(streamSectionExplanation).mockImplementation(

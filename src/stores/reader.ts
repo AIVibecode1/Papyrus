@@ -47,6 +47,14 @@ interface ReaderState {
   clearSelection: () => void;
   startWalkthrough: (provider: ProviderConfig, language: string) => Promise<void>;
   continueWalkthrough: (provider: ProviderConfig, language: string) => Promise<void>;
+  /** Re-runs the last section's explanation, replacing its entry. */
+  regenerateSection: (provider: ProviderConfig, language: string) => Promise<void>;
+  explainSection: (
+    i: number,
+    provider: ProviderConfig,
+    language: string,
+    replace: boolean,
+  ) => Promise<void>;
   ask: (question: string, provider: ProviderConfig, language: string) => Promise<void>;
   /** Re-asks the question behind the last failed assistant message. */
   retryAsk: (provider: ProviderConfig, language: string) => Promise<void>;
@@ -168,62 +176,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       if (!paper) return;
 
       if (sectionIndex < sections.length) {
-        const i = sectionIndex;
-        const gen = ++wtGen;
-        set((s) => ({
-          sectionIndex: i + 1,
-          sectionEntries: [...s.sectionEntries, { text: "", status: "loading", error: null }],
-        }));
-
-        const buffer = createStreamBuffer<ReaderState>(set, {
-          isCurrent: () => wtGen === gen,
-          apply: (s, text) => {
-            const entry = s.sectionEntries[i];
-            // Apply to loading AND streaming entries: the first flush flips
-            // the status, and later flushes must keep appending.
-            if (!entry || (entry.status !== "loading" && entry.status !== "streaming")) return s;
-            const entries = [...s.sectionEntries];
-            entries[i] = { ...entry, text: entry.text + text, status: "streaming" };
-            return { sectionEntries: entries };
-          },
-        });
-
-        try {
-          await streamSectionExplanation({
-            provider,
-            paper,
-            sectionIndex: i + 1,
-            totalSections: sections.length,
-            sectionText: sections[i],
-            language,
-            onChunk: (chunk) => buffer.push(chunk),
-          });
-          if (wtGen !== gen) return;
-          buffer.flushNow();
-          set((s) => {
-            const entries = [...s.sectionEntries];
-            const entry = entries[i];
-            if (entry) entries[i] = { ...entry, status: "done" };
-            return { sectionEntries: entries };
-          });
-        } catch (err) {
-          if (wtGen !== gen) return;
-          buffer.dispose();
-          const message = err instanceof Error ? err.message : String(err);
-          const stopped = message.startsWith(CANCELLED_MARKER);
-          set((s) => {
-            const entries = [...s.sectionEntries];
-            const entry = entries[i];
-            if (entry) {
-              entries[i] = {
-                ...entry,
-                status: stopped ? "stopped" : "error",
-                error: stopped ? null : message,
-              };
-            }
-            return { sectionEntries: entries };
-          });
-        }
+        await get().explainSection(sectionIndex, provider, language, false);
         return;
       }
 
@@ -269,6 +222,88 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           );
         }
       }
+    },
+
+    /**
+     * Streams the explanation for section `i`. With `replace` it overwrites
+     * the entry at that index (regenerate); otherwise it appends a fresh
+     * entry (continue). Shared by continueWalkthrough and regenerateSection.
+     */
+    explainSection: async (i, provider, language, replace) => {
+      const { paper, sections } = get();
+      if (!paper || i < 0 || i >= sections.length) return;
+      const gen = ++wtGen;
+      set((s) => ({
+        sectionIndex: i + 1,
+        sectionEntries: replace
+          ? s.sectionEntries.map((e, idx) =>
+              idx === i ? { text: "", status: "loading", error: null } : e,
+            )
+          : [...s.sectionEntries, { text: "", status: "loading", error: null }],
+      }));
+
+      const buffer = createStreamBuffer<ReaderState>(set, {
+        isCurrent: () => wtGen === gen,
+        apply: (s, text) => {
+          const entry = s.sectionEntries[i];
+          // Apply to loading AND streaming entries: the first flush flips
+          // the status, and later flushes must keep appending.
+          if (!entry || (entry.status !== "loading" && entry.status !== "streaming")) return s;
+          const entries = [...s.sectionEntries];
+          entries[i] = { ...entry, text: entry.text + text, status: "streaming" };
+          return { sectionEntries: entries };
+        },
+      });
+
+      try {
+        await streamSectionExplanation({
+          provider,
+          paper,
+          sectionIndex: i + 1,
+          totalSections: sections.length,
+          sectionText: sections[i],
+          language,
+          onChunk: (chunk) => buffer.push(chunk),
+        });
+        if (wtGen !== gen) return;
+        buffer.flushNow();
+        set((s) => {
+          const entries = [...s.sectionEntries];
+          const entry = entries[i];
+          if (entry) entries[i] = { ...entry, status: "done" };
+          return { sectionEntries: entries };
+        });
+      } catch (err) {
+        if (wtGen !== gen) return;
+        buffer.dispose();
+        const message = err instanceof Error ? err.message : String(err);
+        const stopped = message.startsWith(CANCELLED_MARKER);
+        set((s) => {
+          const entries = [...s.sectionEntries];
+          const entry = entries[i];
+          if (entry) {
+            entries[i] = {
+              ...entry,
+              status: stopped ? "stopped" : "error",
+              error: stopped ? null : message,
+            };
+          }
+          return { sectionEntries: entries };
+        });
+      }
+    },
+
+    /**
+     * Re-runs the last section's explanation, replacing its entry: lets the
+     * user redo a stopped (or finished) section instead of only moving on.
+     */
+    regenerateSection: async (provider, language) => {
+      const { sections, sectionIndex, sectionEntries } = get();
+      const i = sectionIndex - 1;
+      if (i < 0 || i >= sections.length) return;
+      const entry = sectionEntries[i];
+      if (!entry || (entry.status !== "done" && entry.status !== "stopped")) return;
+      await get().explainSection(i, provider, language, true);
     },
 
     ask: async (question, provider, language) => {

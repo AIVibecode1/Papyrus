@@ -181,6 +181,13 @@ export function ReaderView() {
     reader.sectionIndex >= reader.sections.length &&
     reader.synthesis !== null &&
     reader.synthesis.status === "done";
+  const lastSectionEntry = reader.sectionEntries[reader.sectionEntries.length - 1];
+  // Regenerate is offered when the last section is finished or was stopped,
+  // so the user can redo it instead of only moving forward.
+  const canRegenerate =
+    !wtBusy &&
+    lastSectionEntry !== undefined &&
+    (lastSectionEntry.status === "done" || lastSectionEntry.status === "stopped");
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -433,15 +440,28 @@ export function ReaderView() {
                   )}
 
                   {!walkthroughDone && !wtBusy && reader.sectionEntries.length > 0 && (
-                    <Button
-                      variant={reader.sectionIndex < reader.sections.length ? "default" : "outline"}
-                      className="w-full"
-                      onClick={() => void reader.continueWalkthrough(provider, i18n.language)}
-                    >
-                      {reader.sectionIndex < reader.sections.length
-                        ? t("reader.continue")
-                        : t("reader.finishSynthesis")}
-                    </Button>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        variant={
+                          reader.sectionIndex < reader.sections.length ? "default" : "outline"
+                        }
+                        className="w-full"
+                        onClick={() => void reader.continueWalkthrough(provider, i18n.language)}
+                      >
+                        {reader.sectionIndex < reader.sections.length
+                          ? t("reader.continue")
+                          : t("reader.finishSynthesis")}
+                      </Button>
+                      {canRegenerate && (
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => void reader.regenerateSection(provider, i18n.language)}
+                        >
+                          {t("reader.regenerate")}
+                        </Button>
+                      )}
+                    </div>
                   )}
 
                   {walkthroughDone && (

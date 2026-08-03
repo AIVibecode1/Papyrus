@@ -248,6 +248,35 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
     };
   }, [scale]);
 
+  // Re-fit when the container resizes (window resize or split drag): the
+  // initial fit is computed once at load, and WebView2 sometimes leaves
+  // canvases black after a resize unless a fresh render happens. The
+  // debounce keeps drags from re-rendering every frame.
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const el = containerRef.current;
+    if (!el) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const first = viewportsRef.current[0]?.page;
+        if (!first) return;
+        const width = el.clientWidth;
+        const fit = Math.max(
+          0.5,
+          Math.min(2.5, (width - 48) / first.getViewport({ scale: 1 }).width),
+        );
+        setScale((prev) => (Math.abs(prev - fit) < 0.01 ? prev : fit));
+      }, 200);
+    });
+    observer.observe(el);
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, []);
+
   // --- search --------------------------------------------------------------
   const applyHighlights = (layer: HTMLElement, query: string) => {
     layer.querySelectorAll("mark").forEach((m) => {

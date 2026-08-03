@@ -41,7 +41,8 @@
     "retry": "Try again",
     "retryAsk": "Retry answer",
     "chatHistory": "Chat history",
-    "resizeSplit": "Resize the panels (drag)"
+    "resizeSplit": "Resize the panels (drag)",
+    "regenerate": "Regenerate"
   },
   "markdown": {
     "diagramError": "Diagram could not be rendered"

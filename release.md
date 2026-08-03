@@ -19,11 +19,59 @@ Rules:
 
 ---
 
-## v1.0.2 - 2026-08-03
+## v1.0.3 - 2026-08-03
 
 Status: installers built, not yet published on GitHub.
+Built from: (filled at commit time)
+Quality gates: 146 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
+Prettier, strict typecheck, CI on Windows and macOS.
+
+Bullet points for the GitHub release description:
+
+- Bilingual by design: full English and Arabic interfaces with proper RTL
+  support, switchable instantly
+- Browse the latest arXiv papers in six fields (AI, ML, NLP, CV, neural
+  evolution, stats), search arXiv, and step back through any past day with
+  real paper counts
+- The day picker always reaches the current day: today's papers are
+  selectable the moment they appear (previously the newest day lagged one
+  day behind), and an empty today refetches automatically once papers land
+- Arabic mode: paper titles, dates and English terms inside AI answers
+  keep their correct direction, no more flipped text
+- Semantic Scholar as a second source: search with citation counts, TLDRs
+  and venues, with an automatic honest fallback to arXiv when the free
+  rate limit is busy; a friendly translated hint guides you when a search
+  term is needed
+- Read mode: built-in PDF reader with find-in-page, a draggable split
+  between the paper and the explanation panel, and a section-by-section
+  walkthrough
+- Walkthrough controls: after stopping or finishing a section you can
+  Regenerate it (re-run the explanation in place) or Continue to the next
+- The PDF viewer re-fits when the window or split is resized, which also
+  clears the black-canvas glitch some resizes caused
+- AI explanations powered by your own providers: OpenAI-compatible
+  (OpenAI, OpenRouter, DeepSeek, Groq, Ollama, OpenCode Go, or any custom
+  endpoint), with preset URLs locked and providers named by their model
+- Ask questions about the paper in a chat panel with history; equations
+  in answers render as real math (KaTeX)
+- Resilient AI streams: long explanations survive provider resets and
+  gateway timeouts (partial answers are kept, streaming timeout is 10
+  minutes)
+- Three themes: light, sepia and dark
+- Save favorites and export your data to a timestamped JSON file
+- Privacy first: API keys live only in the OS keychain (Windows
+  Credential Manager / macOS Keychain), never in files or logs
+- The Settings page shows the app version (1.0.3)
+- Installers for Windows: MSI and NSIS setup
+
+---
+
+Status: superseded before publishing. Per the version-pump
+rule (every user-facing change bumps the version), its fixes rolled
+into v1.0.3. Kept here as a tracking log entry.
 Built from: 6b32b79
-Quality gates: 144 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
+Built from: 6b32b79
+Quality gates: 146 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
 
 Bullet points for the GitHub release description:
@@ -68,7 +116,7 @@ rule (every user-facing change bumps the version), its fixes rolled
 into v1.0.2. Kept here as a tracking log entry.
 Built from: 9d9ff0e
 Built from: 9d9ff0e
-Quality gates: 144 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
+Quality gates: 146 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
 
 Bullet points for the GitHub release description:

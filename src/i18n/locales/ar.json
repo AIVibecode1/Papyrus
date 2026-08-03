@@ -41,7 +41,8 @@
     "retry": "حاول مجدداً",
     "retryAsk": "إعادة المحاولة",
     "chatHistory": "سجل المحادثة",
-    "resizeSplit": "تغيير حجم الأجزاء (اسحب)"
+    "resizeSplit": "تغيير حجم الأجزاء (اسحب)",
+    "regenerate": "إعادة التوليد"
   },
   "markdown": {
     "diagramError": "تعذّر عرض الرسم البياني"
