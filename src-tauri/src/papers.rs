@@ -72,6 +72,7 @@ fn build_fetch_url(
     query: Option<&str>,
     date: Option<&str>,
     max: usize,
+    start: usize,
 ) -> Result<String, String> {
     let category = category.trim();
     let valid_category = !category.is_empty()
@@ -108,9 +109,15 @@ fn build_fetch_url(
         ));
     }
 
-    Ok(format!(
+    let mut url = format!(
         "{ARXIV_API}?search_query={term}&sortBy=submittedDate&sortOrder=descending&max_results={max}"
-    ))
+    );
+    if start > 0 {
+        // Pagination: arXiv returns results ordered newest first, so the
+        // next page starts at the current list length.
+        url.push_str(&format!("&start={start}"));
+    }
+    Ok(url)
 }
 
 /// Parses and validates a `YYYY-MM-DD` calendar date.
@@ -167,10 +174,12 @@ pub async fn fetch_papers(
     max_results: Option<usize>,
     query: Option<String>,
     date: Option<String>,
+    start: Option<usize>,
 ) -> Result<Vec<Paper>, String> {
     // Validate input before hitting the network.
     let max = max_results.unwrap_or(20).clamp(1, MAX_RESULTS_LIMIT);
-    let url = build_fetch_url(&category, query.as_deref(), date.as_deref(), max)?;
+    let start = start.unwrap_or(0);
+    let url = build_fetch_url(&category, query.as_deref(), date.as_deref(), max, start)?;
 
     rate_limit().await;
 
@@ -392,20 +401,20 @@ mod tests {
 
     #[test]
     fn fetch_url_without_query_uses_category() {
-        let url = build_fetch_url("cs.AI", None, None, 20).expect("category URL should build");
+        let url = build_fetch_url("cs.AI", None, None, 20, 0).expect("category URL should build");
         assert!(url.contains("search_query=cat:cs.AI"));
         assert!(!url.contains("search_query=all:"));
         assert!(url.contains("sortBy=submittedDate&sortOrder=descending&max_results=20"));
         // Invalid categories are still rejected at the same boundary.
         assert_eq!(
-            build_fetch_url("cs.AI; DROP TABLE", None, None, 20),
+            build_fetch_url("cs.AI; DROP TABLE", None, None, 20, 0),
             Err("Invalid category".into())
         );
     }
 
     #[test]
     fn fetch_url_with_query_uses_all_field() {
-        let url = build_fetch_url("cs.AI", Some("transformer"), None, 20)
+        let url = build_fetch_url("cs.AI", Some("transformer"), None, 20, 0)
             .expect("query URL should build");
         assert!(url.contains("search_query=all:transformer"));
         // The category term is replaced, not combined.
@@ -415,8 +424,8 @@ mod tests {
 
     #[test]
     fn fetch_url_with_date_adds_submitted_range() {
-        let url =
-            build_fetch_url("cs.AI", None, Some("2026-08-01"), 20).expect("date URL should build");
+        let url = build_fetch_url("cs.AI", None, Some("2026-08-01"), 20, 0)
+            .expect("date URL should build");
         // The range covers the whole day: [20260801 TO 20260802].
         assert!(url.contains("search_query=cat:cs.AI+AND+submittedDate:[20260801 TO 20260802]"));
         assert!(url.contains("sortBy=submittedDate&sortOrder=descending&max_results=20"));
@@ -424,7 +433,7 @@ mod tests {
 
     #[test]
     fn fetch_url_combines_query_and_date() {
-        let url = build_fetch_url("cs.AI", Some("transformer"), Some("2026-08-01"), 20)
+        let url = build_fetch_url("cs.AI", Some("transformer"), Some("2026-08-01"), 20, 0)
             .expect("combined URL should build");
         assert!(
             url.contains("search_query=all:transformer+AND+submittedDate:[20260801 TO 20260802]")
@@ -437,7 +446,7 @@ mod tests {
         // Characters arXiv's query grammar treats as operators must be
         // rejected before they reach the API.
         for bad in ['"', '(', ')', ':', '&'] {
-            let url = build_fetch_url("cs.AI", Some(&format!("transformer{bad}")), None, 20);
+            let url = build_fetch_url("cs.AI", Some(&format!("transformer{bad}")), None, 20, 0);
             assert_eq!(
                 url,
                 Err("Invalid search query".into()),
@@ -446,15 +455,15 @@ mod tests {
         }
         // Over-long and blank queries are rejected too…
         assert_eq!(
-            build_fetch_url("cs.AI", Some(&"a".repeat(201)), None, 20),
+            build_fetch_url("cs.AI", Some(&"a".repeat(201)), None, 20, 0),
             Err("Invalid search query".into())
         );
         assert_eq!(
-            build_fetch_url("cs.AI", Some("   "), None, 20),
+            build_fetch_url("cs.AI", Some("   "), None, 20, 0),
             Err("Invalid search query".into())
         );
         // …but surrounding whitespace is trimmed before validation.
-        let url = build_fetch_url("cs.AI", Some("  attention  "), None, 20)
+        let url = build_fetch_url("cs.AI", Some("  attention  "), None, 20, 0)
             .expect("trimmed query should build");
         assert!(url.contains("search_query=all:attention"));
     }
@@ -471,7 +480,7 @@ mod tests {
             "abc",        // garbage
             "",           // empty
         ] {
-            let url = build_fetch_url("cs.AI", None, Some(bad), 20);
+            let url = build_fetch_url("cs.AI", None, Some(bad), 20, 0);
             assert_eq!(url, Err("Invalid date".into()), "must reject {bad:?}");
         }
     }
@@ -489,6 +498,15 @@ mod tests {
     }
 
     #[test]
+    fn pagination_appends_start_param() {
+        let url = build_fetch_url("cs.AI", None, None, 20, 40).expect("url should build");
+        assert!(url.contains("max_results=20&start=40"), "got: {url}");
+        // start=0 (first page) omits the param entirely.
+        let first = build_fetch_url("cs.AI", None, None, 20, 0).expect("url should build");
+        assert!(!first.contains("start="), "got: {first}");
+    }
+
+    #[test]
     fn rejects_garbage_xml() {
         assert!(parse_feed("not xml at all {{{").is_err());
     }
@@ -499,7 +517,7 @@ mod tests {
     fn live_fetch_from_arxiv() {
         let papers = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(fetch_papers("cs.AI".into(), Some(5), None, None))
+            .block_on(fetch_papers("cs.AI".into(), Some(5), None, None, None))
             .expect("live fetch should succeed");
         assert!(!papers.is_empty(), "expected at least one paper");
         let p = &papers[0];

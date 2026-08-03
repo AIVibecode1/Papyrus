@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Paper } from "@/lib/types";
 
 vi.mock("@/lib/arxiv", () => ({ fetchPapers: vi.fn() }));
+vi.mock("@/lib/citations", () => ({ fetchCitations: vi.fn().mockResolvedValue({}) }));
 
 import { fetchPapers } from "@/lib/arxiv";
+import { fetchCitations } from "@/lib/citations";
 import { usePapersStore } from "@/stores/papers";
 
 const aiPaper: Paper = {
@@ -158,5 +160,52 @@ describe("papers store", () => {
     const after = usePapersStore.getState();
     expect(after.papers).toEqual([lgPaper]);
     expect(after.loading).toBe(false);
+  });
+
+  it("loadMore appends the next page and dedupes", async () => {
+    vi.mocked(fetchPapers)
+      .mockResolvedValueOnce([aiPaper])
+      .mockResolvedValueOnce([lgPaper, aiPaper]); // page 2 overlaps page 1
+
+    usePapersStore.setState({ category: "cs.AI" });
+    await usePapersStore.getState().refresh();
+    expect(usePapersStore.getState().papers).toEqual([aiPaper]);
+
+    await usePapersStore.getState().loadMore();
+
+    // The duplicated aiPaper from page 2 must not appear twice.
+    expect(usePapersStore.getState().papers).toEqual([aiPaper, lgPaper]);
+    // Page 2 was requested with start = current length.
+    expect(fetchPapers).toHaveBeenLastCalledWith("cs.AI", 20, undefined, undefined, 1);
+    expect(usePapersStore.getState().loadingMore).toBe(false);
+  });
+
+  it("loadMore does nothing while loading", async () => {
+    vi.mocked(fetchPapers).mockResolvedValue([aiPaper]);
+    usePapersStore.setState({ category: "cs.AI", loading: true });
+
+    await usePapersStore.getState().loadMore();
+
+    expect(fetchPapers).toHaveBeenCalledTimes(0);
+  });
+
+  it("loadCitations stores the returned counts", async () => {
+    vi.mocked(fetchCitations).mockResolvedValue({ ai1: 42 });
+    usePapersStore.getState().loadCitations(["ai1", "unknown"]);
+    await Promise.resolve();
+
+    expect(usePapersStore.getState().citations).toEqual({ ai1: 42 });
+  });
+
+  it("refresh enriches the list with citation counts", async () => {
+    vi.mocked(fetchPapers).mockResolvedValue([aiPaper]);
+    vi.mocked(fetchCitations).mockResolvedValue({ ai1: 7 });
+
+    usePapersStore.setState({ category: "cs.AI" });
+    await usePapersStore.getState().refresh();
+    await Promise.resolve();
+
+    expect(fetchCitations).toHaveBeenCalledWith(["ai1"]);
+    expect(usePapersStore.getState().citations).toEqual({ ai1: 7 });
   });
 });

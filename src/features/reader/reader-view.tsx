@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   BookOpenText,
   Check,
+  Copy,
   Loader2,
   MessageSquareText,
   Send,
@@ -92,6 +93,7 @@ export function ReaderView() {
   const reader = useReaderStore();
   const [tab, setTab] = useState<Tab>("walkthrough");
   const [question, setQuestion] = useState("");
+  const [copied, setCopied] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const paper = reader.paper;
@@ -118,6 +120,33 @@ export function ReaderView() {
     if (!question.trim() || !provider || chatBusy) return;
     void reader.ask(question, provider, i18n.language);
     setQuestion("");
+  };
+
+  const handleCopySelection = async () => {
+    if (!reader.selection) return;
+    try {
+      // Some embedded webviews hang instead of rejecting when the clipboard
+      // permission is unavailable, so race the write against a timeout.
+      await Promise.race([
+        navigator.clipboard.writeText(reader.selection),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("clipboard unavailable")), 500),
+        ),
+      ]);
+    } catch {
+      // Fallback for restricted contexts (headless preview, older webviews):
+      // select the text in a hidden textarea and execCommand("copy").
+      const textarea = document.createElement("textarea");
+      textarea.value = reader.selection;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   return (
@@ -171,13 +200,48 @@ export function ReaderView() {
           {/* PDF viewer */}
           <div className="min-h-0 min-w-0 flex-1">
             {reader.pdfBytes && (
-              <PdfViewer bytes={reader.pdfBytes} onSelect={(text) => reader.setSelection(text)} />
+              <PdfViewer
+                bytes={reader.pdfBytes}
+                paperId={paper.id}
+                onSelect={(text) => reader.setSelection(text)}
+              />
             )}
           </div>
 
           {/* AI panel: tabs on top, then per-tab content. The Ask tab keeps
               its input pinned at the bottom, always visible. */}
           <aside className="flex min-h-0 w-full shrink-0 flex-col border-t bg-background lg:w-[26rem] lg:border-s lg:border-t-0">
+            {reader.selection && (
+              <div className="flex shrink-0 items-start gap-2 border-b bg-primary/5 p-2.5">
+                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{t("reader.selectionLabel")}:</span>{" "}
+                  <span dir="ltr" className="line-clamp-2">
+                    {reader.selection}
+                  </span>
+                </p>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleCopySelection}
+                  aria-label={copied ? t("reader.copied") : t("reader.copySelection")}
+                  title={copied ? t("reader.copied") : t("reader.copySelection")}
+                >
+                  {copied ? (
+                    <Check className="size-3.5 text-primary" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => reader.clearSelection()}
+                  aria-label={t("reader.clearSelection")}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+            )}
             <div className="flex shrink-0 items-center gap-1 border-b p-2">
               <Button
                 variant={tab === "walkthrough" ? "secondary" : "ghost"}
@@ -289,27 +353,6 @@ export function ReaderView() {
                 {/* chat history scrolls; the input stays pinned below */}
                 <div className="min-h-0 flex-1 overflow-y-auto p-3">
                   <div className="flex flex-col gap-3">
-                    {reader.selection && (
-                      <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5">
-                        <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground">
-                            {t("reader.selectionLabel")}:
-                          </span>{" "}
-                          <span dir="ltr" className="line-clamp-2">
-                            {reader.selection}
-                          </span>
-                        </p>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={() => reader.clearSelection()}
-                          aria-label={t("reader.clearSelection")}
-                        >
-                          <X className="size-3.5" />
-                        </Button>
-                      </div>
-                    )}
-
                     {reader.chat.length === 0 ? (
                       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
                         <div className="flex size-10 items-center justify-center rounded-full bg-muted/60">

@@ -506,15 +506,36 @@ fn build_synthesis_messages(paper: &Paper, sections_text: &str, language: &str) 
     ]
 }
 
+/// One prior chat turn, sent back to the provider so follow-up questions
+/// have real conversation context (serde matches the JS `{role, content}`).
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatTurn {
+    pub role: String,
+    pub content: String,
+}
+
 /// Question-answer message: the question plus (optionally) the selected
-/// passage and the relevant section as grounding context.
+/// passage and the relevant section as grounding context, and the recent
+/// conversation history so follow-ups are answered in context.
 fn build_qa_messages(
     paper: &Paper,
     question: &str,
     selection: Option<&str>,
     context: Option<&str>,
+    history: &[ChatTurn],
     language: &str,
 ) -> Vec<Value> {
+    let mut messages = vec![json!({ "role": "system", "content": qa_prompt(language) })];
+    // Prior turns first (max 8, oldest to newest), then the live question.
+    for turn in history.iter().take(8) {
+        let role = if turn.role == "assistant" {
+            "assistant"
+        } else {
+            "user"
+        };
+        messages.push(json!({ "role": role, "content": turn.content }));
+    }
     let mut user = format!(
         "Paper title: {}\nAuthors: {}\n",
         paper.title,
@@ -532,10 +553,8 @@ fn build_qa_messages(
         ));
     }
     user.push_str(&format!("\nQuestion: {question}"));
-    vec![
-        json!({ "role": "system", "content": qa_prompt(language) }),
-        json!({ "role": "user", "content": user }),
-    ]
+    messages.push(json!({ "role": "user", "content": user }));
+    messages
 }
 
 /// Streams a chat completion with a prebuilt message list, sharing the
@@ -606,14 +625,19 @@ pub async fn explain_synthesis(
 }
 
 /// Answers a question about the paper, grounded in the selected passage
-/// and the relevant section context.
+/// and the relevant section context, with recent chat history.
 #[tauri::command]
+// The argument list is the IPC contract between the frontend and Rust;
+// grouping it into a struct would add indirection without removing any
+// of the fields the webview must send.
+#[allow(clippy::too_many_arguments)]
 pub async fn ask_about_paper(
     provider: ProviderConfig,
     paper: Paper,
     question: String,
     selection: Option<String>,
     context: Option<String>,
+    history: Vec<ChatTurn>,
     language: String,
     on_chunk: Channel<String>,
 ) -> Result<(), String> {
@@ -622,6 +646,7 @@ pub async fn ask_about_paper(
         &question,
         selection.as_deref(),
         context.as_deref(),
+        &history,
         &language,
     );
     stream_messages(&provider, messages, on_chunk).await
@@ -1238,6 +1263,7 @@ mod tests {
             "Why does the method work?",
             Some("The transformer encodes tokens."),
             Some("Section 2: the method."),
+            &[],
             "en",
         );
         let user = messages[1]["content"].as_str().unwrap();
@@ -1253,12 +1279,69 @@ mod tests {
             "What is the main idea?",
             None,
             None,
+            &[],
             "en",
         );
         let user = messages[1]["content"].as_str().unwrap();
         assert!(!user.contains("Selected passage"));
         assert!(!user.contains("Relevant part"));
         assert!(user.contains("Question: What is the main idea?"));
+    }
+
+    #[test]
+    fn qa_messages_include_conversation_history_in_order() {
+        let history = vec![
+            ChatTurn {
+                role: "user".into(),
+                content: "What is an embedding?".into(),
+            },
+            ChatTurn {
+                role: "assistant".into(),
+                content: "A vector that represents a token.".into(),
+            },
+            ChatTurn {
+                role: "user".into(),
+                content: "And the query?".into(),
+            },
+        ];
+        let messages = build_qa_messages(
+            &reader_sample_paper(),
+            "What about the keys?",
+            None,
+            None,
+            &history,
+            "en",
+        );
+        assert_eq!(messages.len(), 5); // system + 3 history turns + question
+        assert_eq!(messages[1]["role"], "user");
+        assert_eq!(messages[1]["content"], "What is an embedding?");
+        assert_eq!(messages[2]["role"], "assistant");
+        assert_eq!(messages[2]["content"], "A vector that represents a token.");
+        assert_eq!(messages[3]["content"], "And the query?");
+        assert!(
+            messages[4]["content"]
+                .as_str()
+                .unwrap()
+                .contains("Question: What about the keys?")
+        );
+    }
+
+    #[test]
+    #[ignore = "touches the real OS keychain; run locally with --ignored"]
+    fn keychain_roundtrip_on_real_vault() {
+        // The standing 30-second manual check, automated: save, read and
+        // delete a throwaway secret through the REAL OS keychain (Windows
+        // Credential Manager / macOS Keychain). Ignored by default so CI
+        // runners without an interactive vault stay green; run locally with
+        // `cargo test -- --ignored keychain_roundtrip`.
+        let service = "papyrus-test";
+        let account = format!("roundtrip-{}", std::process::id());
+        let secret = "papyrus-test-secret-42";
+        set_key(service, &account, secret).expect("save should work");
+        let read = get_key(service, &account).expect("read should work");
+        assert_eq!(read.as_deref(), Some(secret));
+        delete_key(service, &account).expect("delete should work");
+        assert_eq!(get_key(service, &account).expect("read after delete"), None);
     }
 
     #[test]

@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ExplainPanel } from "@/features/papers/explain-panel";
 import { useExplanationStore } from "@/stores/explanation";
 import { useFavoritesStore } from "@/stores/favorites";
+import { usePapersStore } from "@/stores/papers";
 import { useReaderStore } from "@/stores/reader";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
@@ -25,6 +26,7 @@ export function PaperCard({ paper }: PaperCardProps) {
   const toggleFavorite = useFavoritesStore((s) => s.toggle);
   const openReader = useReaderStore((s) => s.open);
   const setView = useUiStore((s) => s.setView);
+  const citationCount = usePapersStore((s) => s.citations[paper.id]);
   const expandedId = useExplanationStore((s) => s.expandedId);
   const toggle = useExplanationStore((s) => s.toggle);
   const start = useExplanationStore((s) => s.start);
@@ -96,6 +98,14 @@ export function PaperCard({ paper }: PaperCardProps) {
               {" · "}
               <span dir="ltr" className="line-clamp-1" title={paper.authors.join(", ")}>
                 {paper.authors.join(", ")}
+              </span>
+            </>
+          )}
+          {typeof citationCount === "number" && (
+            <>
+              {" · "}
+              <span title={t("papers.citedBy", { count: citationCount })}>
+                {t("papers.citedBy", { count: citationCount })}
               </span>
             </>
           )}

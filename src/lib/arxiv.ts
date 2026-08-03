@@ -32,9 +32,10 @@ export async function fetchPapers(
   maxResults = 20,
   query?: string,
   date?: string,
+  start = 0,
 ): Promise<Paper[]> {
   if ("__TAURI_INTERNALS__" in window) {
-    return invoke<Paper[]>("fetch_papers", { category, maxResults, query, date });
+    return invoke<Paper[]>("fetch_papers", { category, maxResults, query, date, start });
   }
 
   if (import.meta.env.DEV) {

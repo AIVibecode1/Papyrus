@@ -1,4 +1,5 @@
 mod ai;
+mod citations;
 mod papers;
 mod pdf;
 
@@ -8,6 +9,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             papers::fetch_papers,
+            citations::fetch_citations,
             ai::explain_paper,
             ai::explain_section,
             ai::explain_synthesis,

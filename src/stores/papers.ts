@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { fetchPapers } from "@/lib/arxiv";
+import { fetchCitations } from "@/lib/citations";
 import { useDigestStore } from "@/stores/digest";
 import type { Paper } from "@/lib/types";
 
@@ -17,12 +18,19 @@ interface PapersState {
   date: string | null;
   papers: Paper[];
   loading: boolean;
+  loadingMore: boolean;
   error: string | null;
   lastUpdated: number | null;
+  /** citation counts keyed by paper id (Semantic Scholar enrichment). */
+  citations: Record<string, number>;
   setCategory: (category: string) => void;
   setQuery: (query: string) => void;
   setDate: (date: string | null) => void;
   refresh: () => Promise<void>;
+  /** Fetches the next page and appends it (arXiv start=N pagination). */
+  loadMore: () => Promise<void>;
+  /** Fills citation counts for the visible papers; failures are silent. */
+  loadCitations: (ids: string[]) => void;
 }
 
 export const usePapersStore = create<PapersState>((set, get) => ({
@@ -31,24 +39,26 @@ export const usePapersStore = create<PapersState>((set, get) => ({
   date: null,
   papers: [],
   loading: false,
+  loadingMore: false,
   error: null,
   lastUpdated: null,
+  citations: {},
 
   setCategory: (category) => {
     if (category === get().category) return;
-    set({ category, papers: [], error: null });
+    set({ category, papers: [], citations: {}, error: null });
     void get().refresh();
   },
 
   setQuery: (query) => {
     if (query === get().query) return;
-    set({ query, papers: [], error: null });
+    set({ query, papers: [], citations: {}, error: null });
     void get().refresh();
   },
 
   setDate: (date) => {
     if (date === get().date) return;
-    set({ date, papers: [], error: null });
+    set({ date, papers: [], citations: {}, error: null });
     void get().refresh();
   },
 
@@ -74,6 +84,7 @@ export const usePapersStore = create<PapersState>((set, get) => ({
       );
       if (seq !== requestSeq) return;
       set({ papers, loading: false, lastUpdated: Date.now() });
+      get().loadCitations(papers.map((p) => p.id));
     } catch (err) {
       if (seq !== requestSeq) return;
       set({
@@ -81,5 +92,39 @@ export const usePapersStore = create<PapersState>((set, get) => ({
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  },
+
+  loadMore: async () => {
+    const { papers, category, query, date, loading, loadingMore } = get();
+    if (loading || loadingMore || papers.length === 0) return;
+    set({ loadingMore: true });
+    try {
+      const next = await fetchPapers(
+        category,
+        PAGE_SIZE,
+        query.trim() || undefined,
+        date ?? undefined,
+        papers.length,
+      );
+      // Merge, dropping duplicates (arXiv can shift entries between pages).
+      const known = new Set(papers.map((p) => p.id));
+      const fresh = next.filter((p) => !known.has(p.id));
+      set({ papers: [...papers, ...fresh], loadingMore: false });
+      get().loadCitations(fresh.map((p) => p.id));
+    } catch (err) {
+      set({
+        loadingMore: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+
+  loadCitations: (ids) => {
+    if (ids.length === 0) return;
+    void fetchCitations(ids).then((counts) => {
+      const entries = Object.entries(counts);
+      if (entries.length === 0) return;
+      set((s) => ({ citations: { ...s.citations, ...Object.fromEntries(entries) } }));
+    });
   },
 }));

@@ -111,15 +111,22 @@ export async function streamSynthesis(opts: SynthesisStreamOptions): Promise<voi
   );
 }
 
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface AskStreamOptions extends ReaderStreamOptions {
   question: string;
   selection: string | null;
   context: string | null;
+  /** Recent conversation turns, oldest first (max 8). */
+  history: ChatTurn[];
 }
 
 /** Streams an answer to a question about the paper. */
 export async function streamAsk(opts: AskStreamOptions): Promise<void> {
-  const { provider, paper, language, onChunk, question, selection, context } = opts;
+  const { provider, paper, language, onChunk, question, selection, context, history } = opts;
   if (isTauri()) {
     const channel = new Channel<string>();
     channel.onmessage = (msg) => onChunk(msg);
@@ -129,18 +136,17 @@ export async function streamAsk(opts: AskStreamOptions): Promise<void> {
       question,
       selection,
       context,
+      history,
       language,
       onChunk: channel,
     });
     return;
   }
   const system = language === "ar" ? prompts.qaPromptAr : prompts.qaPromptEn;
-  await streamChatBrowser(
-    provider,
-    [
-      { role: "system", content: system },
-      { role: "user", content: buildQaUser(paper, question, selection, context) },
-    ],
-    onChunk,
-  );
+  const messages = [
+    { role: "system", content: system },
+    ...history.slice(-8).map((turn) => ({ role: turn.role, content: turn.content })),
+    { role: "user", content: buildQaUser(paper, question, selection, context) },
+  ];
+  await streamChatBrowser(provider, messages, onChunk);
 }

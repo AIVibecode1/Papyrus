@@ -12,7 +12,34 @@ import { Input } from "@/components/ui/input";
 
 interface PdfViewerProps {
   bytes: Uint8Array;
-  onSelect?: (text: string) => void;
+  /** arXiv id: enables reading-position memory across sessions. */
+  paperId?: string;
+  onSelect: (text: string) => void;
+}
+
+// Reading position memory, keyed by paper id.
+const POS_KEY = "papyrus-reader-pos";
+function readPosition(paperId?: string): number | null {
+  if (!paperId) return null;
+  try {
+    const raw = localStorage.getItem(POS_KEY);
+    if (!raw) return null;
+    const map = JSON.parse(raw) as Record<string, number>;
+    return typeof map[paperId] === "number" ? map[paperId] : null;
+  } catch {
+    return null;
+  }
+}
+function savePosition(paperId: string | undefined, page: number) {
+  if (!paperId) return;
+  try {
+    const raw = localStorage.getItem(POS_KEY);
+    const map = (raw ? JSON.parse(raw) : {}) as Record<string, number>;
+    map[paperId] = page;
+    localStorage.setItem(POS_KEY, JSON.stringify(map));
+  } catch {
+    // memory is best-effort
+  }
 }
 
 interface PageView {
@@ -60,7 +87,7 @@ export function highlightSpan(span: HTMLElement, query: string): number {
 // Viewer
 // ---------------------------------------------------------------------------
 
-export function PdfViewer({ bytes, onSelect }: PdfViewerProps) {
+export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
@@ -80,6 +107,7 @@ export function PdfViewer({ bytes, onSelect }: PdfViewerProps) {
   const marksRef = useRef<HTMLElement[]>([]);
   const loadingTaskRef = useRef<pdfjsLib.PDFDocumentLoadingTask | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // --- load ----------------------------------------------------------------
   useEffect(() => {
@@ -114,7 +142,6 @@ export function PdfViewer({ bytes, onSelect }: PdfViewerProps) {
         }));
         viewportsRef.current = views;
         setPages(views);
-        setCurrentPage(1);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       }
@@ -260,6 +287,73 @@ export function PdfViewer({ bytes, onSelect }: PdfViewerProps) {
     wrap?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  // Remember the reading position whenever the visible page changes. The
+  // guard prevents the mount-time save (page 1) from clobbering a stored
+  // position before the restore effect has read it.
+  const restoreDoneRef = useRef(false);
+  useEffect(() => {
+    if (!restoreDoneRef.current) return;
+    savePosition(paperId, currentPage);
+  }, [currentPage, paperId]);
+
+  // Restore the last reading position once the pages have real layout
+  // heights (the load effect alone is too early: canvases start at zero
+  // height, and a scroll to a zero-height page is a no-op that leaves the
+  // scroll tracker on page 1).
+  useEffect(() => {
+    if (pages.length === 0) return;
+    const saved = readPosition(paperId);
+    if (saved && saved >= 1 && saved <= pages.length) {
+      setCurrentPage(saved);
+      const timer = setTimeout(() => {
+        pageWrapRefs.current[saved - 1]?.scrollIntoView({ block: "start" });
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [pages.length, paperId]);
+
+  // Enable position saves once the restore pass has run (whether or not a
+  // saved position existed).
+  useEffect(() => {
+    if (pages.length > 0) restoreDoneRef.current = true;
+  }, [pages.length]);
+
+  // Keyboard shortcuts: ArrowLeft/ArrowRight page navigation (ignored while
+  // typing), Ctrl/Cmd+F opens the find bar, Escape closes it.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+      if (e.key === "Escape") {
+        setSearchOpen(false);
+        return;
+      }
+      if (typing) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setSearchOpen(true);
+        requestAnimationFrame(() => {
+          searchInputRef.current?.focus();
+        });
+        return;
+      }
+      if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        e.preventDefault();
+        goToPage(Math.max(1, currentPage - 1));
+      } else if (e.key === "ArrowRight" || e.key === "PageDown") {
+        e.preventDefault();
+        goToPage(Math.min(pages.length, currentPage + 1));
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [currentPage, pages.length, paperId]);
+
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
@@ -340,6 +434,7 @@ export function PdfViewer({ bytes, onSelect }: PdfViewerProps) {
         ) : (
           <div className="flex items-center gap-1.5">
             <Input
+              ref={searchInputRef}
               autoFocus
               value={searchQuery}
               onChange={(e) => {

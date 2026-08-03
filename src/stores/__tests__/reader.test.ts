@@ -243,6 +243,21 @@ describe("reader store", () => {
     expect(call.context).toContain("Method text");
   });
 
+  it("ask sends the recent conversation as history", async () => {
+    await useReaderStore.getState().open(paper);
+    vi.mocked(streamAsk).mockImplementation(chunkStream(["first answer"]));
+    await useReaderStore.getState().ask("First question", provider, "en");
+
+    vi.mocked(streamAsk).mockImplementation(chunkStream(["second answer"]));
+    await useReaderStore.getState().ask("Follow-up?", provider, "en");
+
+    const call = vi.mocked(streamAsk).mock.calls[1][0];
+    expect(call.history).toEqual([
+      { role: "user", content: "First question" },
+      { role: "assistant", content: "first answer" },
+    ]);
+  });
+
   it("chat history persists and reloads per paper", async () => {
     await useReaderStore.getState().open(paper);
     vi.mocked(streamAsk).mockImplementation(chunkStream(["persisted answer"]));

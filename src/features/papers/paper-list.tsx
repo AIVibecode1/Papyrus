@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Loader2,
   RefreshCw,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -58,6 +59,8 @@ export function PaperList() {
   const date = usePapersStore((s) => s.date);
   const setDate = usePapersStore((s) => s.setDate);
   const setQuery = usePapersStore((s) => s.setQuery);
+  const loadMore = usePapersStore((s) => s.loadMore);
+  const loadingMore = usePapersStore((s) => s.loadingMore);
   const savedIds = useFavoritesStore((s) => s.ids);
   const savedBy = useFavoritesStore((s) => s.byId);
   // Select the stable byCategory reference and derive below. Calling a
@@ -243,6 +246,24 @@ export function PaperList() {
           {papers.map((paper) => (
             <PaperCard key={paper.id} paper={paper} />
           ))}
+          {papers.length >= 20 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-center"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+            >
+              {loadingMore ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  {t("papers.loadingMore")}
+                </>
+              ) : (
+                t("papers.loadMore")
+              )}
+            </Button>
+          )}
         </div>
       )}
     </div>

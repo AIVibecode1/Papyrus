@@ -31,6 +31,8 @@
     "walkthroughDone": "اكتمل الشرح الموجّه. يمكنك طرح الأسئلة في تبويب اسأل.",
     "selectionLabel": "المقطع المحدد",
     "clearSelection": "مسح التحديد",
+    "copySelection": "نسخ التحديد",
+    "copied": "تم النسخ",
     "emptyChat": "اسأل أي شيء عن الورقة، أو حدّد مقطعًا واسأل عنه.",
     "thinking": "يفكّر…",
     "askPlaceholder": "اسأل عن الورقة…",
@@ -38,6 +40,10 @@
   },
   "markdown": {
     "diagramError": "تعذّر عرض الرسم البياني"
+  },
+  "errors": {
+    "title": "حدث خطأ غير متوقع",
+    "reload": "إعادة تشغيل التطبيق"
   },
   "nav": {
     "settings": "الإعدادات"
@@ -73,6 +79,9 @@
     "latest": "الأحدث",
     "today": "اليوم",
     "read": "اقرأ",
+    "citedBy": "استُشهد به {{count}} مرة",
+    "loadMore": "تحميل المزيد",
+    "loadingMore": "جارٍ التحميل…",
     "prevDay": "اليوم السابق",
     "nextDay": "اليوم التالي",
     "browseByDay": "تصفح حسب اليوم",

@@ -306,7 +306,10 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       const { paper, sections, selection } = get();
       if (!paper || !question.trim()) return;
       const gen = ++chatGen;
+      // Both messages get real counter ids: deriving the assistant id as
+      // id + 1 would collide with the next question's id.
       const id = messageId++;
+      const assistantId = messageId++;
       const selectionSnapshot = selection;
 
       set((s) => ({
@@ -321,7 +324,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
             selection: selectionSnapshot,
           },
           {
-            id: id + 1,
+            id: assistantId,
             role: "assistant",
             text: "",
             status: "loading",
@@ -346,7 +349,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         if (buf.length === 0) return;
         set((s) => {
           const list = [...s.chat];
-          const msg = list.find((m) => m.id === id + 1);
+          const msg = list.find((m) => m.id === assistantId);
           // loading OR streaming: the first flush flips the status and
           // later flushes must keep appending (same rule as sections).
           if (!msg || (msg.status !== "loading" && msg.status !== "streaming")) return s;
@@ -361,6 +364,17 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       // answers without paper context.
       const context = findContextSection(sections, selectionSnapshot ?? "");
 
+      // Real conversation context: the last few completed turns (oldest
+      // first), so follow-up questions are answered in context. Only
+      // messages strictly before the current question are included.
+      const history = get()
+        .chat.filter(
+          (m) =>
+            m.id < id && (m.status === "done" || m.status === "error" || m.status === "stopped"),
+        )
+        .slice(-8)
+        .map((m) => ({ role: m.role, content: m.text }));
+
       try {
         await streamAsk({
           provider,
@@ -368,6 +382,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           question: question.trim(),
           selection: selectionSnapshot,
           context,
+          history,
           language,
           onChunk: (chunk) => {
             if (chatGen !== gen) return;
@@ -379,7 +394,9 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         clearTimer();
         flush();
         set((s) => {
-          const list = s.chat.map((m) => (m.id === id + 1 ? { ...m, status: "done" as const } : m));
+          const list = s.chat.map((m) =>
+            m.id === assistantId ? { ...m, status: "done" as const } : m,
+          );
           persistChat(paper.id, list);
           return { chat: list };
         });
@@ -391,7 +408,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         const status: StreamStatus = stopped ? "stopped" : "error";
         set((s) => {
           const list = s.chat.map((m) =>
-            m.id === id + 1 ? { ...m, status, error: stopped ? null : message } : m,
+            m.id === assistantId ? { ...m, status, error: stopped ? null : message } : m,
           );
           persistChat(paper.id, list);
           return { chat: list };
