@@ -22,7 +22,7 @@ Rules:
 ## v1.0.4 - 2026-08-03
 
 Status: installers built, not yet published on GitHub.
-Built from: (filled at commit time)
+Built from: df3f773
 Quality gates: 146 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
 
