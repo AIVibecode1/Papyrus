@@ -85,12 +85,19 @@ export const useDigestStore = create<DigestState>((set, get) => ({
     // the current day (yesterday-only made the picker lag a day behind,
     // showing e.g. July 31 as "newest" while today's papers exist).
     const last = get().lastChecked[category];
-    if (last && last >= today) return; // already up to date
+    // Already up to date, unless today's stored list is empty: the day
+    // may have been fetched before arXiv announced anything, and must be
+    // refetched once papers arrive (the empty day heals on the next pass).
+    const storedToday = get().byCategory[category]?.[today];
+    if (last && last >= today && storedToday?.length) return;
 
     running = true;
     try {
       const earliest = addDays(today, -(BACKFILL_DAYS - 1));
-      const from = last && last > earliest ? addDays(last, 1) : earliest;
+      let from = last && last > earliest ? addDays(last, 1) : earliest;
+      // Today was already fetched but came back empty (arXiv announces
+      // later in the day): refetch it so the day heals once papers land.
+      if (last === today && !storedToday?.length) from = today;
       const missing: string[] = [];
       for (let d = from; d <= today; d = addDays(d, 1)) {
         // A day stored with an empty list counts as missing: empty days

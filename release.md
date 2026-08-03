@@ -22,8 +22,8 @@ Rules:
 ## v1.0.2 - 2026-08-03
 
 Status: installers built, not yet published on GitHub.
-Built from: (filled at commit time)
-Quality gates: 141 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
+Built from: fe2e697
+Quality gates: 144 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
 
 Bullet points for the GitHub release description:
@@ -33,6 +33,7 @@ Bullet points for the GitHub release description:
 - Browse the latest arXiv papers in six fields (AI, ML, NLP, CV, neural
   evolution, stats), search arXiv, and step back through any past day with
   real paper counts
+- The current day heals itself: if it was fetched before arXiv announced anything, it refetches automatically once papers arrive
 - The day picker always reaches the current day: today's papers are
   selectable the moment they appear (previously the newest day lagged one
   day behind)
@@ -67,7 +68,7 @@ rule (every user-facing change bumps the version), its fixes rolled
 into v1.0.2. Kept here as a tracking log entry.
 Built from: 9d9ff0e
 Built from: 9d9ff0e
-Quality gates: 141 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
+Quality gates: 144 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
 
 Bullet points for the GitHub release description:

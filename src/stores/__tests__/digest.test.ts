@@ -119,10 +119,27 @@ describe("digest store", () => {
 
   it("skips backfill when already up to date", async () => {
     useDigestStore.setState({ loaded: true, lastChecked: { "cs.AI": today } });
+    useDigestStore.getState().storeDay("cs.AI", today, [paperFor(today)]);
 
     await useDigestStore.getState().ensureHistory("cs.AI");
 
-    expect(vi.mocked(fetchPapers)).not.toHaveBeenCalled();
+    expect(fetchPapers).not.toHaveBeenCalled();
+  });
+
+  it("refetches today when its stored list is empty", async () => {
+    // Today was fetched before arXiv announced anything: the empty day
+    // must be refetched (healed) once papers arrive, even though the
+    // checkpoint already advanced to today.
+    useDigestStore.setState({ loaded: true, lastChecked: { "cs.AI": today } });
+    useDigestStore.getState().storeDay("cs.AI", today, []);
+
+    vi.mocked(fetchPapers).mockResolvedValue({ papers: [paperFor(today)], fallbackNote: null });
+
+    await useDigestStore.getState().ensureHistory("cs.AI");
+
+    expect(fetchPapers).toHaveBeenCalledTimes(1);
+    const state = useDigestStore.getState();
+    expect(state.dayCount("cs.AI", today)).toBe(1);
   });
 
   it("caps the first backfill window", async () => {
