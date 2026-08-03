@@ -127,6 +127,10 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
   reflected in the current release's bullet points in `release.md`**,
   updated in the same commit as the change. Each update adds the version
   number and what was fixed or added.
+- **Every user-facing change bumps the app version (patch +1).** The
+  version lives in three files: `package.json`, `src-tauri/tauri.conf.json`
+  and `src-tauri/Cargo.toml`; bump all three in the same commit as the
+  change, and rebuild the installers.
 - **Never delete or truncate older release sections**: `release.md` is a
   tracking log, like a quick changelog. Old versions stay forever.
 - When a release is tagged and published, freeze its section (status,

@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { formatUiDate } from "@/lib/dates";
 import {
   Select,
   SelectContent,
@@ -49,9 +50,7 @@ function PaperSkeleton() {
 }
 
 function formatDay(date: string, language: string): string {
-  return new Intl.DateTimeFormat(language, { month: "short", day: "numeric" }).format(
-    new Date(`${date}T00:00:00Z`),
-  );
+  return formatUiDate(`${date}T00:00:00Z`, language, { month: "short", day: "numeric" });
 }
 
 export function PaperList() {

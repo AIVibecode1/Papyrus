@@ -1,6 +1,6 @@
 [package]
 name = "papyrus"
-version = "0.1.0"
+version = "1.0.2"
 description = "Papyrus — latest research papers, explained by your own AI"
 authors = ["Papyrus contributors"]
 edition = "2024"

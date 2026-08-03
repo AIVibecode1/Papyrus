@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatUiDate } from "@/lib/dates";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExplainPanel } from "@/features/papers/explain-panel";
 import { useExplanationStore } from "@/stores/explanation";
@@ -35,9 +36,9 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
   const expanded = expandedId === paper.id;
   const favorited = isFavorite(paper.id);
 
-  const published = new Intl.DateTimeFormat(i18n.language, {
+  const published = formatUiDate(new Date(paper.published), i18n.language, {
     dateStyle: "medium",
-  }).format(new Date(paper.published));
+  });
 
   // Tauri's webview blocks target="_blank" navigation, so route PDF links
   // through the opener plugin inside the app, and fall back to window.open
