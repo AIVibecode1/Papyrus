@@ -6,19 +6,101 @@
 //! requested id (null when the paper is unknown), preserving order.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde_json::Value;
+
+use tauri::Manager;
 
 use crate::papers::shared_client;
 
 const S2_BATCH_URL: &str = "https://api.semanticscholar.org/graph/v1/paper/batch";
 const CITATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 const MAX_IDS_PER_REQUEST: usize = 100;
+const CACHE_FILE_NAME: &str = "citation-cache.json";
+const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 3600);
 
 /// Test hook: lets the unit tests point at a local mock server.
 fn s2_url() -> String {
     std::env::var("PAPYRUS_S2_URL").unwrap_or_else(|_| S2_BATCH_URL.to_string())
+}
+
+/// Where the disk cache lives. Test hook: PAPYRUS_CACHE_DIR overrides the
+/// app data directory (tests cannot construct an AppHandle).
+fn cache_path(app: Option<&tauri::AppHandle>) -> PathBuf {
+    if let Ok(dir) = std::env::var("PAPYRUS_CACHE_DIR") {
+        return PathBuf::from(dir).join(CACHE_FILE_NAME);
+    }
+    let dir = app
+        .and_then(|a| a.path().app_local_data_dir().ok())
+        .unwrap_or_else(|| std::env::temp_dir().join("papyrus"));
+    dir.join(CACHE_FILE_NAME)
+}
+
+/// Test hook: PAPYRUS_CACHE_TTL_SECS overrides the freshness window.
+fn cache_ttl() -> std::time::Duration {
+    if let Ok(secs) = std::env::var("PAPYRUS_CACHE_TTL_SECS")
+        && let Ok(secs) = secs.parse::<u64>()
+    {
+        return std::time::Duration::from_secs(secs);
+    }
+    CACHE_TTL
+}
+
+/// Loads the on-disk cache into the session map when it is still fresh.
+/// A stale file is ignored; the fetch path refreshes it.
+fn load_disk_cache(app: Option<&tauri::AppHandle>) {
+    let Ok(text) = std::fs::read_to_string(cache_path(app)) else {
+        return;
+    };
+    let Ok(Value::Object(map)) = serde_json::from_str::<Value>(&text) else {
+        return;
+    };
+    let Some(saved_at) = map.get("savedAt").and_then(|v| v.as_i64()) else {
+        return;
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    if now.saturating_sub(saved_at) >= cache_ttl().as_secs() as i64 {
+        return;
+    }
+    let Some(counts) = map.get("counts").and_then(|v| v.as_object()) else {
+        return;
+    };
+    let mut guard = cache().lock().unwrap_or_else(|p| p.into_inner());
+    let session = guard.get_or_insert_with(HashMap::new);
+    for (id, count) in counts {
+        if let Some(n) = count.as_u64() {
+            session.insert(id.clone(), n as u32);
+        }
+    }
+}
+
+/// Persists the session cache to disk with the current timestamp so the
+/// next launch (within the TTL window) starts with known counts.
+fn save_disk_cache(app: Option<&tauri::AppHandle>) {
+    let snapshot: HashMap<String, u32> = {
+        let guard = cache().lock().unwrap_or_else(|p| p.into_inner());
+        match guard.as_ref() {
+            Some(map) if !map.is_empty() => map.clone(),
+            _ => return,
+        }
+    };
+    let saved_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let body = serde_json::json!({ "savedAt": saved_at, "counts": snapshot });
+    if let Some(parent) = cache_path(app).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(
+        cache_path(app),
+        serde_json::to_string(&body).unwrap_or_default(),
+    );
 }
 
 /// Session cache so repeated list refreshes do not re-query the API.
@@ -39,12 +121,31 @@ fn bare_arxiv_id(id: &str) -> String {
     base.to_string()
 }
 
-/// Fetches citation counts for the given arXiv ids. Returns a map keyed by
+/// Fetches citation counts for the given arXiv ids through the disk cache:
+/// fresh on-disk counts are loaded into the session map first, and every
+/// successful fetch persists the session back to disk.
+#[tauri::command]
+pub async fn fetch_citations(app: tauri::AppHandle, ids: Vec<String>) -> HashMap<String, u32> {
+    fetch_citations_with_cache(Some(&app), ids).await
+}
+
+/// The command body without the AppHandle, so unit tests can exercise the
+/// disk cache through the PAPYRUS_CACHE_DIR hook.
+async fn fetch_citations_with_cache(
+    app: Option<&tauri::AppHandle>,
+    ids: Vec<String>,
+) -> HashMap<String, u32> {
+    load_disk_cache(app);
+    let result = fetch_citations_impl(ids).await;
+    save_disk_cache(app);
+    result
+}
+
+/// Core fetcher: session cache + network, no disk. Returns a map keyed by
 /// the ORIGINAL ids (with version suffixes preserved) so callers can match
 /// papers directly. Unknown papers are simply absent from the map. Any
 /// network or API error returns an empty map: citations are decoration.
-#[tauri::command]
-pub async fn fetch_citations(ids: Vec<String>) -> HashMap<String, u32> {
+async fn fetch_citations_impl(ids: Vec<String>) -> HashMap<String, u32> {
     let mut result = HashMap::new();
     if ids.is_empty() {
         return result;
@@ -246,24 +347,153 @@ mod tests {
         format!("http://{addr}")
     }
 
-    fn fetch_with_override(ids: Vec<String>, url: &str) -> HashMap<String, u32> {
-        // The env var and the session cache are process-global; serialize
-        // the tests that touch them and start from a clean cache.
-        static ENV_LOCK: Mutex<()> = Mutex::new(());
-        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    // The env vars and the session cache are process-global; serialize the
+    // tests that touch them and start from a clean cache.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn reset_session_cache() {
         if let Ok(mut guard) = cache().lock() {
             *guard = None;
         }
+    }
+
+    fn fetch_with_override(ids: Vec<String>, url: &str) -> HashMap<String, u32> {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_session_cache();
         // Rust 2024 made env::set_var/remove_var unsafe.
         unsafe {
             std::env::set_var("PAPYRUS_S2_URL", url);
         }
         let result = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(fetch_citations(ids));
+            .block_on(fetch_citations_impl(ids));
         unsafe {
             std::env::remove_var("PAPYRUS_S2_URL");
         }
         result
+    }
+
+    #[test]
+    fn disk_cache_survives_a_session_reset() {
+        // Roundtrip: fetch through the command path with a real mock, wipe
+        // the session cache, then fetch again against a DEAD url — the
+        // counts must come back from the disk cache.
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_session_cache();
+        let dir = std::env::temp_dir().join(format!("papyrus-cache-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        unsafe {
+            std::env::set_var("PAPYRUS_CACHE_DIR", &dir);
+            std::env::set_var("PAPYRUS_S2_URL", "");
+        }
+        let mock = spawn_mock_s2(vec![
+            serde_json::json!({ "paperId": "ARXIV:2607.00001", "citationCount": 42 }),
+        ]);
+        unsafe {
+            std::env::set_var("PAPYRUS_S2_URL", &mock);
+        }
+        let first = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_citations_with_cache(
+                None,
+                vec!["2607.00001v2".into()],
+            ));
+        assert_eq!(first.get("2607.00001v2"), Some(&42));
+
+        reset_session_cache();
+        unsafe {
+            std::env::set_var("PAPYRUS_S2_URL", "http://127.0.0.1:1"); // dead
+        }
+        let second = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_citations_with_cache(
+                None,
+                vec!["2607.00001v2".into()],
+            ));
+        assert_eq!(
+            second.get("2607.00001v2"),
+            Some(&42),
+            "disk cache must survive a session reset"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+        unsafe {
+            std::env::remove_var("PAPYRUS_CACHE_DIR");
+            std::env::remove_var("PAPYRUS_S2_URL");
+        }
+    }
+
+    #[test]
+    fn disk_cache_ignores_stale_files() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_session_cache();
+        let dir = std::env::temp_dir().join(format!("papyrus-cache-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        unsafe {
+            std::env::set_var("PAPYRUS_CACHE_DIR", &dir);
+        }
+        let stale_saved_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() - 8 * 24 * 3600)
+            .unwrap_or(0);
+        let body = serde_json::json!({ "savedAt": stale_saved_at, "counts": { "2607.00001": 42 } });
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(CACHE_FILE_NAME),
+            serde_json::to_string(&body).unwrap(),
+        )
+        .unwrap();
+
+        unsafe {
+            std::env::set_var("PAPYRUS_S2_URL", "http://127.0.0.1:1"); // dead
+        }
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_citations_with_cache(None, vec!["2607.00001".into()]));
+        assert!(result.is_empty(), "a stale disk cache must be ignored");
+
+        let _ = std::fs::remove_dir_all(&dir);
+        unsafe {
+            std::env::remove_var("PAPYRUS_CACHE_DIR");
+            std::env::remove_var("PAPYRUS_S2_URL");
+        }
+    }
+
+    #[test]
+    fn disk_cache_ttl_override_expires_immediately() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_session_cache();
+        let dir = std::env::temp_dir().join(format!("papyrus-cache-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        unsafe {
+            std::env::set_var("PAPYRUS_CACHE_DIR", &dir);
+            std::env::set_var("PAPYRUS_CACHE_TTL_SECS", "0"); // always stale
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let body = serde_json::json!({ "savedAt": now, "counts": { "2607.00001": 42 } });
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(CACHE_FILE_NAME),
+            serde_json::to_string(&body).unwrap(),
+        )
+        .unwrap();
+
+        unsafe {
+            std::env::set_var("PAPYRUS_S2_URL", "http://127.0.0.1:1"); // dead
+        }
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_citations_with_cache(None, vec!["2607.00001".into()]));
+        assert!(result.is_empty(), "TTL 0 must expire the cache immediately");
+
+        let _ = std::fs::remove_dir_all(&dir);
+        unsafe {
+            std::env::remove_var("PAPYRUS_CACHE_DIR");
+            std::env::remove_var("PAPYRUS_CACHE_TTL_SECS");
+            std::env::remove_var("PAPYRUS_S2_URL");
+        }
     }
 }

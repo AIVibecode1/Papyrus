@@ -16,7 +16,7 @@ row when done.
 | 003  | Consolidate the four streaming flush implementations | P1       | M         | 002 (recommended)      | DONE   |
 | 010  | Provider failover chain (spike spec build)           | P1       | M         | —                      | DONE   |
 | 004  | Bound PDF rendering work (render queue)              | P2       | S         | 002                    | DONE   |
-| 005  | Persist citation counts on disk with a TTL           | P2       | S         | —                      | TODO   |
+| 005  | Persist citation counts on disk with a TTL           | P2       | S         | —                      | DONE   |
 | 007  | Test the development tooling (mock server, capture)  | P2       | S-M       | —                      | TODO   |
 | 008  | Update the second-source spike to match shipped code | P2       | S         | —                      | TODO   |
 | 011  | Semantic Scholar as the second paper source          | P2       | M         | 008, 005 (recommended) | TODO   |
