@@ -6,14 +6,16 @@
 
 ## 0. Drift check (plan vs. live tree)
 
-| Plan claim                                                 | Live tree (verified 2026-08-02)                                                                                                                                                                |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Repo has no git commits yet"                              | Stale — 18 commits exist (baseline + plans 001–027). Commit workflow per operator instruction.                                                                                                 |
-| `fetch_papers(category, max_results)` at `papers.rs:43-63` | Accurate but line-shifted — command is `src-tauri/src/papers.rs:52-94`; input validation `:58-68`; arXiv-only URL construction `:72-74`.                                                       |
-| `Paper` struct at `papers.rs:17-25`                        | Line-shifted — `papers.rs:26-36`; `#[derive(Debug, Serialize, Deserialize)]` with `#[serde(rename_all = "camelCase")]`; all seven fields required (`String`/`Vec<String>`).                    |
-| `src/lib/arxiv.ts` is the TS fetch wrapper                 | Accurate — `fetchPapers(category, maxResults)` at `arxiv.ts:25-37`; Tauri invoke vs. `src/dev/mock-papers.json` browser fallback.                                                              |
-| REF1.md:20-35 API notes                                    | Archived (plan 022) but still in `docs/research/REF1.md`. **Stale on OpenAlex**: it claims "API key required now" — live probe 2026-08-02 shows keyless still works (smaller pool, see §2/§A). |
-| Plan 025 (search) not landed                               | Correct — README row 025 is TODO; `fetch_papers` has no `query` param yet. This design composes with 025's `query` per the plan brief.                                                         |
+| Plan claim                                                           | Live tree (verified 2026-08-02)                                                                                                                                                                                                                                                                                   |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Repo has no git commits yet"                                        | Stale — 18 commits exist (baseline + plans 001–027). Commit workflow per operator instruction.                                                                                                                                                                                                                    |
+| `fetch_papers(category, max_results)` at `papers.rs:43-63`           | Accurate but line-shifted — command is `src-tauri/src/papers.rs:52-94`; input validation `:58-68`; arXiv-only URL construction `:72-74`.                                                                                                                                                                          |
+| `Paper` struct at `papers.rs:17-25`                                  | Line-shifted — `papers.rs:26-36`; `#[derive(Debug, Serialize, Deserialize)]` with `#[serde(rename_all = "camelCase")]`; all seven fields required (`String`/`Vec<String>`).                                                                                                                                       |
+| `src/lib/arxiv.ts` is the TS fetch wrapper                           | Accurate — `fetchPapers(category, maxResults)` at `arxiv.ts:25-37`; Tauri invoke vs. `src/dev/mock-papers.json` browser fallback.                                                                                                                                                                                 |
+| REF1.md:20-35 API notes                                              | Archived (plan 022) but still in `docs/research/REF1.md`. **Stale on OpenAlex**: it claims "API key required now" — live probe 2026-08-02 shows keyless still works (smaller pool, see §2/§A).                                                                                                                    |
+| Plan 025 (search) not landed                                         | Correct — README row 025 is TODO; `fetch_papers` has no `query` param yet. This design composes with 025's `query` per the plan brief.                                                                                                                                                                            |
+| Citation counts were part of the S2 SOURCE work (Paper struct field) | Superseded in ordering, not in design — the citation signal shipped FIRST as a standalone enrichment layer (`src-tauri/src/citations.rs`, S2 batch endpoint, session + disk cache with a 7-day TTL, registered in `lib.rs`), before the S2 source itself. Plan 011 builds the source on top of the same endpoint. |
+| §4 badge placement: "next to the category badge"                     | Stale — the shipped badge lives in the card's meta line (`paper-card.tsx:104-111`), i.e. the option this doc REJECTED ("less scannable"). Outcome: it reads naturally next to the date/author meta and keeps the category header minimal; recorded in §4 below.                                                   |
 
 **Stop-condition check**: neither endpoint requires authentication — Semantic
 Scholar answered keyless (with HTTP 429, an AWS `TooManyRequestsException`, not
@@ -243,12 +245,16 @@ and sends `x-api-key` header when present. Never in the frontend store.
 
 ## 4. UI surfacing
 
-**Citation count badge.** Render `citationCount` as a small mono badge next to
-the existing category badge (`paper-card.tsx:59-61`), e.g. `⤷ 1,234` or
-`"N citations"` via i18n. Trade-off: adds a second badge to a header that is
-deliberately minimal; mitigate by keeping it `text-xs` muted and only when
-`citation_count.is_some()`. Alternative (rejected for v1): moving it into the
-meta line under the title — less scannable than a badge.
+**Citation count badge — SUPERSEDED by the shipped implementation (2026-08-03).**
+The live tree renders the count as a mono badge in the card's META line
+(`paper-card.tsx:104-111`), i.e. the option this doc rejected as "less
+scannable than a badge". Outcome: the meta line already groups the
+date/authors, so the count reads as data next to data, and the category
+header stays minimal (the doc's own concern). The enrichment path is
+`fetch_citations` (S2 batch, session + disk cache, 7-day TTL) fed by the
+papers store's backfill; the card shows the badge only when
+`citationCount` is present. When the S2 source lands (plan 011), the
+badge renders from the Paper field directly with the same look.
 
 **TLDR as summary fallback.** `paper.summary || paper.tldr || t("papers.noAbstract")`
 at `paper-card.tsx:77`. Trade-off: a TLDR is a model-generated one-liner, not
@@ -362,6 +368,9 @@ en/ar) = S; tests = S-M.
 - Frontend (Vitest): card renders citation badge only when present, renders
   TLDR when summary is empty, renders fallback notice when the command returns
   the fallback flag; store test for `source` state passing through to invoke.
+  Status: the badge half shipped early via the enrichment path (citation
+  badge present-only behavior is covered; TLDR and notice tests land with
+  plan 011).
 - Rate-limit unit tests: the per-source limiter registry (interval per source,
   no cross-source blocking — arXiv's 3 s must not delay an S2 fetch).
 
