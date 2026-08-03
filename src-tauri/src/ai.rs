@@ -11,7 +11,7 @@ use tauri::ipc::Channel;
 use crate::papers::{Paper, shared_client};
 
 const KEYRING_SERVICE: &str = "papyrus";
-const EXPLAIN_TIMEOUT: Duration = Duration::from_secs(120);
+const EXPLAIN_TIMEOUT: Duration = Duration::from_secs(600);
 const TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 static CANCEL_EXPLAIN: AtomicBool = AtomicBool::new(false);
@@ -223,7 +223,17 @@ async fn stream_chat(
         loop {
             let chunk = match stream.next().await {
                 Some(Ok(chunk)) => chunk,
-                Some(Err(e)) => return Err(format!("Stream error: {e}")),
+                Some(Err(e)) => {
+                    // Mid-stream transport failure (proxy reset, gateway
+                    // timeout, truncated chunked body). With content already
+                    // received, treat it like the clean-close case below:
+                    // surfacing the partial answer beats throwing it away.
+                    // With nothing received, report the real error.
+                    if full.is_empty() {
+                        return Err(format!("Stream error: {e}"));
+                    }
+                    return Ok(full);
+                }
                 // Stream ended without a [DONE] marker: treat it as a clean
                 // close if we already received content, otherwise error.
                 None => {
@@ -1121,6 +1131,80 @@ mod tests {
         // a replacement character at the split point instead.
         assert_eq!(full, arabic);
         assert_eq!(chunks.concat(), arabic);
+    }
+
+    #[test]
+    fn keeps_partial_content_when_the_stream_breaks_mid_body() {
+        // A truncated body (Content-Length larger than the bytes actually
+        // sent) makes the body stream error mid-transfer. Content already
+        // received must be kept, like the clean-close case: gateways that
+        // reset long SSE streams must not throw the answer away.
+        let response = concat!(
+            "HTTP/1.1 200 OK
+",
+            "Content-Type: text/event-stream
+",
+            "Content-Length: 500
+",
+            "Connection: close
+
+",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Partial \"}}]}
+
+",
+        );
+        let url = spawn_mock_server_chunked(vec![response.as_bytes().to_vec()]);
+        let client = reqwest::Client::new();
+        let mut chunks = Vec::new();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let full = runtime
+            .block_on(stream_chat(
+                &client,
+                &format!("{url}/v1/chat/completions"),
+                "test-key",
+                json!({ "model": "mock", "messages": [] }),
+                Duration::from_secs(10),
+                &CANCEL_EXPLAIN,
+                &mut |c| chunks.push(c.to_string()),
+            ))
+            .expect("partial content must be returned, not an error");
+        assert_eq!(full, "Partial ");
+        assert_eq!(chunks, vec!["Partial "]);
+    }
+
+    #[test]
+    fn errors_when_the_stream_breaks_before_any_content() {
+        // Same truncated body, but nothing usable arrives first: the real
+        // error must surface (no silent empty success).
+        let response = concat!(
+            "HTTP/1.1 200 OK
+",
+            "Content-Type: text/event-stream
+",
+            "Content-Length: 500
+",
+            "Connection: close
+
+",
+        );
+        let url = spawn_mock_server_chunked(vec![response.as_bytes().to_vec()]);
+        let client = reqwest::Client::new();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let err = runtime
+            .block_on(stream_chat(
+                &client,
+                &format!("{url}/v1/chat/completions"),
+                "test-key",
+                json!({ "model": "mock", "messages": [] }),
+                Duration::from_secs(10),
+                &CANCEL_EXPLAIN,
+                &mut |_| {},
+            ))
+            .expect_err("an empty broken stream must error");
+        assert!(
+            err.contains("Stream error") || err.contains("unexpected"),
+            "got: {err}"
+        );
     }
 
     #[test]

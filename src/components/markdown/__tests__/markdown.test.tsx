@@ -154,4 +154,12 @@ describe("Markdown renderer", () => {
     expect(out).toContain("Cost: $5 for");
     expect(out).toContain("$L = 1$");
   });
+
+  it("gives every paragraph auto direction so English titles do not flip in Arabic answers", () => {
+    const { container } = render(
+      <Markdown>{"هذه ورقة مهمة بعنوان (Attention Is All You Need) وتشرح المحولات."}</Markdown>,
+    );
+    const p = container.querySelector("p");
+    expect(p).toHaveAttribute("dir", "auto");
+  });
 });

@@ -125,7 +125,10 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
   humans and for AI agents.
 - **Every change that reaches users (feature, fix, upgrade) MUST be
   reflected in the current release's bullet points in `release.md`**,
-  updated in the same commit as the change.
+  updated in the same commit as the change. Each update adds the version
+  number and what was fixed or added.
+- **Never delete or truncate older release sections**: `release.md` is a
+  tracking log, like a quick changelog. Old versions stay forever.
 - When a release is tagged and published, freeze its section (status,
   built-from commit, gate counts) and never edit old sections afterwards.
 - New releases are added by copying the template section in `release.md`.

@@ -6,7 +6,10 @@ written for humans and for AI agents working in this repo.
 
 Rules:
 
-- Every release adds a section below and never edits old sections.
+- Every release adds a section below and never deletes or truncates old
+  sections: this file is a tracking log, like a quick changelog.
+- Each section keeps its version number and the list of what was fixed
+  or added in that version.
 - The bullet points here are the source of truth for the GitHub release
   description. Copy them as-is.
 - The test counts in each section must match the README "Testing and
@@ -20,7 +23,7 @@ Rules:
 
 Status: installers built, not yet published on GitHub.
 Built from: 9d9ff0e
-Quality gates: 140 frontend tests, 73 Rust tests, clippy, rustfmt, ESLint,
+Quality gates: 141 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
 
 Bullet points for the GitHub release description:
@@ -44,6 +47,9 @@ Bullet points for the GitHub release description:
 - Three themes: light, sepia and dark
 - Save favorites and export your data to a timestamped JSON file
 - Semantic Scholar is search-only: switching to it without a search term now shows a clear hint in your language, and the search box switches to "Search Semantic Scholar…"
+- The day picker now includes today: the newest day is always the current day (previously it lagged one day behind)
+- Arabic mode: English paper titles and terms inside AI answers keep their correct direction, no more flipped text
+- The PDF reader's AI stream no longer fails with "error decoding response body" when a provider resets a long stream: partial answers are kept, and the streaming timeout was raised to 10 minutes
 - The Settings page shows the app version (1.0.1)
 - Privacy first: API keys live only in the OS keychain (Windows
   Credential Manager / macOS Keychain), never in files or logs

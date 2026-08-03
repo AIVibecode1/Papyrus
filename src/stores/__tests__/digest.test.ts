@@ -87,11 +87,12 @@ describe("digest store", () => {
     expect(useDigestStore.getState().loaded).toBe(true);
   });
 
-  it("backfills every missing day and advances the checkpoint", async () => {
+  it("backfills every missing day including today and advances the checkpoint", async () => {
     // Seed: last checked 3 days ago, no stored days. Mark loaded so the
     // store does not re-load from (empty) storage and wipe the seed.
     // The checkpoint means that day was already fetched, so the backfill
-    // starts the day after it: two missing days total.
+    // starts the day after it: three missing days (yesterday-1, yesterday,
+    // today — today is included so the day picker shows the current day).
     const threeDaysAgo = addDays(yesterday, -2);
     useDigestStore.setState({ loaded: true, lastChecked: { "cs.AI": threeDaysAgo } });
 
@@ -103,20 +104,21 @@ describe("digest store", () => {
     await useDigestStore.getState().ensureHistory("cs.AI");
 
     const calls = vi.mocked(fetchPapers).mock.calls;
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
     expect(calls[0][0]).toBe("cs.AI");
     expect(calls[0][1]).toBe(50);
     expect(calls[0][3]).toBe(addDays(yesterday, -1));
     expect(calls[1][3]).toBe(yesterday);
+    expect(calls[2][3]).toBe(today);
 
     const state = useDigestStore.getState();
-    expect(state.lastChecked["cs.AI"]).toBe(yesterday);
-    expect(state.days("cs.AI")).toEqual([yesterday, addDays(yesterday, -1)]);
+    expect(state.lastChecked["cs.AI"]).toBe(today);
+    expect(state.days("cs.AI")).toEqual([today, yesterday, addDays(yesterday, -1)]);
     expect(state.progress).toBeNull();
   });
 
   it("skips backfill when already up to date", async () => {
-    useDigestStore.setState({ loaded: true, lastChecked: { "cs.AI": yesterday } });
+    useDigestStore.setState({ loaded: true, lastChecked: { "cs.AI": today } });
 
     await useDigestStore.getState().ensureHistory("cs.AI");
 
@@ -131,8 +133,8 @@ describe("digest store", () => {
 
     const calls = vi.mocked(fetchPapers).mock.calls;
     expect(calls).toHaveLength(14);
-    expect(calls[0][3]).toBe(addDays(yesterday, -13));
-    expect(calls[13][3]).toBe(yesterday);
+    expect(calls[0][3]).toBe(addDays(today, -13));
+    expect(calls[13][3]).toBe(today);
   });
 
   it("keeps the checkpoint behind a failed day for retry", async () => {

@@ -81,23 +81,25 @@ export const useDigestStore = create<DigestState>((set, get) => ({
     get().load();
     if (running) return;
     const today = todayStr();
-    const yesterday = addDays(today, -1);
+    // The backfill covers today too: the day picker's newest day must be
+    // the current day (yesterday-only made the picker lag a day behind,
+    // showing e.g. July 31 as "newest" while today's papers exist).
     const last = get().lastChecked[category];
-    if (last && last >= yesterday) return; // already up to date
+    if (last && last >= today) return; // already up to date
 
     running = true;
     try {
-      const earliest = addDays(yesterday, -(BACKFILL_DAYS - 1));
+      const earliest = addDays(today, -(BACKFILL_DAYS - 1));
       const from = last && last > earliest ? addDays(last, 1) : earliest;
       const missing: string[] = [];
-      for (let d = from; d <= yesterday; d = addDays(d, 1)) {
+      for (let d = from; d <= today; d = addDays(d, 1)) {
         // A day stored with an empty list counts as missing: empty days
         // were historically written when the arXiv query was malformed,
         // and refetching heals them.
         if (!get().byCategory[category]?.[d]?.length) missing.push(d);
       }
       if (missing.length === 0) {
-        set((s) => ({ lastChecked: { ...s.lastChecked, [category]: yesterday } }));
+        set((s) => ({ lastChecked: { ...s.lastChecked, [category]: today } }));
         return;
       }
 
@@ -115,7 +117,7 @@ export const useDigestStore = create<DigestState>((set, get) => ({
         }
         set({ progress: { category, done: i + 1, total: missing.length } });
       }
-      const checkpoint = failedAt ? addDays(failedAt, -1) : yesterday;
+      const checkpoint = failedAt ? addDays(failedAt, -1) : today;
       set((s) => ({
         lastChecked: { ...s.lastChecked, [category]: checkpoint },
         progress: null,

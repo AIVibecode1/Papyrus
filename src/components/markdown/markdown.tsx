@@ -63,25 +63,46 @@ export const Markdown = memo(function Markdown({ children, className }: Markdown
       </a>
     ),
     h1: ({ children }) => (
-      <h1 className="mb-2 mt-4 text-lg font-bold tracking-tight first:mt-0">{children}</h1>
+      <h1 dir="auto" className="mb-2 mt-4 text-lg font-bold tracking-tight first:mt-0">
+        {children}
+      </h1>
     ),
     h2: ({ children }) => (
-      <h2 className="mb-2 mt-4 text-base font-bold tracking-tight first:mt-0">{children}</h2>
+      <h2 dir="auto" className="mb-2 mt-4 text-base font-bold tracking-tight first:mt-0">
+        {children}
+      </h2>
     ),
     h3: ({ children }) => (
-      <h3 className="mb-1.5 mt-3 text-sm font-bold tracking-tight first:mt-0">{children}</h3>
+      <h3 dir="auto" className="mb-1.5 mt-3 text-sm font-bold tracking-tight first:mt-0">
+        {children}
+      </h3>
     ),
     h4: ({ children }) => (
-      <h4 className="mb-1 mt-3 text-sm font-semibold first:mt-0">{children}</h4>
+      <h4 dir="auto" className="mb-1 mt-3 text-sm font-semibold first:mt-0">
+        {children}
+      </h4>
     ),
-    p: ({ children }) => <p className="my-2 leading-relaxed first:mt-0 last:mb-0">{children}</p>,
+    p: ({ children }) => (
+      // dir="auto": each paragraph follows its own dominant script, so an
+      // English paper title inside an Arabic answer is not bidi-flipped.
+      <p dir="auto" className="my-2 leading-relaxed first:mt-0 last:mb-0">
+        {children}
+      </p>
+    ),
     ul: ({ children }) => <ul className="my-2 list-disc space-y-1 ps-5">{children}</ul>,
     ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 ps-5">{children}</ol>,
-    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+    li: ({ children }) => (
+      <li dir="auto" className="leading-relaxed">
+        {children}
+      </li>
+    ),
     strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
     em: ({ children }) => <em>{children}</em>,
     blockquote: ({ children }) => (
-      <blockquote className="my-2 border-s-2 border-primary/40 ps-3 text-muted-foreground">
+      <blockquote
+        dir="auto"
+        className="my-2 border-s-2 border-primary/40 ps-3 text-muted-foreground"
+      >
         {children}
       </blockquote>
     ),
