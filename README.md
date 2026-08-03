@@ -18,21 +18,26 @@ react-i18next. Backend logic is written in Rust.
 
 ## Features
 
-| Feature             | What it does                                                                                                                                                  |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Latest papers       | Fetches the newest arXiv papers, newest first, for 6 fields (AI, machine learning, language, vision, neural networks, statistics) plus free keyword search    |
-| Browse by day       | Step back through any past day (arXiv date-range queries), or pick a day from the collected history list                                                      |
-| Daily history       | The app automatically collects each day's papers for the current field (last 14 days on first launch, 30 days kept), so past days are always available        |
-| AI explanations     | Explains any paper in 200 to 300 plain words, streamed live, in the language of the interface (English or Arabic)                                             |
-| Markdown answers    | AI answers render as real markdown: headings, lists, tables, math equations (KaTeX) and mermaid diagrams, styled to the app and RTL-aware                     |
-| In-app PDF reader   | Open any paper's PDF inside the app: page navigation, zoom, find-in-page search with highlights, and text selection. PDFs are cached on disk                  |
-| Whole-paper mentor  | The mentor reads the paper section by section and explains each one (press Continue between sections), then gives a final synthesis of the whole paper        |
-| Paper chat          | Ask anything about the paper in the Ask tab. Answers are grounded in the paper, and any passage you select in the PDF becomes context for your question       |
-| Your providers      | Works with OpenAI, OpenRouter, DeepSeek, Groq, Mistral, Ollama (local) or any custom base URL and model name                                                  |
-| Privacy first       | API keys live in the OS keychain (Windows Credential Manager / macOS Keychain). Paper fetching and AI calls happen in the Rust backend, never in the web page |
-| Bilingual           | Instant English to Arabic switching, full RTL layout, Cairo font                                                                                              |
-| Light and dark mode | Theme toggle, remembered between sessions                                                                                                                     |
-| Favorites           | Bookmark papers and filter the list to show only saved ones                                                                                                   |
+| Feature             | What it does                                                                                                                                                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Latest papers       | Fetches the newest arXiv papers, newest first, for 6 fields (AI, machine learning, language, vision, neural networks, statistics) plus free keyword search                                                                                      |
+| Browse by day       | Step back through any past day (arXiv date-range queries), or pick a day from the collected history list                                                                                                                                        |
+| Daily history       | The app automatically collects each day's papers for the current field (last 14 days on first launch, 30 days kept), so past days are always available                                                                                          |
+| AI explanations     | Explains any paper in 200 to 300 plain words, streamed live, in the language of the interface (English or Arabic)                                                                                                                               |
+| Markdown answers    | AI answers render as real markdown: headings, lists, tables, math equations (KaTeX) and mermaid diagrams, styled to the app and RTL-aware                                                                                                       |
+| In-app PDF reader   | Open any paper's PDF inside the app: page navigation, zoom, find-in-page search with highlights, and text selection. Keyboard shortcuts (arrows, Ctrl/Cmd+F), reading position memory, one-click copy of any selection. PDFs are cached on disk |
+| Whole-paper mentor  | The mentor reads the paper section by section and explains each one (press Continue between sections), then gives a final synthesis of the whole paper                                                                                          |
+| Paper chat          | Ask anything about the paper in the Ask tab. Answers are grounded in the paper, and any passage you select in the PDF becomes context for your question                                                                                         |
+| Your providers      | Works with OpenAI, OpenRouter, DeepSeek, Groq, Mistral, Ollama (local) or any custom base URL and model name                                                                                                                                    |
+| Privacy first       | API keys live in the OS keychain (Windows Credential Manager / macOS Keychain). Paper fetching and AI calls happen in the Rust backend, never in the web page                                                                                   |
+| Bilingual           | Instant English to Arabic switching, full RTL layout, bundled IBM Plex Sans Arabic font                                                                                                                                                         |
+| Three themes        | Light (soft, low-contrast day palette), Sepia (warm paper for reading) and Dark, switched from the top bar or the Appearance select in Settings                                                                                                 |
+| Favorites           | Bookmark papers and filter the list to show only saved ones                                                                                                                                                                                     |
+| Citation counts     | "Cited by N" on every card from Semantic Scholar (batched, cached on disk for 7 days, failure-proof)                                                                                                                                            |
+| Load more           | Fetch the next page of papers instead of stopping at 20                                                                                                                                                                                         |
+| Second paper source | Semantic Scholar search (citation counts, TLDRs, venues) with automatic fallback to arXiv and a dismissible notice when it happens                                                                                                              |
+| Provider failover   | If the active AI provider fails, the next one in your list answers automatically ("Explained by ..." note)                                                                                                                                      |
+| Export your data    | One click exports your saved papers and chat transcripts to a timestamped JSON file in Documents                                                                                                                                                |
 
 ## Screenshots
 
@@ -68,11 +73,15 @@ Papyrus has two parts that talk to each other:
 ```
 
 **The paper flow.** When you pick a field (for example cs.AI), the frontend
-asks the Rust backend for the newest papers. The backend calls the arXiv
-API, parses the XML answer, and returns a list of papers with title,
-authors, date, abstract, categories and a PDF link. arXiv sends no
-permission headers for browser calls, so this always happens in the
-backend, never directly from the web page.
+asks the Rust backend for the newest papers. By default the backend calls
+the arXiv API, parses the XML answer, and returns a list of papers with
+title, authors, date, abstract, categories and a PDF link. A source
+select in Settings switches to Semantic Scholar (search-only): the
+backend queries its search API with independent rate limits, maps the
+results (citation counts, TLDRs, venues, PDF links) into the same paper
+shape, and falls back to arXiv automatically if Semantic Scholar fails.
+arXiv sends no permission headers for browser calls, so fetching always
+happens in the backend, never directly from the web page.
 
 **The explanation flow.** When you click Explain on a paper, the backend
 reads your key from the OS keychain, builds a short request containing the
@@ -117,9 +126,11 @@ only ever knows whether a key exists, never its value.
    and type any question. The answer is grounded in the paper's text.
    Select a passage in the PDF first and the question is answered with
    that passage as context. Your chat history is kept per paper.
-8. **Switch language and theme.** Use the toggles in the top bar. The
-   whole interface flips to Arabic with full RTL, and explanations are
-   then written in Arabic. Your choice is remembered.
+8. **Switch language and theme.** Use the toggles in the top bar: the
+   language group flips the whole interface to Arabic with full RTL (and
+   explanations are then written in Arabic), and the theme button cycles
+   Light (soft, low contrast), Sepia (warm paper) and Dark. The same
+   choice lives in Settings under Appearance. Your choices are remembered.
 
 ## How many papers do you get?
 
@@ -233,7 +244,7 @@ installers for Windows, and the MIT license.
 | Corrupted or hand-edited localStorage could crash the settings page                                                                                        | Provider data is validated on load: malformed entries are dropped and dangling active-provider ids are repaired.                                                                                                                                                                                                                                                                                                                                                                                                          |
 | The keychain plugin was an unmaintained community plugin                                                                                                   | It was replaced with the maintained `keyring` crate, used directly against Windows Credential Manager and macOS Keychain.                                                                                                                                                                                                                                                                                                                                                                                                 |
 | The webview had a full keychain permission it never used                                                                                                   | The capability was removed (least privilege), leaving only `core:default` and `opener:allow-open-url`.                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| The app started with no frontend tests and no quality gates                                                                                                | Vitest was added (87 frontend tests today), the Rust suite grew to 39 tests, and ESLint, Prettier, strict typecheck, clippy and rustfmt run on every commit through pre-commit hooks.                                                                                                                                                                                                                                                                                                                                     |
+| The app started with no frontend tests and no quality gates                                                                                                | Vitest was added (128 frontend tests today), the Rust suite grew to 70 tests, and ESLint, Prettier, strict typecheck, clippy and rustfmt run on every commit through pre-commit hooks.                                                                                                                                                                                                                                                                                                                                    |
 | The repo had no automated builds                                                                                                                           | A GitHub Actions workflow now runs the full gate suite and builds installers on Windows and macOS.                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | The mock AI server refused browser requests (CORS)                                                                                                         | CORS headers and preflight handling were added, so the dev preview can stream test explanations.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | The interface looked like a default template: pure neutral grays, no accent, flat interactions                                                             | Redesign pass (taste-skill): warm paper-toned palette with a single ink-blue accent, pressed-button feedback, refined card typography (tracking, balanced titles, tabular numerals), active-category indicator, and a skip-to-content link.                                                                                                                                                                                                                                                                               |
@@ -351,7 +362,7 @@ src-tauri/          Rust backend
   capabilities/       webview permissions (least privilege)
 dev/                Development-only tools (mock AI server, screenshot capture, sample PDF)
 docs/               Screenshots and design specs
-plans/              The 28 improvement plans that shaped the final version
+plans/              The 13 improvement plans of the latest audit round (all done)
 ```
 
 ## Development
@@ -439,12 +450,13 @@ cargo test --manifest-path src-tauri/Cargo.toml live_fetch_from_arxiv -- --ignor
 
 ## Roadmap
 
-- Provider failover: if the active provider fails, try the next one
-  automatically (design spec ready in docs/spikes).
-- Second paper source: Semantic Scholar or OpenAlex for citation counts
-  and richer metadata (design spec ready in docs/spikes).
-- Daily digest: pick the most interesting papers of the day (history is
-  already collected; the digest would select and surface them).
+- Curated daily selection: a small hand-picked list of the day's most
+  interesting papers, ranked from the collected history (design spike
+  ready in docs/spikes/curated-daily.md; citation-based ranking starts
+  once papers are a few days old, because one-day-old papers are not
+  yet indexed by Semantic Scholar).
+- An optional Semantic Scholar API key in Settings for steadier citation
+  and search results (keyless works but is rate-limited).
 - macOS signing and notarization for a smoother install experience.
 
 ## License
