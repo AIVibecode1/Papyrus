@@ -17,6 +17,10 @@ use crate::papers::shared_client;
 
 const S2_BATCH_URL: &str = "https://api.semanticscholar.org/graph/v1/paper/batch";
 const CITATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// 429 retries for the shared unauthenticated S2 pool (same rationale as
+/// S2_RETRIES in papers.rs).
+const CITATION_RETRIES: u32 = 2;
+const CITATION_RETRY_DELAY_MS: u64 = 1200;
 const MAX_IDS_PER_REQUEST: usize = 100;
 const CACHE_FILE_NAME: &str = "citation-cache.json";
 const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 3600);
@@ -191,14 +195,32 @@ async fn fetch_citations_impl(ids: Vec<String>) -> HashMap<String, u32> {
                 .collect::<Vec<_>>(),
         });
 
-        let response = client
-            .post(format!("{}?fields=citationCount", s2_url()))
-            .json(&body)
-            .timeout(CITATION_TIMEOUT)
-            .send()
-            .await;
+        // 429s are common on the shared unauthenticated pool; retry a
+        // couple of times before giving up on the chunk.
+        let mut attempt = 0u32;
+        let response = loop {
+            let response = client
+                .post(format!("{}?fields=citationCount", s2_url()))
+                .json(&body)
+                .timeout(CITATION_TIMEOUT)
+                .send()
+                .await;
 
-        let Ok(response) = response else { break };
+            let Ok(response) = response else { break None };
+            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
+                && attempt < CITATION_RETRIES
+            {
+                attempt += 1;
+                tokio::time::sleep(std::time::Duration::from_millis(
+                    CITATION_RETRY_DELAY_MS * u64::from(attempt),
+                ))
+                .await;
+                continue;
+            }
+            break Some(response);
+        };
+
+        let Some(response) = response else { break };
         if !response.status().is_success() {
             break; // rate-limited or down: skip silently
         }
@@ -270,6 +292,52 @@ mod tests {
         assert_eq!(counts.get("2607.00001v1"), Some(&42));
         assert!(!counts.contains_key("2607.00002"));
         assert_eq!(counts.get("2607.00003v2"), Some(&7));
+    }
+
+    #[test]
+    fn retries_on_429_and_recovers() {
+        // The shared S2 pool answers 429 a couple of times, then succeeds:
+        // the fetch must retry and return the counts.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let body = serde_json::to_string(&[serde_json::json!({
+            "paperId": "ARXIV:2607.00001",
+            "citationCount": 42,
+        })])
+        .unwrap();
+        thread::spawn(move || {
+            let mut served = 0u32;
+            while let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let mut req = Vec::new();
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            req.extend_from_slice(&buf[..n]);
+                            if req.windows(4).any(|w| w == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                if served < 2 {
+                    served += 1;
+                    let head = "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write_all(head.as_bytes());
+                } else {
+                    let head = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = stream.write_all(head.as_bytes());
+                    let _ = stream.write_all(body.as_bytes());
+                }
+            }
+        });
+        let counts = fetch_with_override(vec!["2607.00001".into()], &format!("http://{addr}"));
+        assert_eq!(counts.get("2607.00001"), Some(&42));
     }
 
     #[test]

@@ -29,3 +29,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Third-party agent skills (local dev tooling)
+.agents/
+skills-lock.json

@@ -301,6 +301,12 @@ async fn fetch_from_arxiv(
     parse_feed(&body)
 }
 
+/// Retries on HTTP 429: Semantic Scholar's shared unauthenticated pool is
+/// frequently saturated (spike §3.1) and a short wait usually clears it.
+/// A persistent outage still falls back to arXiv via fetch_papers.
+const S2_RETRIES: u32 = 2;
+const S2_RETRY_DELAY_MS: u64 = 1200;
+
 /// Fetches papers from the Semantic Scholar search API. Requires a
 /// non-empty query; `start` maps to the API's `offset` for pagination.
 async fn fetch_from_semanticscholar(
@@ -324,24 +330,36 @@ async fn fetch_from_semanticscholar(
         url.push_str(&format!("&offset={start}"));
     }
 
-    let response = shared_client()
-        .get(&url)
-        .timeout(S2_TIMEOUT)
-        .send()
-        .await
-        .map_err(|e| format!("Network error while contacting Semantic Scholar: {e}"))?;
+    let mut attempt = 0u32;
+    loop {
+        let response = shared_client()
+            .get(&url)
+            .timeout(S2_TIMEOUT)
+            .send()
+            .await
+            .map_err(|e| format!("Network error while contacting Semantic Scholar: {e}"))?;
 
-    let status = response.status();
-    let body = response
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read Semantic Scholar response: {e}"))?;
+        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS && attempt < S2_RETRIES {
+            attempt += 1;
+            tokio::time::sleep(Duration::from_millis(
+                S2_RETRY_DELAY_MS * u64::from(attempt),
+            ))
+            .await;
+            continue;
+        }
 
-    if !status.is_success() {
-        return Err(format!("Semantic Scholar API returned HTTP {status}"));
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read Semantic Scholar response: {e}"))?;
+
+        if !status.is_success() {
+            return Err(format!("Semantic Scholar API returned HTTP {status}"));
+        }
+
+        return parse_s2_search(&body);
     }
-
-    parse_s2_search(&body)
 }
 
 /// Percent-encodes a query for use in a URL query string (spaces, unicode
@@ -1004,6 +1022,74 @@ mod tests {
 
         let err = result.expect_err("a total outage must surface as Err");
         assert!(err.contains("arXiv"), "got: {err}");
+    }
+
+    #[test]
+    fn semanticscholar_retries_on_429_then_succeeds() {
+        // The shared unauthenticated S2 pool answers 429 a couple of times
+        // before succeeding: the fetch must retry, not fall back to arXiv.
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let body = r#"{"data":[{"paperId":"abc123","title":"Retry Paper","authors":[{"name":"Ada"}],"publicationDate":"2026-07-01","year":2026,"abstract":"Abstract","citationCount":3,"venue":"CVPR","openAccessPdf":{"url":"https://example.com/retry.pdf"},"s2FieldsOfStudy":["Computer Science"]}]}"#;
+        thread::spawn(move || {
+            let mut served = 0u32;
+            while let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let mut req = Vec::new();
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            req.extend_from_slice(&buf[..n]);
+                            if req.windows(4).any(|w| w == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                if served < 2 {
+                    served += 1;
+                    let head = "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write_all(head.as_bytes());
+                } else {
+                    let head = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = stream.write_all(head.as_bytes());
+                    let _ = stream.write_all(body.as_bytes());
+                }
+            }
+        });
+
+        unsafe {
+            std::env::set_var(
+                "PAPYRUS_S2_SEARCH_URL",
+                &format!("http://{addr}/graph/v1/paper/search"),
+            );
+        }
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_papers(
+                "cs.AI".into(),
+                Some(5),
+                Some("transformer".into()),
+                None,
+                None,
+                Some("semanticscholar".into()),
+            ));
+        unsafe {
+            std::env::remove_var("PAPYRUS_S2_SEARCH_URL");
+        }
+
+        let (papers, note) = result.expect("S2 fetch must recover after 429s");
+        assert!(note.is_none(), "no fallback notice expected, got: {note:?}");
+        assert_eq!(papers.len(), 1);
+        assert_eq!(papers[0].title, "Retry Paper");
+        assert_eq!(papers[0].citation_count, Some(3));
     }
 
     #[test]
