@@ -1,5 +1,6 @@
 mod ai;
 mod citations;
+mod export;
 mod papers;
 mod pdf;
 
@@ -20,6 +21,7 @@ pub fn run() {
             ai::delete_api_key,
             ai::has_api_key,
             pdf::fetch_pdf,
+            export::export_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

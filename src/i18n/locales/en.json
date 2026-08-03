@@ -128,7 +128,11 @@
     "cancel": "Cancel",
     "paperSource": "Paper source",
     "sourceArxiv": "arXiv",
-    "sourceSemanticScholar": "Semantic Scholar"
+    "sourceSemanticScholar": "Semantic Scholar",
+    "export": "Export",
+    "exportData": "Export my data",
+    "exportedTo": "Saved to {{path}}",
+    "exportFailed": "Export failed: {{error}}"
   },
   "explain": {
     "selectProvider": "Choose provider",

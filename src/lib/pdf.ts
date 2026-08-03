@@ -10,7 +10,13 @@ import { isTauri } from "@/lib/ai";
  */
 export async function getPdfBytes(paperId: string, url: string): Promise<Uint8Array> {
   if (isTauri()) {
-    const raw = await invoke<unknown>("fetch_pdf", { paperId, url });
+    // The fetch target is derived server-side from the id (plan 006); only
+    // source-provided papers (s2:) round-trip their url through the
+    // https/public-host guard.
+    const raw = await invoke<unknown>("fetch_pdf", {
+      paperId,
+      ...(paperId.startsWith("s2:") ? { url } : {}),
+    });
     if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
     if (raw instanceof Uint8Array) return raw;
     // Some IPC layers deliver { data: [...] }; accept it defensively.

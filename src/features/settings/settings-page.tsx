@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Plus, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Plus, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { PaperSource } from "@/lib/arxiv";
+import { exportSavedData } from "@/lib/export";
 import type { ProviderConfig } from "@/lib/types";
 import { usePapersStore } from "@/stores/papers";
 import { useSettingsStore } from "@/stores/settings";
@@ -32,6 +33,23 @@ export function SettingsPage() {
   const [formKey, setFormKey] = useState(0);
   const [keyStates, setKeyStates] = useState<Record<string, boolean>>({});
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+
+  const handleExport = async () => {
+    setExporting(true);
+    setExportMessage(null);
+    try {
+      const path = await exportSavedData();
+      setExportMessage(t("settings.exportedTo", { path }));
+    } catch (err) {
+      setExportMessage(
+        t("settings.exportFailed", { error: err instanceof Error ? err.message : String(err) }),
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const refreshKeyStates = () => {
     for (const p of providers) {
@@ -112,6 +130,24 @@ export function SettingsPage() {
           </Select>
         </div>
       </div>
+
+      <div className="mt-6 flex items-center justify-between border-t pt-4">
+        <h2 className="text-base font-semibold">{t("settings.export")}</h2>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void handleExport()}
+          disabled={exporting}
+        >
+          {exporting ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Download className="size-4" />
+          )}
+          {t("settings.exportData")}
+        </Button>
+      </div>
+      {exportMessage && <p className="mt-2 text-xs text-muted-foreground">{exportMessage}</p>}
 
       <div className="mt-6 flex items-center justify-between">
         <h2 className="text-base font-semibold">{t("settings.providers")}</h2>

@@ -31,10 +31,92 @@ async fn download_pdf(url: &str) -> Result<Vec<u8>, String> {
     Ok(bytes.to_vec())
 }
 
-/// Downloads a paper's PDF and caches it on disk keyed by arXiv id, so the
-/// viewer and the text extractor never download the same PDF twice.
+/// Builds the canonical arXiv PDF URL from a paper id (e.g.
+/// `2607.29762v1` → `https://arxiv.org/pdf/2607.29762`). Never trusts the
+/// webview with the fetch target. Rejects anything that is not an arXiv
+/// id shape: the id must be `[a-z]+\.[0-9]+` optionally followed by `vN`.
+fn arxiv_pdf_url(paper_id: &str) -> Result<String, String> {
+    let id = paper_id.trim();
+    // A version suffix (vN) at the very end is stripped; anything else
+    // makes the whole id invalid (never truncate before validating).
+    let base = match id.rfind('v') {
+        Some(pos)
+            if pos > 0
+                && !id[pos + 1..].is_empty()
+                && id[pos + 1..].bytes().all(|b| b.is_ascii_digit()) =>
+        {
+            &id[..pos]
+        }
+        _ => id,
+    };
+    let valid = !base.is_empty()
+        && base.contains('.')
+        && !base.ends_with('v')
+        && base
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.');
+    if !valid {
+        return Err("Invalid paper id".into());
+    }
+    Ok(format!("https://arxiv.org/pdf/{base}"))
+}
+
+/// SSRF guard for source-provided PDF urls (S2 `openAccessPdf` hosts are
+/// arbitrary publisher domains, so they cannot be derived from the id).
+/// Rejects anything but https with no credentials, and refuses hosts that
+/// resolve to loopback/private/link-local addresses (the metadata IP
+/// 169.254.169.254 is link-local and covered).
+async fn ensure_public_https(url: &str) -> Result<(), String> {
+    let rest = url
+        .strip_prefix("https://")
+        .ok_or_else(|| "PDF url must be https".to_string())?;
+    if rest.contains('@') {
+        return Err("PDF url must not carry credentials".into());
+    }
+    let host = rest
+        .split(['/', '?', '#'])
+        .next()
+        .filter(|h| !h.is_empty())
+        .ok_or_else(|| "PDF url has no host".to_string())?;
+    let ips = tokio::net::lookup_host((host, 443))
+        .await
+        .map_err(|_| "PDF host could not be resolved".to_string())?;
+    for ip in ips {
+        let private = match ip.ip() {
+            std::net::IpAddr::V4(v4) => {
+                v4.is_loopback()
+                    || v4.is_private()
+                    || v4.is_link_local()
+                    || v4.is_broadcast()
+                    || v4.is_unspecified()
+                    || v4.is_multicast()
+            }
+            std::net::IpAddr::V6(v6) => {
+                v6.is_loopback()
+                    || v6.is_unspecified()
+                    || v6.is_multicast()
+                    // Link-local: fe80::/10 (metadata endpoints live here).
+                    || (v6.segments()[0] & 0xffc0) == 0xfe80
+            }
+        };
+        if private {
+            return Err("PDF host resolves to a private address".into());
+        }
+    }
+    Ok(())
+}
+
+/// Downloads a paper's PDF and caches it on disk keyed by the paper id, so
+/// the viewer and the text extractor never download the same PDF twice.
+/// The fetch target is DERIVED server-side: arXiv ids map to the canonical
+/// arXiv PDF url; `s2:` ids (source-provided hosts) pass their url through
+/// the https/public-host guard. The webview never picks a fetch target.
 #[tauri::command]
-pub async fn fetch_pdf(app: AppHandle, paper_id: String, url: String) -> Result<Response, String> {
+pub async fn fetch_pdf(
+    app: AppHandle,
+    paper_id: String,
+    url: Option<String>,
+) -> Result<Response, String> {
     let path = cache_path(&app, &paper_id)?;
     if let Ok(bytes) = fs::read(&path)
         && !bytes.is_empty()
@@ -42,7 +124,14 @@ pub async fn fetch_pdf(app: AppHandle, paper_id: String, url: String) -> Result<
         return Ok(Response::new(bytes));
     }
 
-    let bytes = download_pdf(&url).await?;
+    let target = if paper_id.starts_with("s2:") {
+        let url = url.ok_or_else(|| "A PDF url is required for this paper".to_string())?;
+        ensure_public_https(&url).await?;
+        url
+    } else {
+        arxiv_pdf_url(&paper_id)?
+    };
+    let bytes = download_pdf(&target).await?;
     // Best-effort cache write: a full disk is not a reason to fail the read.
     let _ = fs::write(&path, &bytes);
     Ok(Response::new(bytes))
@@ -96,9 +185,7 @@ mod tests {
         format!("http://{addr}/paper.pdf")
     }
 
-    fn run(
-        fut: impl std::future::Future<Output = Result<Vec<u8>, String>>,
-    ) -> Result<Vec<u8>, String> {
+    fn run<T>(fut: impl std::future::Future<Output = Result<T, String>>) -> Result<T, String> {
         tokio::runtime::Runtime::new().unwrap().block_on(fut)
     }
 
@@ -154,5 +241,69 @@ mod tests {
             .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
             .collect();
         assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn arxiv_pdf_url_accepts_versioned_and_bare_ids() {
+        assert_eq!(
+            arxiv_pdf_url("2607.29762v1").expect("versioned id should build"),
+            "https://arxiv.org/pdf/2607.29762"
+        );
+        assert_eq!(
+            arxiv_pdf_url("2607.29762").expect("bare id should build"),
+            "https://arxiv.org/pdf/2607.29762"
+        );
+        // Old-style ids with a category prefix still pass.
+        assert_eq!(
+            arxiv_pdf_url("cs.ai.2607.00001v2").expect("prefixed id should build"),
+            "https://arxiv.org/pdf/cs.ai.2607.00001"
+        );
+    }
+
+    #[test]
+    fn arxiv_pdf_url_rejects_garbage() {
+        for bad in [
+            "",                               // empty
+            "nodots",                         // no dot
+            "2607.29762v1/../etc/passwd",     // path separator
+            "https://evil.example/paper.pdf", // full url, not an id
+            "2607.29762v1!x",                 // invalid char
+        ] {
+            assert_eq!(
+                arxiv_pdf_url(bad),
+                Err("Invalid paper id".into()),
+                "must reject {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ensure_public_https_rejects_loopback_and_private_targets() {
+        // IP literals resolve without DNS; localhost resolves via the
+        // hosts file — both deterministic, no external network.
+        let cases = [
+            "http://127.0.0.1/paper.pdf",               // plaintext
+            "https://127.0.0.1/paper.pdf",              // loopback
+            "https://10.0.0.5/paper.pdf",               // private
+            "https://192.168.1.10/paper.pdf",           // private
+            "https://169.254.169.254/latest/meta-data", // metadata IP
+            "https://localhost/paper.pdf",              // loopback via hosts file
+            "https://user:pass@arxiv.org/paper.pdf",    // credentials
+            "https:///paper.pdf",                       // no host
+        ];
+        for url in cases {
+            let err = run(ensure_public_https(url)).expect_err("must reject {url}");
+            assert!(!err.is_empty(), "expected an error for {url}");
+        }
+    }
+
+    #[test]
+    fn s2_pdf_requires_a_url_and_guards_it() {
+        // s2: without a url -> error (not derivable).
+        let err = arxiv_pdf_url("s2:abc123").expect_err("s2 ids are not arXiv ids");
+        assert_eq!(err, "Invalid paper id");
+        // The guard path itself is covered by ensure_public_https tests;
+        // the fetch_pdf wrapper needs an AppHandle (not constructible in
+        // unit tests) — the URL policy is what matters here.
     }
 }

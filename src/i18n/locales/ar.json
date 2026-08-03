@@ -128,7 +128,11 @@
     "cancel": "إلغاء",
     "paperSource": "مصدر الأوراق",
     "sourceArxiv": "arXiv",
-    "sourceSemanticScholar": "Semantic Scholar"
+    "sourceSemanticScholar": "Semantic Scholar",
+    "export": "التصدير",
+    "exportData": "تصدير بياناتي",
+    "exportedTo": "تم الحفظ في {{path}}",
+    "exportFailed": "فشل التصدير: {{error}}"
   },
   "explain": {
     "selectProvider": "اختر المزوّد",
