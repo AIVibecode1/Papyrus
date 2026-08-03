@@ -13,6 +13,22 @@ import { Input } from "@/components/ui/input";
 // Platform detection for shortcut hints (macOS uses the Command key).
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform ?? "");
 
+/**
+ * Renders pages one at a time, checking cancellation before each page so a
+ * newer run (zoom change, reopen) stops the old loop immediately instead
+ * of finishing every canvas. Exported for unit tests.
+ */
+export async function renderInQueue(
+  views: PageView[],
+  render: (view: PageView, index: number) => Promise<void>,
+  isCancelled: () => boolean,
+): Promise<void> {
+  for (let i = 0; i < views.length; i += 1) {
+    if (isCancelled()) return;
+    await render(views[i], i);
+  }
+}
+
 interface PdfViewerProps {
   bytes: Uint8Array;
   /** arXiv id: enables reading-position memory across sessions. */
@@ -190,23 +206,35 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
     [searchQuery],
   );
 
+  // Monotonic id of the current render run: bumping it cancels the
+  // in-flight run (zoom changes must stop the old loop immediately).
+  const renderRunRef = useRef(0);
+
   useEffect(() => {
     // Re-render all pages when the zoom changes. Viewports are updated in
     // the ref and mirrored once into state; the effect itself only depends
-    // on `scale`, so it cannot loop.
+    // on `scale`, so it cannot loop. Pages render through a sequential
+    // queue that checks cancellation before every page.
     const views = viewportsRef.current;
     if (views.length === 0) return;
     const timer = setTimeout(() => {
+      const run = ++renderRunRef.current;
       void (async () => {
         const next = views.map(({ page }) => ({ page, viewport: page.getViewport({ scale }) }));
         viewportsRef.current = next;
         setPages(next);
-        for (let i = 0; i < next.length; i += 1) {
-          await renderPage(next[i].page, i, next[i].viewport);
-        }
+        await renderInQueue(
+          next,
+          (view, index) => renderPage(view.page, index, view.viewport),
+          () => run !== renderRunRef.current,
+        );
       })();
     }, 150);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      // A newer effect cycle started: cancel any run still in flight.
+      renderRunRef.current += 1;
+    };
   }, [scale]);
 
   // --- search --------------------------------------------------------------

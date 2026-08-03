@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import "@/i18n";
-import { PdfViewer } from "@/components/pdf-viewer/pdf-viewer";
+import { PdfViewer, renderInQueue } from "@/components/pdf-viewer/pdf-viewer";
 
 const fakePage = {
   getViewport: (scale: number) => ({ width: 100 * scale, height: 150 * scale }),
@@ -105,5 +105,43 @@ describe("PdfViewer", () => {
     render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
 
     await waitFor(() => expect(screen.getByText("3 / 3")).toBeInTheDocument());
+  });
+});
+
+describe("renderInQueue", () => {
+  it("renders every page in order when not cancelled", async () => {
+    const calls: number[] = [];
+    const views = [{ page: {} as never, viewport: {} as never } as never, 1, 2].map(() => ({
+      page: {} as never,
+      viewport: {} as never,
+    }));
+
+    await renderInQueue(
+      views,
+      async (_view, i) => void calls.push(i),
+      () => false,
+    );
+
+    expect(calls).toEqual([0, 1, 2]);
+  });
+
+  it("stops immediately once cancelled", async () => {
+    const calls: number[] = [];
+    let cancelled = false;
+    const views = [{ page: {} as never, viewport: {} as never }, 1, 2].map(() => ({
+      page: {} as never,
+      viewport: {} as never,
+    }));
+
+    await renderInQueue(
+      views,
+      async (_view, i) => {
+        calls.push(i);
+        if (i === 1) cancelled = true; // a zoom change lands mid-run
+      },
+      () => cancelled,
+    );
+
+    expect(calls).toEqual([0, 1]); // page 2 never rendered
   });
 });
