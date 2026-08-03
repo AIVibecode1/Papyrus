@@ -144,14 +144,23 @@ fn build_fetch_url(
         let (y, m, d) = parse_date(date)?;
         let (ny, nm, nd) = next_day(y, m, d);
         // arXiv's range syntax wants compact YYYYMMDD bounds. The upper
-        // bound is the following day so the whole day is included.
+        // bound is the following day so the whole day is included. The
+        // term is joined with spaces (not "+") so the fully encoded URL
+        // matches what the API demonstrably accepts: "cat:cs.AI AND
+        // submittedDate:[20260725 TO 20260726]" with %20 spaces returns
+        // entries, while raw or "%2B"-encoded operators and raw range
+        // brackets silently return zero.
         term.push_str(&format!(
-            "+AND+submittedDate:[{y:04}{m:02}{d:02} TO {ny:04}{nm:02}{nd:02}]"
+            " AND submittedDate:[{y:04}{m:02}{d:02} TO {ny:04}{nm:02}{nd:02}]"
         ));
     }
 
     let mut url = format!(
-        "{ARXIV_API}?search_query={term}&sortBy=submittedDate&sortOrder=descending&max_results={max}"
+        "{ARXIV_API}?search_query={}&sortBy=submittedDate&sortOrder=descending&max_results={max}",
+        // Percent-encode the term: arXiv's range grammar (`[` `]` `:`) and
+        // any query text must arrive encoded, or the API silently returns
+        // zero entries for date ranges.
+        urlencode(&term),
     );
     if start > 0 {
         // Pagination: arXiv returns results ordered newest first, so the
@@ -644,8 +653,8 @@ mod tests {
     #[test]
     fn fetch_url_without_query_uses_category() {
         let url = build_fetch_url("cs.AI", None, None, 20, 0).expect("category URL should build");
-        assert!(url.contains("search_query=cat:cs.AI"));
-        assert!(!url.contains("search_query=all:"));
+        assert!(url.contains("search_query=cat%3Acs.AI"));
+        assert!(!url.contains("search_query=all%3A"));
         assert!(url.contains("sortBy=submittedDate&sortOrder=descending&max_results=20"));
         // Invalid categories are still rejected at the same boundary.
         assert_eq!(
@@ -658,7 +667,7 @@ mod tests {
     fn fetch_url_with_query_uses_all_field() {
         let url = build_fetch_url("cs.AI", Some("transformer"), None, 20, 0)
             .expect("query URL should build");
-        assert!(url.contains("search_query=all:transformer"));
+        assert!(url.contains("search_query=all%3Atransformer"));
         // The category term is replaced, not combined.
         assert!(!url.contains("cat:cs.AI"));
         assert!(url.contains("sortBy=submittedDate&sortOrder=descending&max_results=20"));
@@ -668,18 +677,22 @@ mod tests {
     fn fetch_url_with_date_adds_submitted_range() {
         let url = build_fetch_url("cs.AI", None, Some("2026-08-01"), 20, 0)
             .expect("date URL should build");
-        // The range covers the whole day: [20260801 TO 20260802].
-        assert!(url.contains("search_query=cat:cs.AI+AND+submittedDate:[20260801 TO 20260802]"));
-        assert!(url.contains("sortBy=submittedDate&sortOrder=descending&max_results=20"));
+        // The range covers the whole day: [20260801 TO 20260802], joined
+        // with spaces and fully percent-encoded (arXiv returns zero
+        // entries when the range grammar arrives raw or with "%2B").
+        assert_eq!(
+            url,
+            "https://export.arxiv.org/api/query?search_query=cat%3Acs.AI%20AND%20submittedDate%3A%5B20260801%20TO%2020260802%5D&sortBy=submittedDate&sortOrder=descending&max_results=20"
+        );
     }
 
     #[test]
     fn fetch_url_combines_query_and_date() {
         let url = build_fetch_url("cs.AI", Some("transformer"), Some("2026-08-01"), 20, 0)
             .expect("combined URL should build");
-        assert!(
-            url.contains("search_query=all:transformer+AND+submittedDate:[20260801 TO 20260802]")
-        );
+        assert!(url.contains(
+            "search_query=all%3Atransformer%20AND%20submittedDate%3A%5B20260801%20TO%2020260802%5D"
+        ));
         assert!(!url.contains("cat:cs.AI"));
     }
 
@@ -707,7 +720,7 @@ mod tests {
         // …but surrounding whitespace is trimmed before validation.
         let url = build_fetch_url("cs.AI", Some("  attention  "), None, 20, 0)
             .expect("trimmed query should build");
-        assert!(url.contains("search_query=all:attention"));
+        assert!(url.contains("search_query=all%3Aattention"));
     }
 
     #[test]

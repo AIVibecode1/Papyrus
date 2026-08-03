@@ -33,18 +33,26 @@ export default function App() {
         >
           {t("a11y.skipToContent")}
         </a>
-        <TopBar />
         {view === "papers" ? (
-          <div className="mx-auto flex w-full max-w-6xl flex-1">
-            <Sidebar />
-            <main id="main-content" className="flex-1 p-4 lg:p-6">
-              <PaperList />
-            </main>
-          </div>
+          <>
+            <TopBar />
+            <div className="mx-auto flex w-full max-w-6xl flex-1">
+              <Sidebar />
+              <main id="main-content" className="flex-1 p-4 lg:p-6">
+                <PaperList />
+              </main>
+            </div>
+          </>
         ) : view === "reader" ? (
+          // The reader is a full-height workspace with its own header
+          // (back, title, stop). Rendering it inside the TopBar shell
+          // would stack two headers and overflow the viewport.
           <ReaderView />
         ) : (
-          <SettingsPage />
+          <>
+            <TopBar />
+            <SettingsPage />
+          </>
         )}
       </div>
     </ErrorBoundary>

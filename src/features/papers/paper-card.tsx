@@ -45,7 +45,11 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
   const handleOpenPdf = (e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     if ("__TAURI_INTERNALS__" in window) {
-      void openUrl(paper.pdfUrl);
+      openUrl(paper.pdfUrl).catch((err) => {
+        // Surface failures instead of silently doing nothing: the opener
+        // plugin rejects URLs outside its capability scope.
+        console.error("openUrl failed for", paper.pdfUrl, err);
+      });
     } else {
       window.open(paper.pdfUrl, "_blank", "noreferrer");
     }

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { fetchPapers } from "@/lib/arxiv";
 import type { Paper } from "@/lib/types";
 
-const STORAGE_KEY = "papyrus-digest-v1";
+const STORAGE_KEY = "papyrus-digest-v2";
 /** Max days fetched in one backfill pass (arXiv's 3 s politeness rule applies). */
 const BACKFILL_DAYS = 14;
 /** How much history to keep per category. */
@@ -91,7 +91,10 @@ export const useDigestStore = create<DigestState>((set, get) => ({
       const from = last && last > earliest ? addDays(last, 1) : earliest;
       const missing: string[] = [];
       for (let d = from; d <= yesterday; d = addDays(d, 1)) {
-        if (!get().byCategory[category]?.[d]) missing.push(d);
+        // A day stored with an empty list counts as missing: empty days
+        // were historically written when the arXiv query was malformed,
+        // and refetching heals them.
+        if (!get().byCategory[category]?.[d]?.length) missing.push(d);
       }
       if (missing.length === 0) {
         set((s) => ({ lastChecked: { ...s.lastChecked, [category]: yesterday } }));

@@ -40,7 +40,8 @@
     "pdfLoading": "Loading the PDF…",
     "retry": "Try again",
     "retryAsk": "Retry answer",
-    "chatHistory": "Chat history"
+    "chatHistory": "Chat history",
+    "resizeSplit": "Resize the panels (drag)"
   },
   "markdown": {
     "diagramError": "Diagram could not be rendered"

@@ -24,6 +24,27 @@ import { cn } from "@/lib/utils";
 
 type Tab = "walkthrough" | "ask";
 
+const SPLIT_KEY = "papyrus-reader-split";
+/** PDF share of the row width (0.3 = panel dominates, 0.8 = PDF dominates). */
+export function clampSplit(value: number): number {
+  if (!Number.isFinite(value)) return 0.62;
+  return Math.min(0.8, Math.max(0.3, value));
+}
+
+function initialSplit(): number {
+  try {
+    return clampSplit(Number(localStorage.getItem(SPLIT_KEY)));
+  } catch {
+    return 0.62;
+  }
+}
+
+function isRowLayout(): boolean {
+  return (
+    typeof window.matchMedia !== "function" || window.matchMedia("(min-width: 1024px)").matches
+  );
+}
+
 function StatusRow({ status, error }: { status: string; error: string | null }) {
   const { t } = useTranslation();
   if (status === "error" && error) {
@@ -96,6 +117,54 @@ export function ReaderView() {
   const [question, setQuestion] = useState("");
   const [copied, setCopied] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  // PDF share of the horizontal split (desktop); persisted between
+  // sessions so the user's layout survives restarts.
+  const [split, setSplit] = useState(initialSplit);
+  const [isRow, setIsRow] = useState(isRowLayout);
+  const draggingRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onChange = (e: MediaQueryListEvent) => setIsRow(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  // Drag the separator to resize the PDF/panel split. The PDF always
+  // occupies the inline-start side, so the math flips in RTL.
+  const startSplitDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const row = rowRef.current;
+    if (!row) return;
+    const rect = row.getBoundingClientRect();
+    draggingRef.current = true;
+    const onMove = (ev: PointerEvent) => {
+      if (!draggingRef.current) return;
+      const pdfWidth =
+        document.documentElement.dir === "rtl" ? rect.right - ev.clientX : ev.clientX - rect.left;
+      setSplit(clampSplit(pdfWidth / rect.width));
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      // Persist after the last move lands.
+      try {
+        localStorage.setItem(SPLIT_KEY, String(getSplitRef.current));
+      } catch {
+        // storage unavailable: keep the in-session layout
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+  // Keep the persisted value in sync with the latest state at drag end.
+  const getSplitRef = useRef(split);
+  useEffect(() => {
+    getSplitRef.current = split;
+  }, [split]);
 
   const paper = reader.paper;
   const provider = providers.find((p) => p.id === activeProviderId) ?? providers[0];
@@ -203,9 +272,17 @@ export function ReaderView() {
       )}
 
       {reader.loadStatus === "ready" && paper && (
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          {/* PDF viewer */}
-          <div className="min-h-0 min-w-0 flex-1">
+        <div ref={rowRef} className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+          {/* PDF viewer: grows with the row on narrow windows, exact
+              share of the split on desktop (inline-start side). */}
+          <div
+            className="min-h-0 min-w-0"
+            style={
+              isRow
+                ? { flexBasis: `${split * 100}%`, flexGrow: 0, flexShrink: 0 }
+                : { flex: "3 1 0%" }
+            }
+          >
             {reader.pdfBytes && (
               <PdfViewer
                 bytes={reader.pdfBytes}
@@ -215,9 +292,28 @@ export function ReaderView() {
             )}
           </div>
 
+          {/* Resize handle (desktop only): drag to change the split. */}
+          {isRow && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t("reader.resizeSplit")}
+              title={t("reader.resizeSplit")}
+              onPointerDown={startSplitDrag}
+              className="w-1.5 shrink-0 cursor-col-resize touch-none border-x border-border/60 bg-muted/40 transition-colors hover:bg-primary/20 active:bg-primary/30"
+            />
+          )}
+
           {/* AI panel: tabs on top, then per-tab content. The Ask tab keeps
               its input pinned at the bottom, always visible. */}
-          <aside className="flex min-h-0 w-full shrink-0 flex-col border-t bg-background lg:w-[26rem] lg:border-s lg:border-t-0">
+          <aside
+            className="flex min-h-0 flex-col border-t bg-background lg:border-s lg:border-t-0"
+            style={
+              isRow
+                ? { flexBasis: `${(1 - split) * 100}%`, flexGrow: 0, flexShrink: 0 }
+                : { flex: "2 1 0%" }
+            }
+          >
             {reader.selection && (
               <div className="flex shrink-0 items-start gap-2 border-b bg-primary/5 p-2.5">
                 <p className="min-w-0 flex-1 text-xs text-muted-foreground">

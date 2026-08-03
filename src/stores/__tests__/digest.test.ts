@@ -81,7 +81,7 @@ describe("digest store", () => {
   });
 
   it("load with corrupted storage does not throw", () => {
-    localStorageMock.setItem("papyrus-digest-v1", "not json {{{");
+    localStorageMock.setItem("papyrus-digest-v2", "not json {{{");
     useDigestStore.setState({ loaded: false });
     expect(() => useDigestStore.getState().load()).not.toThrow();
     expect(useDigestStore.getState().loaded).toBe(true);

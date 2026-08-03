@@ -68,6 +68,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+import { clampSplit } from "@/features/reader/reader-view";
+
+describe("clampSplit", () => {
+  it("clamps to the 0.3-0.8 range and falls back for garbage", () => {
+    expect(clampSplit(0.5)).toBe(0.5);
+    expect(clampSplit(0.9)).toBe(0.8);
+    expect(clampSplit(0.1)).toBe(0.3);
+    expect(clampSplit(Number.NaN)).toBe(0.62);
+    expect(clampSplit(Number.POSITIVE_INFINITY)).toBe(0.62);
+  });
+});
+
 describe("ReaderView", () => {
   it("shows the back button and returns to the papers view", () => {
     render(<ReaderView />);
