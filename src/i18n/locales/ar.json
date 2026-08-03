@@ -92,7 +92,7 @@
     "browseByDay": "تصفح حسب اليوم",
     "noPapersOnDay": "لا توجد أبحاث لهذا اليوم.",
     "historyLoading": "جارٍ جمع السجل… {{done}}/{{total}}",
-    "sourceFallback": "Semantic Scholar غير متاح، يتم عرض نتائج arXiv.",
+    "sourceFallback": "Semantic Scholar مشغول حاليًا (حدود الاستخدام المجانية)، يتم عرض نتائج arXiv بدلًا منه. عد إلى Scholar وحاول البحث مجددًا بعد دقيقة.",
     "dismiss": "إغلاق"
   },
   "presets": {

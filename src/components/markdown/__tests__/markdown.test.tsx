@@ -3,7 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Markdown } from "@/components/markdown/markdown";
+import { Markdown, normalizeMathDelimiters } from "@/components/markdown/markdown";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 
@@ -131,5 +131,27 @@ describe("Markdown renderer", () => {
     // react-markdown escapes raw HTML (rehype-raw is not enabled).
     expect(document.querySelector("img")).toBeNull();
     expect(screen.getByText(/<img/)).toBeInTheDocument();
+  });
+
+  it("renders $...$ math as KaTeX", () => {
+    const { container } = render(<Markdown>{"Energy is $E = mc^2$."}</Markdown>);
+    expect(container.querySelector(".katex")).toBeInTheDocument();
+  });
+
+  it("normalizes \\(...\\) inline math that models often emit", () => {
+    const { container } = render(<Markdown>{"Energy is \\(E = mc^2\\)."}</Markdown>);
+    expect(container.querySelector(".katex")).toBeInTheDocument();
+  });
+
+  it("normalizes \\[...\\] display math into a KaTeX block", () => {
+    const { container } = render(<Markdown>{"\\[\\frac{1}{2}\\]"}</Markdown>);
+    expect(container.querySelector(".katex-display")).toBeInTheDocument();
+  });
+
+  it("normalizeMathDelimiters leaves plain text and $...$ untouched", () => {
+    const src = "Cost: $5 for \\frac{1}{2} of $L = 1$";
+    const out = normalizeMathDelimiters(src);
+    expect(out).toContain("Cost: $5 for");
+    expect(out).toContain("$L = 1$");
   });
 });

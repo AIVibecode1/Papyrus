@@ -304,8 +304,8 @@ async fn fetch_from_arxiv(
 /// Retries on HTTP 429: Semantic Scholar's shared unauthenticated pool is
 /// frequently saturated (spike §3.1) and a short wait usually clears it.
 /// A persistent outage still falls back to arXiv via fetch_papers.
-const S2_RETRIES: u32 = 2;
-const S2_RETRY_DELAY_MS: u64 = 1200;
+const S2_RETRIES: u32 = 3;
+const S2_RETRY_DELAY_MS: u64 = 1500;
 
 /// Fetches papers from the Semantic Scholar search API. Requires a
 /// non-empty query; `start` maps to the API's `offset` for pagination.
@@ -355,7 +355,12 @@ async fn fetch_from_semanticscholar(
             .map_err(|e| format!("Failed to read Semantic Scholar response: {e}"))?;
 
         if !status.is_success() {
-            return Err(format!("Semantic Scholar API returned HTTP {status}"));
+            return Err(if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                "Semantic Scholar is busy right now (free-tier rate limits). Try again in a minute."
+                    .into()
+            } else {
+                format!("Semantic Scholar API returned HTTP {status}")
+            });
         }
 
         return parse_s2_search(&body);
@@ -1090,6 +1095,81 @@ mod tests {
         assert_eq!(papers.len(), 1);
         assert_eq!(papers[0].title, "Retry Paper");
         assert_eq!(papers[0].citation_count, Some(3));
+    }
+
+    #[test]
+    fn semanticscholar_persistent_429_falls_back_with_friendly_note() {
+        // A server that answers 429 forever: after the retries the fetch
+        // must fall back to arXiv and surface a rate-limit explanation.
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let feed = SAMPLE_FEED.to_string();
+        thread::spawn(move || {
+            let mut served = 0u32;
+            while let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let mut req = Vec::new();
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            req.extend_from_slice(&buf[..n]);
+                            if req.windows(4).any(|w| w == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                let marker = b"graph/v1/paper/search";
+                if req.windows(marker.len()).any(|w| w == marker) && served < 10 {
+                    served += 1;
+                    let head = "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    let _ = stream.write_all(head.as_bytes());
+                } else {
+                    let head = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/atom+xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        feed.len()
+                    );
+                    let _ = stream.write_all(head.as_bytes());
+                    let _ = stream.write_all(feed.as_bytes());
+                }
+            }
+        });
+
+        unsafe {
+            std::env::set_var(
+                "PAPYRUS_S2_SEARCH_URL",
+                &format!("http://{addr}/graph/v1/paper/search"),
+            );
+            std::env::set_var("PAPYRUS_ARXIV_URL", &format!("http://{addr}/api/query"));
+        }
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_papers(
+                "cs.AI".into(),
+                Some(5),
+                Some("transformer".into()),
+                None,
+                None,
+                Some("semanticscholar".into()),
+            ));
+        unsafe {
+            std::env::remove_var("PAPYRUS_S2_SEARCH_URL");
+            std::env::remove_var("PAPYRUS_ARXIV_URL");
+        }
+
+        let (papers, note) = result.expect("arXiv fallback must succeed");
+        assert!(
+            papers
+                .iter()
+                .any(|p| p.title.contains("Attention Is All You Need"))
+        );
+        let note = note.expect("the fallback note must be Some");
+        assert!(note.contains("busy"), "got: {note}");
+        assert!(note.contains("rate limits"), "got: {note}");
     }
 
     #[test]

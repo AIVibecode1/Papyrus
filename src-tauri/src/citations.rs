@@ -19,8 +19,8 @@ const S2_BATCH_URL: &str = "https://api.semanticscholar.org/graph/v1/paper/batch
 const CITATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 /// 429 retries for the shared unauthenticated S2 pool (same rationale as
 /// S2_RETRIES in papers.rs).
-const CITATION_RETRIES: u32 = 2;
-const CITATION_RETRY_DELAY_MS: u64 = 1200;
+const CITATION_RETRIES: u32 = 3;
+const CITATION_RETRY_DELAY_MS: u64 = 1500;
 const MAX_IDS_PER_REQUEST: usize = 100;
 const CACHE_FILE_NAME: &str = "citation-cache.json";
 const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 3600);

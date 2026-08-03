@@ -92,7 +92,7 @@
     "browseByDay": "Browse by day",
     "noPapersOnDay": "No papers found for this day.",
     "historyLoading": "Collecting history… {{done}}/{{total}}",
-    "sourceFallback": "Semantic Scholar is unavailable, showing arXiv results.",
+    "sourceFallback": "Semantic Scholar is busy right now (free-tier rate limits), showing arXiv results instead. Switch back to Scholar and search again in a minute.",
     "dismiss": "Dismiss"
   },
   "presets": {
