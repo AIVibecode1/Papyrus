@@ -19,7 +19,7 @@ Rules:
 ## v1.0.0 - 2026-08-03
 
 Status: installers built (app version 1.0.1), not yet published on GitHub.
-Built from: <fill in the pushed commit sha>
+Built from: 9d9ff0e
 Quality gates: 140 frontend tests, 73 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
 
