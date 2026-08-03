@@ -110,7 +110,7 @@ export function PaperList() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-muted-foreground">
+        <div className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
           {lastUpdated &&
             t("papers.updated", {
               time: new Intl.DateTimeFormat(undefined, {
@@ -224,8 +224,8 @@ export function PaperList() {
           </Card>
         ) : (
           <div className="flex flex-col gap-4">
-            {savedIds.map((id) => (
-              <PaperCard key={id} paper={savedBy[id]} />
+            {savedIds.map((id, i) => (
+              <PaperCard key={id} paper={savedBy[id]} index={i} />
             ))}
           </div>
         ))}
@@ -243,8 +243,8 @@ export function PaperList() {
 
       {!loading && !error && !savedOnly && papers.length > 0 && (
         <div className="flex flex-col gap-4">
-          {papers.map((paper) => (
-            <PaperCard key={paper.id} paper={paper} />
+          {papers.map((paper, i) => (
+            <PaperCard key={paper.id} paper={paper} index={i} />
           ))}
           {papers.length >= 20 && (
             <Button

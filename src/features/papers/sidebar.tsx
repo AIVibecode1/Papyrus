@@ -10,7 +10,7 @@ export function Sidebar() {
 
   return (
     <aside className="w-56 shrink-0 border-e bg-muted/30 p-4">
-      <h2 className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h2 className="px-2 font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
         {t("categories.title")}
       </h2>
       <nav className="mt-3 flex flex-col gap-1">

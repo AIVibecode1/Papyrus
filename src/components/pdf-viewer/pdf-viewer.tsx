@@ -10,6 +10,9 @@ import "pdfjs-dist/web/pdf_viewer.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+// Platform detection for shortcut hints (macOS uses the Command key).
+const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform ?? "");
+
 interface PdfViewerProps {
   bytes: Uint8Array;
   /** arXiv id: enables reading-position memory across sessions. */
@@ -386,7 +389,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
         >
           <ChevronLeft className="size-4" />
         </Button>
-        <span className="text-xs text-muted-foreground" dir="ltr">
+        <span className="font-mono text-[11px] text-muted-foreground" dir="ltr">
           {currentPage} / {pages.length}
         </span>
         <Button
@@ -408,7 +411,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
         >
           <Minus className="size-4" />
         </Button>
-        <span className="w-10 text-center text-xs text-muted-foreground" dir="ltr">
+        <span className="w-10 text-center font-mono text-[11px] text-muted-foreground" dir="ltr">
           {Math.round(scale * 100)}%
         </span>
         <Button
@@ -423,14 +426,17 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
         <div className="mx-1 h-4 w-px bg-border" />
 
         {!searchOpen ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setSearchOpen(true)}
-            aria-label={t("reader.searchInPdf")}
-          >
-            <Search className="size-4" />
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setSearchOpen(true)}
+              aria-label={t("reader.searchInPdf")}
+            >
+              <Search className="size-4" />
+            </Button>
+            <kbd>{IS_MAC ? "⌘F" : "Ctrl+F"}</kbd>
+          </>
         ) : (
           <div className="flex items-center gap-1.5">
             <Input

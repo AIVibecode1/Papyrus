@@ -16,10 +16,10 @@ export function TopBar() {
     <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
       <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+          <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <ScrollText className="size-4" />
           </div>
-          <span className="text-base font-bold tracking-tight">{t("app.name")}</span>
+          <span className="font-serif text-lg leading-none tracking-tight">{t("app.name")}</span>
           <span className="hidden text-sm text-muted-foreground sm:inline">{t("app.tagline")}</span>
         </div>
 
@@ -37,7 +37,7 @@ export function TopBar() {
                 className={cn(
                   "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
                   i18n.language === lang.code
-                    ? "bg-background text-foreground shadow-sm"
+                    ? "border bg-background text-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )}
                 aria-pressed={i18n.language === lang.code}

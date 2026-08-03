@@ -3,32 +3,127 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Papyrus palette: warm paper neutrals (a subtle warm tint instead of
- * pure gray), one single desaturated ink-blue accent, and tinted shadows.
- * The accent is used for primary actions, focus rings, the active
- * category, and saved-bookmark state. Nothing else is allowed to be
- * colorful: consistency beats variety.
+ * Papyrus design system: premium utilitarian minimalism.
+ *
+ * Warm monochrome canvas (bone white, never pure gray), one ink primary
+ * for actions, a single desaturated pastel-blue accent for highlights,
+ * 1px hairline borders, no heavy shadows, tabular numerals everywhere.
+ * Typography is the interface: Geist Sans for UI, Geist Mono for
+ * metadata, IBM Plex Sans Arabic for Arabic (bundled locally, offline),
+ * Instrument Serif for the brand wordmark.
+ */
+
+/* --- bundled fonts (OFL licensed, no network needed) ---------------------- */
+@font-face {
+  font-family: "Geist Sans";
+  src: url("./assets/fonts/Geist-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Sans";
+  src: url("./assets/fonts/Geist-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Sans";
+  src: url("./assets/fonts/Geist-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Sans";
+  src: url("./assets/fonts/Geist-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./assets/fonts/GeistMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./assets/fonts/GeistMono-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  src: url("./assets/fonts/ibm-plex-sans-arabic-arabic-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  src: url("./assets/fonts/ibm-plex-sans-arabic-arabic-500-normal.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  src: url("./assets/fonts/ibm-plex-sans-arabic-arabic-600-normal.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  src: url("./assets/fonts/ibm-plex-sans-arabic-arabic-700-normal.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("./assets/fonts/instrument-serif-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("./assets/fonts/instrument-serif-latin-400-italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+/*
+ * Warm monochrome palette. The only color allowed to appear is the
+ * desaturated pastel blue (accent) plus semantic red for destructive
+ * actions. Primary actions are ink, not blue.
  */
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.985 0.004 80);
-  --foreground: oklch(0.21 0.012 80);
-  --card: oklch(0.995 0.003 80);
-  --card-foreground: oklch(0.21 0.012 80);
-  --popover: oklch(0.995 0.003 80);
-  --popover-foreground: oklch(0.21 0.012 80);
-  --primary: oklch(0.45 0.09 255);
-  --primary-foreground: oklch(0.985 0.004 255);
-  --secondary: oklch(0.955 0.006 80);
-  --secondary-foreground: oklch(0.25 0.015 80);
-  --muted: oklch(0.955 0.006 80);
-  --muted-foreground: oklch(0.5 0.015 80);
-  --accent: oklch(0.94 0.018 255);
-  --accent-foreground: oklch(0.35 0.07 255);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0.008 80);
-  --input: oklch(0.91 0.008 80);
-  --ring: oklch(0.55 0.11 255);
+  --background: oklch(0.972 0.004 85);
+  --foreground: oklch(0.23 0.008 70);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.23 0.008 70);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.23 0.008 70);
+  --primary: oklch(0.21 0.006 70);
+  --primary-foreground: oklch(0.985 0.003 85);
+  --secondary: oklch(0.948 0.005 85);
+  --secondary-foreground: oklch(0.3 0.01 70);
+  --muted: oklch(0.948 0.005 85);
+  --muted-foreground: oklch(0.52 0.012 75);
+  --accent: oklch(0.955 0.02 240);
+  --accent-foreground: oklch(0.42 0.07 240);
+  --destructive: oklch(0.52 0.12 25);
+  --border: oklch(0.913 0.006 85);
+  --input: oklch(0.913 0.006 85);
+  --ring: oklch(0.55 0.06 240);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -37,24 +132,24 @@
 }
 
 .dark {
-  --background: oklch(0.17 0.008 60);
-  --foreground: oklch(0.96 0.004 60);
-  --card: oklch(0.21 0.01 60);
-  --card-foreground: oklch(0.96 0.004 60);
-  --popover: oklch(0.21 0.01 60);
-  --popover-foreground: oklch(0.96 0.004 60);
-  --primary: oklch(0.68 0.11 255);
-  --primary-foreground: oklch(0.985 0.004 255);
-  --secondary: oklch(0.27 0.012 60);
-  --secondary-foreground: oklch(0.96 0.004 60);
-  --muted: oklch(0.27 0.012 60);
-  --muted-foreground: oklch(0.72 0.01 60);
-  --accent: oklch(0.29 0.03 255);
-  --accent-foreground: oklch(0.85 0.05 255);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.96 0.004 60 / 12%);
-  --input: oklch(0.96 0.004 60 / 15%);
-  --ring: oklch(0.62 0.12 255);
+  --background: oklch(0.185 0.005 70);
+  --foreground: oklch(0.93 0.004 80);
+  --card: oklch(0.225 0.006 70);
+  --card-foreground: oklch(0.93 0.004 80);
+  --popover: oklch(0.225 0.006 70);
+  --popover-foreground: oklch(0.93 0.004 80);
+  --primary: oklch(0.92 0.004 80);
+  --primary-foreground: oklch(0.2 0.006 70);
+  --secondary: oklch(0.27 0.007 70);
+  --secondary-foreground: oklch(0.93 0.004 80);
+  --muted: oklch(0.27 0.007 70);
+  --muted-foreground: oklch(0.68 0.008 75);
+  --accent: oklch(0.3 0.035 240);
+  --accent-foreground: oklch(0.82 0.05 240);
+  --destructive: oklch(0.66 0.13 25);
+  --border: oklch(0.93 0.004 80 / 12%);
+  --input: oklch(0.93 0.004 80 / 14%);
+  --ring: oklch(0.65 0.06 240);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -91,8 +186,10 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --font-sans:
-    "Cairo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Geist Sans", "IBM Plex Sans Arabic", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+  --font-serif: "Instrument Serif", "Times New Roman", serif;
 }
 
 @layer base {
@@ -102,7 +199,33 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
-    /* Keep numerals aligned in dates, counts and timestamps. */
+    /* Dates, counts and page numbers stay aligned. */
     font-variant-numeric: tabular-nums;
+  }
+  /* Text selection in the muted pastel, ink-blue text on top. */
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+  /* Keyboard-shortcut chips (used in the reader toolbar). */
+  kbd {
+    @apply inline-flex items-center rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium leading-none text-muted-foreground;
+  }
+  /* One consistent stroke weight across every icon. */
+  svg.lucide {
+    stroke-width: 1.75;
+  }
+}
+
+/* Quiet entry motion: cards rise 12px and fade in once, staggered by
+   the caller via animation-delay. Transform + opacity only. */
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

@@ -17,9 +17,11 @@ import { cn } from "@/lib/utils";
 
 interface PaperCardProps {
   paper: Paper;
+  /** Position in the list; staggers the entry animation (capped). */
+  index?: number;
 }
 
-export function PaperCard({ paper }: PaperCardProps) {
+export function PaperCard({ paper, index = 0 }: PaperCardProps) {
   const { t, i18n } = useTranslation();
   const { providers, activeProviderId } = useSettingsStore();
   const isFavorite = useFavoritesStore((s) => s.isFavorite);
@@ -71,9 +73,10 @@ export function PaperCard({ paper }: PaperCardProps) {
   return (
     <Card
       className={cn(
-        "transition-all duration-200 hover:-translate-y-px hover:border-foreground/20 hover:shadow-sm",
+        "animate-[card-in_0.6s_cubic-bezier(0.16,1,0.3,1)_both] transition-all duration-200 hover:-translate-y-px hover:border-foreground/20 hover:shadow-sm",
         expanded && "border-primary/50",
       )}
+      style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
     >
       <CardContent className="flex flex-col gap-2.5 p-5">
         {/* English paper content stays left-to-right inside the RTL layout:
@@ -91,7 +94,7 @@ export function PaperCard({ paper }: PaperCardProps) {
           </Badge>
         </div>
 
-        <p dir="ltr" className="text-xs text-muted-foreground">
+        <p dir="ltr" className="font-mono text-[11px] leading-relaxed text-muted-foreground">
           <time dateTime={paper.published}>{published}</time>
           {paper.authors.length > 0 && (
             <>
