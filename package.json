@@ -17,7 +17,6 @@
     "format:check": "pnpm exec prettier --check ."
   },
   "dependencies": {
-    "@fontsource/cairo": "^5.3.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
