@@ -10,6 +10,7 @@
     "preview": "pnpm exec vite preview",
     "mock-ai": "node dev/mock-ai-server.mjs",
     "test": "pnpm exec vitest run",
+    "test:dev": "node --test dev/__tests__/mock-ai-server.test.mjs",
     "tauri": "tauri",
     "lint": "pnpm exec eslint .",
     "typecheck": "pnpm exec tsc --noEmit",

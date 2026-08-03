@@ -3,6 +3,7 @@
 // It speaks SSE streaming and replies in the language of the system prompt
 // (English or Arabic) so the full EN/AR pipeline can be exercised.
 import http from "node:http";
+import { pathToFileURL } from "node:url";
 
 const PORT = Number(process.env.PORT ?? 8765);
 
@@ -64,78 +65,94 @@ const CORS_HEADERS = {
   "access-control-max-age": "600",
 };
 
-const server = http.createServer((req, res) => {
-  let body = "";
-  req.on("data", (chunk) => (body += chunk));
-  req.on("end", () => {
-    const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
+/**
+ * Picks the reply for a chat request body: Arabic when the system prompt
+ * asks for Arabic, English otherwise. Exported for tests.
+ */
+export function buildReply(body) {
+  const messages = Array.isArray(body?.messages) ? body.messages : [];
+  const systemPrompt = messages.find((m) => m.role === "system")?.content ?? "";
+  const arabic = systemPrompt.includes("اللغة العربية");
+  return { arabic, text: arabic ? EXPLANATION_AR : EXPLANATION_EN };
+}
 
-    // CORS preflight (browser clients).
-    if (req.method === "OPTIONS") {
-      res.writeHead(204, CORS_HEADERS);
-      res.end();
-      return;
-    }
+/** Creates the request handler server without binding a port. Exported for
+ * tests, which can listen on port 0 and exercise the full HTTP surface. */
+export function createMockServer() {
+  return http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => {
+      const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
 
-    if (req.method === "GET" && url.pathname === "/v1/models") {
-      res.writeHead(200, { "content-type": "application/json", ...CORS_HEADERS });
-      res.end(JSON.stringify({ data: [{ id: "mock-model" }] }));
-      return;
-    }
-
-    if (req.method === "POST" && url.pathname.endsWith("/chat/completions")) {
-      let parsed = {};
-      try {
-        parsed = JSON.parse(body);
-      } catch {
-        /* malformed body — respond anyway */
-      }
-      const messages = Array.isArray(parsed.messages) ? parsed.messages : [];
-      const systemPrompt = messages.find((m) => m.role === "system")?.content ?? "";
-      const arabic = systemPrompt.includes("اللغة العربية");
-      const text = arabic ? EXPLANATION_AR : EXPLANATION_EN;
-      const stream = parsed.stream !== false;
-
-      if (!stream) {
-        res.writeHead(200, { "content-type": "application/json", ...CORS_HEADERS });
-        res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: text } }] }));
+      // CORS preflight (browser clients).
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, CORS_HEADERS);
+        res.end();
         return;
       }
 
-      res.writeHead(200, {
-        "content-type": "text/event-stream",
-        "cache-control": "no-cache",
-        connection: "keep-alive",
-        ...CORS_HEADERS,
-      });
+      if (req.method === "GET" && url.pathname === "/v1/models") {
+        res.writeHead(200, { "content-type": "application/json", ...CORS_HEADERS });
+        res.end(JSON.stringify({ data: [{ id: "mock-model" }] }));
+        return;
+      }
 
-      const words = text.split(" ");
-      let i = 0;
-      const timer = setInterval(() => {
-        if (i >= words.length) {
-          res.write("data: [DONE]\n\n");
-          res.end();
-          clearInterval(timer);
+      if (req.method === "POST" && url.pathname.endsWith("/chat/completions")) {
+        let parsed = {};
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          /* malformed body — respond anyway */
+        }
+        const { text } = buildReply(parsed);
+        const stream = parsed.stream !== false;
+
+        if (!stream) {
+          res.writeHead(200, { "content-type": "application/json", ...CORS_HEADERS });
+          res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: text } }] }));
           return;
         }
-        const payload = JSON.stringify({
-          choices: [{ delta: { content: words[i] + " " } }],
+
+        res.writeHead(200, {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+          connection: "keep-alive",
+          ...CORS_HEADERS,
         });
-        res.write(`data: ${payload}\n\n`);
-        i += 1;
-      }, 35);
-      return;
-    }
 
-    res.writeHead(404, { "content-type": "text/plain" });
-    res.end("not found");
+        const words = text.split(" ");
+        let i = 0;
+        const timer = setInterval(() => {
+          if (i >= words.length) {
+            res.write("data: [DONE]\n\n");
+            res.end();
+            clearInterval(timer);
+            return;
+          }
+          const payload = JSON.stringify({
+            choices: [{ delta: { content: words[i] + " " } }],
+          });
+          res.write(`data: ${payload}\n\n`);
+          i += 1;
+        }, 35);
+        return;
+      }
+
+      res.writeHead(404, { "content-type": "text/plain" });
+      res.end("not found");
+    });
   });
-});
+}
 
-server.listen(PORT, () => {
-  console.log(`Mock AI server listening on http://localhost:${PORT}/v1`);
-  console.log("Configure it in Papyrus Settings as a provider:");
-  console.log(`  Base URL: http://localhost:${PORT}/v1`);
-  console.log("  Model:    mock-model");
-  console.log("  API key:  anything (or empty)");
-});
+// Run as a script only (not when imported by the tests).
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  const server = createMockServer();
+  server.listen(PORT, () => {
+    console.log(`Mock AI server listening on http://localhost:${PORT}/v1`);
+    console.log("Configure it in Papyrus Settings as a provider:");
+    console.log(`  Base URL: http://localhost:${PORT}/v1`);
+    console.log("  Model:    mock-model");
+    console.log("  API key:  anything (or empty)");
+  });
+}
