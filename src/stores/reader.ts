@@ -48,6 +48,8 @@ interface ReaderState {
   startWalkthrough: (provider: ProviderConfig, language: string) => Promise<void>;
   continueWalkthrough: (provider: ProviderConfig, language: string) => Promise<void>;
   ask: (question: string, provider: ProviderConfig, language: string) => Promise<void>;
+  /** Re-asks the question behind the last failed assistant message. */
+  retryAsk: (provider: ProviderConfig, language: string) => Promise<void>;
   stop: () => Promise<void>;
 }
 
@@ -406,6 +408,31 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       }
 
       void sections;
+    },
+
+    retryAsk: async (provider, language) => {
+      const { chat } = get();
+      // Find the last failed assistant message and the user question
+      // directly before it; drop the failed message and re-ask.
+      for (let i = chat.length - 1; i >= 0; i -= 1) {
+        const failed = chat[i];
+        if (failed.role !== "assistant" || failed.status !== "error") continue;
+        let question = "";
+        for (let j = i - 1; j >= 0; j -= 1) {
+          if (chat[j].role === "user") {
+            question = chat[j].text;
+            break;
+          }
+        }
+        if (!question) return;
+        // Drop the failed message AND its user question: ask() re-adds
+        // both, so the bubble pair is not duplicated.
+        const end = i > 0 && chat[i - 1].role === "user" ? i - 1 : i;
+        set({ chat: chat.slice(0, end) });
+        // The next ask() persists the full list (minus the failed
+        // message) when the new stream settles.
+        return get().ask(question, provider, language);
+      }
     },
   };
 });

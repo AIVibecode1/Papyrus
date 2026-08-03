@@ -1,4 +1,4 @@
-import { Moon, ScrollText, Settings, Sun } from "lucide-react";
+import { Lamp, Moon, ScrollText, Settings, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/use-theme";
@@ -60,8 +60,15 @@ export function TopBar() {
             size="icon"
             onClick={toggleTheme}
             aria-label={t("topbar.theme")}
+            title={t("topbar.theme")}
           >
-            {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            {theme === "dark" ? (
+              <Moon className="size-4" />
+            ) : theme === "sepia" ? (
+              <Lamp className="size-4" />
+            ) : (
+              <Sun className="size-4" />
+            )}
           </Button>
         </div>
       </div>

@@ -1,4 +1,13 @@
-import { ChevronLeft, ChevronRight, FileText, Minus, Plus, Search, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Minus,
+  Plus,
+  RotateCcw,
+  Search,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as pdfjsLib from "pdfjs-dist";
@@ -120,6 +129,8 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   const [scale, setScale] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  // Bumping this re-runs the load effect (the error state's retry action).
+  const [reloadKey, setReloadKey] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [matchCount, setMatchCount] = useState(0);
@@ -169,7 +180,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
     return () => {
       cancelled = true;
     };
-  }, [bytes]);
+  }, [bytes, reloadKey]);
 
   useEffect(
     () => () => {
@@ -390,19 +401,31 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
 
   if (error) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-        <FileText className="size-10 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">{t("reader.pdfError")}</p>
-        <p dir="ltr" className="max-w-md text-xs text-muted-foreground/70">
+      <div
+        role="alert"
+        className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center"
+      >
+        <FileText className="size-10 text-destructive/70" />
+        <p className="text-sm font-medium text-destructive">{t("reader.pdfError")}</p>
+        <p dir="ltr" className="max-w-md break-words text-xs text-muted-foreground">
           {error}
         </p>
+        {/* Errors are direction, not dead ends: retrying is one click. */}
+        <Button variant="outline" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
+          <RotateCcw className="size-3.5" />
+          {t("reader.retry")}
+        </Button>
       </div>
     );
   }
 
   if (pages.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div
+        role="status"
+        aria-label={t("reader.pdfLoading")}
+        className="flex h-full items-center justify-center"
+      >
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
@@ -418,7 +441,8 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
           onClick={() => goToPage(Math.max(1, currentPage - 1))}
           aria-label={t("reader.prevPage")}
         >
-          <ChevronLeft className="size-4" />
+          {/* In RTL the previous page sits to the RIGHT (inline-start). */}
+          <ChevronLeft className="size-4 rtl:rotate-180" />
         </Button>
         <span className="font-mono text-[11px] text-muted-foreground" dir="ltr">
           {currentPage} / {pages.length}
@@ -429,7 +453,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
           onClick={() => goToPage(Math.min(pages.length, currentPage + 1))}
           aria-label={t("reader.nextPage")}
         >
-          <ChevronRight className="size-4" />
+          <ChevronRight className="size-4 rtl:rotate-180" />
         </Button>
 
         <div className="mx-1 h-4 w-px bg-border" />
@@ -504,11 +528,15 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
                   setSearchOpen(false);
                 }
               }}
-              placeholder={t("reader.searchInPdf")}
+              placeholder={`${t("reader.searchInPdf")}…`}
               className="h-8 w-40 text-xs"
               dir="auto"
             />
-            <span className="min-w-14 text-center text-xs text-muted-foreground" dir="ltr">
+            <span
+              aria-live="polite"
+              className="min-w-14 text-center text-xs text-muted-foreground"
+              dir="ltr"
+            >
               {matchCount > 0 ? `${matchCount} ${t("reader.matches")}` : t("reader.noMatches")}
             </span>
             <Button
@@ -532,7 +560,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
             onClick={() => jumpToMatch(1)}
             aria-label={t("reader.nextMatch")}
           >
-            <ChevronRight className="size-4" />
+            <ChevronRight className="size-4 rtl:rotate-180" />
           </Button>
         )}
       </div>
@@ -561,6 +589,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
                 }}
                 width={viewport.width}
                 height={viewport.height}
+                aria-hidden="true"
               />
               <div
                 ref={(el) => {

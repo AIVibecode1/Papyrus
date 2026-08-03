@@ -12,6 +12,7 @@ import {
 import type { PaperSource } from "@/lib/arxiv";
 import { exportSavedData } from "@/lib/export";
 import type { ProviderConfig } from "@/lib/types";
+import { useTheme, type Theme } from "@/hooks/use-theme";
 import { usePapersStore } from "@/stores/papers";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
@@ -23,6 +24,7 @@ const emptyForm = { name: "", baseUrl: "", model: "", key: "" };
 export function SettingsPage() {
   const { t } = useTranslation();
   const setView = useUiStore((s) => s.setView);
+  const { theme, setThemeTo } = useTheme();
   const source = usePapersStore((s) => s.source);
   const setSource = usePapersStore((s) => s.setSource);
   const { providers, activeProviderId, removeProvider, setActiveProvider, deleteKey, hasKey } =
@@ -110,6 +112,24 @@ export function SettingsPage() {
       <div className="mt-4 flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
         <ShieldCheck className="size-4 shrink-0" />
         {t("settings.securityNote")}
+      </div>
+
+      <div className="mt-6 flex items-center justify-between">
+        <h2 className="text-base font-semibold">{t("settings.appearance")}</h2>
+        <Select
+          value={theme}
+          onValueChange={(v) => setThemeTo(v as Theme)}
+          aria-label={t("settings.appearance")}
+        >
+          <SelectTrigger className="h-8 w-40 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="light">{t("settings.themeLight")}</SelectItem>
+            <SelectItem value="sepia">{t("settings.themeSepia")}</SelectItem>
+            <SelectItem value="dark">{t("settings.themeDark")}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="mt-6 flex items-center justify-between border-t pt-4">

@@ -103,6 +103,38 @@ describe("ReaderView", () => {
     expect(askSpy).toHaveBeenCalledWith("What is an embedding?", provider, "en");
   });
 
+  it("offers a retry action on a failed answer", () => {
+    const retrySpy = vi.spyOn(useReaderStore.getState(), "retryAsk").mockResolvedValue(undefined);
+    useReaderStore.setState({
+      chat: [
+        {
+          id: 1,
+          role: "user",
+          text: "Why does this work?",
+          status: "done",
+          error: null,
+          selection: null,
+        },
+        {
+          id: 2,
+          role: "assistant",
+          text: "",
+          status: "error",
+          error: "provider down",
+          selection: null,
+        },
+      ],
+    });
+    render(<ReaderView />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(screen.getByText("provider down")).toBeInTheDocument();
+
+    const retry = screen.getByRole("button", { name: "Retry answer" });
+    fireEvent.click(retry);
+    expect(retrySpy).toHaveBeenCalledWith(provider, "en");
+  });
+
   it("starts the whole-paper walkthrough from the walkthrough tab", () => {
     const startSpy = vi
       .spyOn(useReaderStore.getState(), "startWalkthrough")

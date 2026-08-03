@@ -36,7 +36,11 @@
     "emptyChat": "Ask anything about the paper, or select a passage and ask about it.",
     "thinking": "Thinking…",
     "askPlaceholder": "Ask about the paper…",
-    "send": "Send"
+    "send": "Send",
+    "pdfLoading": "Loading the PDF…",
+    "retry": "Try again",
+    "retryAsk": "Retry answer",
+    "chatHistory": "Chat history"
   },
   "markdown": {
     "diagramError": "Diagram could not be rendered"
@@ -132,7 +136,11 @@
     "export": "Export",
     "exportData": "Export my data",
     "exportedTo": "Saved to {{path}}",
-    "exportFailed": "Export failed: {{error}}"
+    "exportFailed": "Export failed: {{error}}",
+    "appearance": "Appearance",
+    "themeLight": "Light",
+    "themeSepia": "Sepia",
+    "themeDark": "Dark"
   },
   "explain": {
     "selectProvider": "Choose provider",

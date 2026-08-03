@@ -258,6 +258,26 @@ describe("reader store", () => {
     ]);
   });
 
+  it("retryAsk re-asks the question behind the last failed answer", async () => {
+    await useReaderStore.getState().open(paper);
+    vi.mocked(streamAsk).mockRejectedValueOnce(new Error("provider down"));
+    await useReaderStore.getState().ask("Why does this work?", provider, "en");
+    expect(useReaderStore.getState().chat[1].status).toBe("error");
+
+    // Retry drops the failed message and re-asks the same question.
+    vi.mocked(streamAsk).mockImplementation(chunkStream(["fresh answer"]));
+    await useReaderStore.getState().retryAsk(provider, "en");
+
+    const s = useReaderStore.getState();
+    expect(s.chat).toHaveLength(2);
+    expect(s.chat[0].text).toBe("Why does this work?");
+    expect(s.chat[1].text).toBe("fresh answer");
+    expect(s.chat[1].status).toBe("done");
+    expect(vi.mocked(streamAsk)).toHaveBeenLastCalledWith(
+      expect.objectContaining({ question: "Why does this work?" }),
+    );
+  });
+
   it("chat history persists and reloads per paper", async () => {
     await useReaderStore.getState().open(paper);
     vi.mocked(streamAsk).mockImplementation(chunkStream(["persisted answer"]));

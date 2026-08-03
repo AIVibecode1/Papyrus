@@ -15,6 +15,11 @@ if (
 ) {
   document.documentElement.classList.add("dark");
 }
+// Sepia is a light palette variant selected via data-theme (the hook
+// mirrors this on every change).
+if (savedTheme === "sepia") {
+  document.documentElement.dataset.theme = "sepia";
+}
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

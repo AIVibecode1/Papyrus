@@ -103,26 +103,34 @@
  * Warm monochrome palette. The only color allowed to appear is the
  * desaturated pastel blue (accent) plus semantic red for destructive
  * actions. Primary actions are ink, not blue.
+ *
+ * Day mode is deliberately LOW contrast: bone canvas, off-white cards and
+ * softened ink text (oklch L ~0.30) so long reading sessions do not strain
+ * the eyes. "Sepia" is a warm-paper variant for reading; dark mode keeps
+ * the same tokens at night brightness. `data-theme` on <html> selects the
+ * palette; the `dark` class additionally drives Tailwind's dark: variants.
  */
 :root {
+  color-scheme: light;
   --radius: 0.625rem;
-  --background: oklch(0.972 0.004 85);
-  --foreground: oklch(0.23 0.008 70);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.23 0.008 70);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.23 0.008 70);
-  --primary: oklch(0.21 0.006 70);
-  --primary-foreground: oklch(0.985 0.003 85);
-  --secondary: oklch(0.948 0.005 85);
-  --secondary-foreground: oklch(0.3 0.01 70);
-  --muted: oklch(0.948 0.005 85);
-  --muted-foreground: oklch(0.52 0.012 75);
+  /* Softened day palette: lower text contrast, warm off-white cards. */
+  --background: oklch(0.968 0.005 85);
+  --foreground: oklch(0.3 0.01 70);
+  --card: oklch(0.988 0.004 85);
+  --card-foreground: oklch(0.3 0.01 70);
+  --popover: oklch(0.988 0.004 85);
+  --popover-foreground: oklch(0.3 0.01 70);
+  --primary: oklch(0.28 0.008 70);
+  --primary-foreground: oklch(0.98 0.003 85);
+  --secondary: oklch(0.945 0.006 85);
+  --secondary-foreground: oklch(0.36 0.01 70);
+  --muted: oklch(0.948 0.006 85);
+  --muted-foreground: oklch(0.55 0.012 75);
   --accent: oklch(0.955 0.02 240);
-  --accent-foreground: oklch(0.42 0.07 240);
+  --accent-foreground: oklch(0.44 0.07 240);
   --destructive: oklch(0.52 0.12 25);
-  --border: oklch(0.913 0.006 85);
-  --input: oklch(0.913 0.006 85);
+  --border: oklch(0.918 0.006 85);
+  --input: oklch(0.918 0.006 85);
   --ring: oklch(0.55 0.06 240);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -131,7 +139,31 @@
   --chart-5: oklch(0.769 0.188 70.08);
 }
 
+/* Warm paper reading theme: sepia ink on aged-paper tones. */
+[data-theme="sepia"] {
+  color-scheme: light;
+  --background: oklch(0.938 0.018 80);
+  --foreground: oklch(0.33 0.03 60);
+  --card: oklch(0.96 0.017 82);
+  --card-foreground: oklch(0.33 0.03 60);
+  --popover: oklch(0.96 0.017 82);
+  --popover-foreground: oklch(0.33 0.03 60);
+  --primary: oklch(0.4 0.045 55);
+  --primary-foreground: oklch(0.97 0.012 85);
+  --secondary: oklch(0.915 0.016 80);
+  --secondary-foreground: oklch(0.4 0.03 60);
+  --muted: oklch(0.92 0.016 80);
+  --muted-foreground: oklch(0.52 0.03 65);
+  --accent: oklch(0.93 0.025 240);
+  --accent-foreground: oklch(0.44 0.06 240);
+  --destructive: oklch(0.5 0.13 30);
+  --border: oklch(0.875 0.016 80);
+  --input: oklch(0.875 0.016 80);
+  --ring: oklch(0.55 0.06 240);
+}
+
 .dark {
+  color-scheme: dark;
   --background: oklch(0.185 0.005 70);
   --foreground: oklch(0.93 0.004 80);
   --card: oklch(0.225 0.006 70);

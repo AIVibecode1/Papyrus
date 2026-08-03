@@ -5,6 +5,7 @@ import {
   Copy,
   Loader2,
   MessageSquareText,
+  RotateCcw,
   Send,
   Square,
   X,
@@ -358,7 +359,11 @@ export function ReaderView() {
               <div className="flex min-h-0 flex-1 flex-col">
                 {/* chat history scrolls; the input stays pinned below */}
                 <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                  <div className="flex flex-col gap-3">
+                  <div
+                    aria-live="polite"
+                    aria-label={t("reader.chatHistory")}
+                    className="flex flex-col gap-3"
+                  >
                     {reader.chat.length === 0 ? (
                       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
                         <div className="flex size-10 items-center justify-center rounded-full bg-muted/60">
@@ -397,7 +402,20 @@ export function ReaderView() {
                               </>
                             )}
                             {m.role === "assistant" && m.status === "error" && m.error && (
-                              <p className="text-xs text-destructive">{m.error}</p>
+                              <div className="mt-2 flex flex-col items-start gap-1.5">
+                                <p className="text-xs text-destructive">{m.error}</p>
+                                {/* Errors are direction: one click re-asks
+                                    the same question (retryAsk). */}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => void reader.retryAsk(provider, i18n.language)}
+                                >
+                                  <RotateCcw className="size-3" />
+                                  {t("reader.retryAsk")}
+                                </Button>
+                              </div>
                             )}
                             {m.role === "assistant" && m.status === "stopped" && (
                               <p className="text-xs text-muted-foreground">

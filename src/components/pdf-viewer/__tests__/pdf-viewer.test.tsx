@@ -29,7 +29,12 @@ vi.mock("pdfjs-dist", () => {
 import * as pdfjsLib from "pdfjs-dist";
 
 function mockDocument(numPages: number) {
-  vi.mocked(pdfjsLib.getDocument).mockReturnValue({
+  vi.mocked(pdfjsLib.getDocument).mockReturnValue(mockLoadingTask(numPages) as never);
+}
+
+/** Builds a loading task for `numPages` (usable with mockReturnValueOnce). */
+function mockLoadingTask(numPages: number) {
+  return {
     promise: Promise.resolve({
       numPages,
       getPage: async () => fakePage,
@@ -37,7 +42,7 @@ function mockDocument(numPages: number) {
       destroy: async () => {},
     }),
     destroy: async () => {},
-  } as never);
+  };
 }
 
 const onSelect = vi.fn();
@@ -105,6 +110,23 @@ describe("PdfViewer", () => {
     render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
 
     await waitFor(() => expect(screen.getByText("3 / 3")).toBeInTheDocument());
+  });
+
+  it("shows an error state with a working retry action", async () => {
+    const failure = { promise: Promise.reject(new Error("corrupt pdf")) };
+    vi.mocked(pdfjsLib.getDocument)
+      .mockReturnValueOnce(failure as never)
+      .mockReturnValueOnce(mockLoadingTask(2) as never);
+    render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+
+    // The failure surfaces as an alert with the message and a retry.
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("corrupt pdf");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+
+    // Retry re-runs the load; the second attempt succeeds.
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.getByText("1 / 2")).toBeInTheDocument());
   });
 });
 

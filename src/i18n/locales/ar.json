@@ -36,7 +36,11 @@
     "emptyChat": "اسأل أي شيء عن الورقة، أو حدّد مقطعًا واسأل عنه.",
     "thinking": "يفكّر…",
     "askPlaceholder": "اسأل عن الورقة…",
-    "send": "إرسال"
+    "send": "إرسال",
+    "pdfLoading": "جارٍ تحميل ملف PDF…",
+    "retry": "حاول مجدداً",
+    "retryAsk": "إعادة المحاولة",
+    "chatHistory": "سجل المحادثة"
   },
   "markdown": {
     "diagramError": "تعذّر عرض الرسم البياني"
@@ -132,7 +136,11 @@
     "export": "التصدير",
     "exportData": "تصدير بياناتي",
     "exportedTo": "تم الحفظ في {{path}}",
-    "exportFailed": "فشل التصدير: {{error}}"
+    "exportFailed": "فشل التصدير: {{error}}",
+    "appearance": "المظهر",
+    "themeLight": "فاتح",
+    "themeSepia": "سيبيا",
+    "themeDark": "داكن"
   },
   "explain": {
     "selectProvider": "اختر المزوّد",
