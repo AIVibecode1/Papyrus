@@ -71,10 +71,11 @@ Bullet points for the GitHub release description:
 
 ---
 
+## v1.0.3 - 2026-08-03
+
 Status: superseded before publishing. Per the version-pump
 rule (every user-facing change bumps the version), its fixes rolled
 into v1.0.4. Kept here as a tracking log entry.
-Built from: c110295
 Built from: c110295
 Quality gates: 146 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
@@ -119,10 +120,11 @@ Bullet points for the GitHub release description:
 
 ---
 
+## v1.0.2 - 2026-08-03
+
 Status: superseded before publishing. Per the version-pump
 rule (every user-facing change bumps the version), its fixes rolled
 into v1.0.3. Kept here as a tracking log entry.
-Built from: 6b32b79
 Built from: 6b32b79
 Quality gates: 146 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
@@ -164,10 +166,11 @@ Bullet points for the GitHub release description:
 
 ---
 
+## v1.0.1 - 2026-08-03
+
 Status: superseded before publishing. Per the version-pump
 rule (every user-facing change bumps the version), its fixes rolled
 into v1.0.2. Kept here as a tracking log entry.
-Built from: 9d9ff0e
 Built from: 9d9ff0e
 Quality gates: 146 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
