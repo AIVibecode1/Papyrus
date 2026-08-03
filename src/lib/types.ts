@@ -20,11 +20,19 @@ export interface ProviderConfig {
   model: string;
 }
 
+export interface ProviderPresetModel {
+  id: string;
+  /** Human label shown in the model picker (e.g. "DeepSeek V4 Flash"). */
+  label: string;
+}
+
 export interface ProviderPreset {
   key: string;
   baseUrl: string;
   model: string;
   keyRequired: boolean;
+  /** When present, the model field becomes a picker of these models. */
+  models?: ProviderPresetModel[];
 }
 
 export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
@@ -45,6 +53,10 @@ export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
     baseUrl: "https://api.deepseek.com/v1",
     model: "deepseek-chat",
     keyRequired: true,
+    models: [
+      { id: "deepseek-chat", label: "DeepSeek Chat" },
+      { id: "deepseek-reasoner", label: "DeepSeek Reasoner" },
+    ],
   },
   groq: {
     key: "presets.groq",
@@ -57,5 +69,12 @@ export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
     baseUrl: "http://localhost:11434/v1",
     model: "llama3.2",
     keyRequired: false,
+  },
+  opencode: {
+    key: "presets.opencode",
+    baseUrl: "https://opencode.ai/zen/go/v1/chat/completions",
+    model: "deepseek-v4-flash",
+    keyRequired: true,
+    models: [{ id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" }],
   },
 };

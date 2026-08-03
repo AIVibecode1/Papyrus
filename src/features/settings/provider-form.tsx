@@ -17,7 +17,7 @@ import { useSettingsStore } from "@/stores/settings";
 
 interface ProviderFormProps {
   editingId: string | null;
-  initial: { name: string; baseUrl: string; model: string };
+  initial: { baseUrl: string; model: string };
   onCancel: () => void;
   onSaved: () => void;
   onKeySaved: (id: string) => void;
@@ -34,7 +34,6 @@ export function ProviderForm({
   const { addProvider, updateProvider, saveKey } = useSettingsStore();
 
   const [form, setForm] = useState(() => ({
-    name: initial.name,
     baseUrl: initial.baseUrl,
     model: initial.model,
     key: "",
@@ -43,6 +42,11 @@ export function ProviderForm({
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Preset base URLs are fixed; only Custom lets the user type one.
+  const urlLocked = !editingId && preset !== "custom";
+  const presetModels =
+    !editingId && preset !== "custom" ? (PROVIDER_PRESETS[preset]?.models ?? undefined) : undefined;
+
   const applyPreset = (key: string) => {
     setPreset(key);
     const p = PROVIDER_PRESETS[key];
@@ -50,13 +54,16 @@ export function ProviderForm({
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.baseUrl.trim() || !form.model.trim()) return;
+    if (!form.baseUrl.trim() || !form.model.trim()) return;
     setSaving(true);
     try {
       const id = editingId ?? crypto.randomUUID();
+      // The provider name is the model: the preset label when a picker
+      // is used (e.g. "DeepSeek V4 Flash"), otherwise the model id.
+      const label = presetModels?.find((m) => m.id === form.model)?.label;
       const config: ProviderConfig = {
         id,
-        name: form.name.trim(),
+        name: (label ?? form.model).trim(),
         baseUrl: form.baseUrl.trim().replace(/\/+$/, ""),
         model: form.model.trim(),
       };
@@ -82,9 +89,9 @@ export function ProviderForm({
       <CardContent className="flex flex-col gap-4">
         {!editingId && (
           <div className="flex flex-col gap-2">
-            <Label>{t("settings.preset")}</Label>
+            <Label htmlFor="provider-preset">{t("settings.preset")}</Label>
             <Select value={preset} onValueChange={applyPreset}>
-              <SelectTrigger className="w-full sm:w-72">
+              <SelectTrigger id="provider-preset" className="w-full sm:w-72">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -100,16 +107,6 @@ export function ProviderForm({
         )}
 
         <div className="flex flex-col gap-2">
-          <Label htmlFor="provider-name">{t("settings.name")}</Label>
-          <Input
-            id="provider-name"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="My Provider"
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
           <Label htmlFor="provider-url">{t("settings.baseUrl")}</Label>
           <Input
             id="provider-url"
@@ -117,18 +114,35 @@ export function ProviderForm({
             value={form.baseUrl}
             onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
             placeholder="https://api.example.com/v1"
+            disabled={urlLocked}
           />
+          {urlLocked && <p className="text-xs text-muted-foreground">{t("settings.urlLocked")}</p>}
         </div>
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="provider-model">{t("settings.model")}</Label>
-          <Input
-            id="provider-model"
-            dir="ltr"
-            value={form.model}
-            onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-            placeholder="gpt-4o-mini"
-          />
+          {presetModels ? (
+            <Select value={form.model} onValueChange={(v) => setForm((f) => ({ ...f, model: v }))}>
+              <SelectTrigger id="provider-model" className="w-full sm:w-72" dir="ltr">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {presetModels.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              id="provider-model"
+              dir="ltr"
+              value={form.model}
+              onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+              placeholder="gpt-4o-mini"
+            />
+          )}
         </div>
 
         <div className="flex flex-col gap-2">

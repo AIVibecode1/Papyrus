@@ -100,7 +100,8 @@
     "openrouter": "OpenRouter",
     "deepseek": "DeepSeek",
     "groq": "Groq",
-    "ollama": "Ollama (local)"
+    "ollama": "Ollama (local)",
+    "opencode": "OpenCode Go"
   },
   "settings": {
     "title": "Settings",
@@ -122,7 +123,6 @@
     "deleteKeyFailed": "Could not remove the API key from your system keychain: {{error}}",
     "preset": "Preset",
     "custom": "Custom",
-    "name": "Name",
     "baseUrl": "Base URL",
     "model": "Model",
     "apiKey": "API key",
@@ -141,7 +141,8 @@
     "appearance": "Appearance",
     "themeLight": "Light",
     "themeSepia": "Sepia",
-    "themeDark": "Dark"
+    "themeDark": "Dark",
+    "urlLocked": "This URL is fixed by the preset. Choose Custom to set your own."
   },
   "explain": {
     "selectProvider": "Choose provider",

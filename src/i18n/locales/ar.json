@@ -100,7 +100,8 @@
     "openrouter": "OpenRouter",
     "deepseek": "DeepSeek",
     "groq": "Groq",
-    "ollama": "Ollama (محلي)"
+    "ollama": "Ollama (محلي)",
+    "opencode": "OpenCode Go"
   },
   "settings": {
     "title": "الإعدادات",
@@ -122,7 +123,6 @@
     "deleteKeyFailed": "تعذّر حذف مفتاح API من سلسلة المفاتيح: {{error}}",
     "preset": "قالب جاهز",
     "custom": "مخصص",
-    "name": "الاسم",
     "baseUrl": "رابط الأساس",
     "model": "النموذج",
     "apiKey": "مفتاح API",
@@ -141,7 +141,8 @@
     "appearance": "المظهر",
     "themeLight": "فاتح",
     "themeSepia": "سيبيا",
-    "themeDark": "داكن"
+    "themeDark": "داكن",
+    "urlLocked": "هذا الرابط ثابت من القالب. اختر «مخصص» لتعيين رابطك الخاص."
   },
   "explain": {
     "selectProvider": "اختر المزوّد",

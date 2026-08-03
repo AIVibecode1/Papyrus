@@ -19,7 +19,7 @@ import { useUiStore } from "@/stores/ui";
 import { ProviderCard } from "./provider-card";
 import { ProviderForm } from "./provider-form";
 
-const emptyForm = { name: "", baseUrl: "", model: "", key: "" };
+const emptyForm = { baseUrl: "", model: "", key: "" };
 
 export function SettingsPage() {
   const { t } = useTranslation();
