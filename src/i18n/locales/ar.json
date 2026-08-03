@@ -93,7 +93,9 @@
     "noPapersOnDay": "لا توجد أبحاث لهذا اليوم.",
     "historyLoading": "جارٍ جمع السجل… {{done}}/{{total}}",
     "sourceFallback": "Semantic Scholar مشغول حاليًا (حدود الاستخدام المجانية)، يتم عرض نتائج arXiv بدلًا منه. عد إلى Scholar وحاول البحث مجددًا بعد دقيقة.",
-    "dismiss": "إغلاق"
+    "dismiss": "إغلاق",
+    "scholarNeedsQuery": "Semantic Scholar للبحث فقط: اكتب كلمة بحث في المربع أعلاه للعثور على الأوراق.",
+    "searchScholarPlaceholder": "ابحث في Semantic Scholar…"
   },
   "presets": {
     "openai": "OpenAI",

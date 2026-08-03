@@ -93,7 +93,9 @@
     "noPapersOnDay": "No papers found for this day.",
     "historyLoading": "Collecting history… {{done}}/{{total}}",
     "sourceFallback": "Semantic Scholar is busy right now (free-tier rate limits), showing arXiv results instead. Switch back to Scholar and search again in a minute.",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "scholarNeedsQuery": "Semantic Scholar is search-only: type a search term in the search box above to find papers.",
+    "searchScholarPlaceholder": "Search Semantic Scholar…"
   },
   "presets": {
     "openai": "OpenAI",

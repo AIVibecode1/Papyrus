@@ -20,7 +20,7 @@ Rules:
 
 Status: installers built, not yet published on GitHub.
 Built from: e64b24e
-Quality gates: 138 frontend tests, 73 Rust tests, clippy, rustfmt, ESLint,
+Quality gates: 140 frontend tests, 73 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
 
 Bullet points for the GitHub release description:
@@ -43,6 +43,7 @@ Bullet points for the GitHub release description:
   in answers render as real math (KaTeX)
 - Three themes: light, sepia and dark
 - Save favorites and export your data to a timestamped JSON file
+- Semantic Scholar is search-only: switching to it without a search term now shows a clear hint in your language, and the search box switches to "Search Semantic Scholar…"
 - Privacy first: API keys live only in the OS keychain (Windows
   Credential Manager / macOS Keychain), never in files or logs
 - Installers for Windows: MSI and NSIS setup

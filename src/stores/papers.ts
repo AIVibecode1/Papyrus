@@ -7,6 +7,12 @@ import type { Paper } from "@/lib/types";
 const DEFAULT_CATEGORY = "cs.AI";
 const PAGE_SIZE = 20;
 
+/**
+ * Error sentinel: the Semantic Scholar source needs a search term.
+ * paper-list renders a friendly translated hint for this value.
+ */
+export const SCHOLAR_SEARCH_REQUIRED = "__scholar_search_required__";
+
 // Monotonic token: a refresh() result is only applied if no newer refresh
 // has started since (guards against stale responses clobbering newer state).
 let requestSeq = 0;
@@ -83,6 +89,13 @@ export const usePapersStore = create<PapersState>((set, get) => ({
     const seq = ++requestSeq;
     const { category, query, date, source } = get();
     set({ loading: true, error: null, fallbackNote: null });
+    // Semantic Scholar is search-only: surface a friendly, translatable
+    // state instead of hitting the backend and showing a raw Rust error.
+    if (source === "semanticscholar" && !query.trim()) {
+      if (seq !== requestSeq) return;
+      set({ loading: false, papers: [], error: SCHOLAR_SEARCH_REQUIRED });
+      return;
+    }
     try {
       // Day views are cache-first: if the auto-collected history already
       // has this day, show it immediately and refresh in the background.

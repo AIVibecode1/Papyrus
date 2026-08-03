@@ -6,7 +6,7 @@ vi.mock("@/lib/citations", () => ({ fetchCitations: vi.fn().mockResolvedValue({}
 
 import { fetchPapers, type FetchPapersResult } from "@/lib/arxiv";
 import { fetchCitations } from "@/lib/citations";
-import { usePapersStore } from "@/stores/papers";
+import { usePapersStore, SCHOLAR_SEARCH_REQUIRED } from "@/stores/papers";
 
 const aiPaper: Paper = {
   id: "ai1",
@@ -40,6 +40,7 @@ describe("papers store", () => {
       category: "cs.MATH",
       query: "",
       date: null,
+      source: "arxiv",
       papers: [],
       loading: false,
       error: null,
@@ -103,6 +104,39 @@ describe("papers store", () => {
     expect(state.query).toBe("transformer");
     expect(state.papers).toEqual([aiPaper]);
     expect(state.loading).toBe(false);
+  });
+
+  it("scholar without a query shows the search-required hint and skips the backend", async () => {
+    const fetchMock = vi.mocked(fetchPapers);
+
+    usePapersStore.setState({ source: "semanticscholar", query: "", papers: [], error: null });
+    await usePapersStore.getState().refresh();
+
+    const state = usePapersStore.getState();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(state.error).toBe(SCHOLAR_SEARCH_REQUIRED);
+    expect(state.loading).toBe(false);
+    expect(state.papers).toEqual([]);
+  });
+
+  it("scholar with a query calls the backend with the scholar source", async () => {
+    const fetchMock = vi
+      .mocked(fetchPapers)
+      .mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
+
+    usePapersStore.setState({ source: "semanticscholar", query: "transformers" });
+    await usePapersStore.getState().refresh();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      20,
+      "transformers",
+      undefined,
+      0,
+      "semanticscholar",
+    );
+    expect(usePapersStore.getState().error).toBeNull();
+    expect(usePapersStore.getState().papers).toEqual([aiPaper]);
   });
 
   it("setDate triggers refresh for that day", async () => {
@@ -220,12 +254,14 @@ describe("papers store", () => {
       .mocked(fetchPapers)
       .mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
 
+    // Scholar needs a query before the backend is called.
+    usePapersStore.setState({ query: "transformers" });
     usePapersStore.getState().setSource("semanticscholar");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "cs.MATH",
       20,
-      undefined,
+      "transformers",
       undefined,
       0,
       "semanticscholar",
@@ -239,7 +275,7 @@ describe("papers store", () => {
       papers: [aiPaper],
       fallbackNote: "Semantic Scholar API returned HTTP 429",
     });
-    usePapersStore.setState({ source: "semanticscholar" });
+    usePapersStore.setState({ source: "semanticscholar", query: "transformers" });
 
     await usePapersStore.getState().refresh();
     expect(usePapersStore.getState().fallbackNote).toBe("Semantic Scholar API returned HTTP 429");

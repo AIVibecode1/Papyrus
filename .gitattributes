@@ -1,0 +1,4 @@
+# Normalize line endings to LF for every platform so Prettier and the
+# other tools always agree (Windows git-bash, macOS and Linux checkouts
+# are identical).
+* text=auto eol=lf

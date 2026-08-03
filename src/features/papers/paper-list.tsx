@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Loader2,
   RefreshCw,
+  Search,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -23,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFavoritesStore } from "@/stores/favorites";
-import { usePapersStore } from "@/stores/papers";
+import { usePapersStore, SCHOLAR_SEARCH_REQUIRED } from "@/stores/papers";
 import { useDigestStore, addDays, todayStr } from "@/stores/digest";
 import { PaperCard } from "@/features/papers/paper-card";
 
@@ -58,6 +59,7 @@ export function PaperList() {
   const { papers, loading, error, refresh, lastUpdated, fallbackNote, clearFallbackNote } =
     usePapersStore();
   const category = usePapersStore((s) => s.category);
+  const source = usePapersStore((s) => s.source);
   const date = usePapersStore((s) => s.date);
   const setDate = usePapersStore((s) => s.setDate);
   const setQuery = usePapersStore((s) => s.setQuery);
@@ -123,8 +125,16 @@ export function PaperList() {
         <Input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          placeholder={t("papers.searchPlaceholder")}
-          aria-label={t("papers.searchPlaceholder")}
+          placeholder={t(
+            source === "semanticscholar"
+              ? "papers.searchScholarPlaceholder"
+              : "papers.searchPlaceholder",
+          )}
+          aria-label={t(
+            source === "semanticscholar"
+              ? "papers.searchScholarPlaceholder"
+              : "papers.searchPlaceholder",
+          )}
           className="h-9 w-full max-w-xs"
         />
         <div className="flex items-center gap-2">
@@ -221,7 +231,16 @@ export function PaperList() {
         </div>
       )}
 
-      {!loading && error && (
+      {!loading && error === SCHOLAR_SEARCH_REQUIRED && (
+        <Card className="border-amber-300/60 dark:border-amber-500/30">
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <Search className="size-8 text-amber-600 dark:text-amber-400" />
+            <p className="text-sm font-medium">{t("papers.scholarNeedsQuery")}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!loading && error && error !== SCHOLAR_SEARCH_REQUIRED && (
         <Card className="border-destructive/40">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <AlertCircle className="size-8 text-destructive" />
