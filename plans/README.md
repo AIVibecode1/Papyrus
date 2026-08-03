@@ -17,13 +17,13 @@ row when done.
 | 010  | Provider failover chain (spike spec build)           | P1       | M         | —                      | DONE   |
 | 004  | Bound PDF rendering work (render queue)              | P2       | S         | 002                    | DONE   |
 | 005  | Persist citation counts on disk with a TTL           | P2       | S         | —                      | DONE   |
-| 007  | Test the development tooling (mock server, capture)  | P2       | S-M       | —                      | TODO   |
-| 008  | Update the second-source spike to match shipped code | P2       | S         | —                      | TODO   |
-| 011  | Semantic Scholar as the second paper source          | P2       | M         | 008, 005 (recommended) | TODO   |
+| 007  | Test the development tooling (mock server, capture)  | P2       | S-M       | —                      | DONE   |
+| 008  | Update the second-source spike to match shipped code | P2       | S         | —                      | DONE   |
+| 011  | Semantic Scholar as the second paper source          | P2       | M         | 008, 005 (recommended) | DONE   |
 | 012  | Export favorites and per-paper chat as JSON          | P3       | S         | —                      | DONE   |
-| 006  | Derive the PDF URL server-side                       | P3       | S         | —                      | TODO   |
-| 009  | Investigate the day-boundary timezone edge           | P3       | S         | —                      | TODO   |
-| 013  | Design spike — curated daily selection               | P3       | S (spike) | —                      | TODO   |
+| 006  | Derive the PDF URL server-side                       | P3       | S         | —                      | DONE   |
+| 009  | Investigate the day-boundary timezone edge           | P3       | S         | —                      | DONE   |
+| 013  | Design spike — curated daily selection               | P3       | S (spike) | —                      | DONE   |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
