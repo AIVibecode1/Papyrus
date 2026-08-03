@@ -144,7 +144,8 @@
     "themeLight": "Light",
     "themeSepia": "Sepia",
     "themeDark": "Dark",
-    "urlLocked": "This URL is fixed by the preset. Choose Custom to set your own."
+    "urlLocked": "This URL is fixed by the preset. Choose Custom to set your own.",
+    "version": "Version {{version}}"
   },
   "explain": {
     "selectProvider": "Choose provider",

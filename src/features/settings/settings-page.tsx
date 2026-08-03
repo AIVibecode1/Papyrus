@@ -18,6 +18,7 @@ import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
 import { ProviderCard } from "./provider-card";
 import { ProviderForm } from "./provider-form";
+import pkg from "../../../package.json";
 
 const emptyForm = { baseUrl: "", model: "", key: "" };
 
@@ -214,6 +215,10 @@ export function SettingsPage() {
           onKeySaved={(id) => setKeyStates((s) => ({ ...s, [id]: true }))}
         />
       )}
+
+      <p className="mt-8 text-center text-xs text-muted-foreground">
+        {t("settings.version", { version: pkg.version })}
+      </p>
     </div>
   );
 }

@@ -18,8 +18,8 @@ Rules:
 
 ## v1.0.0 - 2026-08-03
 
-Status: installers built, not yet published on GitHub.
-Built from: e64b24e
+Status: installers built (app version 1.0.1), not yet published on GitHub.
+Built from: <fill in the pushed commit sha>
 Quality gates: 140 frontend tests, 73 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
 
@@ -44,6 +44,7 @@ Bullet points for the GitHub release description:
 - Three themes: light, sepia and dark
 - Save favorites and export your data to a timestamped JSON file
 - Semantic Scholar is search-only: switching to it without a search term now shows a clear hint in your language, and the search box switches to "Search Semantic Scholar…"
+- The Settings page shows the app version (1.0.1)
 - Privacy first: API keys live only in the OS keychain (Windows
   Credential Manager / macOS Keychain), never in files or logs
 - Installers for Windows: MSI and NSIS setup
