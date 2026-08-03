@@ -189,4 +189,69 @@ describe("digest store", () => {
     expect(state.days("cs.AI")).toEqual([yesterday]);
     expect(state.days("cs.AI")).not.toContain(oldDay);
   });
+
+  it("a backfill running for one category does not block another category", async () => {
+    // Hold cs.AI's backfill open with a deferred promise.
+    let releaseAi: () => void = () => {};
+    vi.mocked(fetchPapers).mockImplementationOnce(
+      () =>
+        new Promise<{ papers: Paper[]; fallbackNote: string | null }>((resolve) => {
+          releaseAi = () => resolve({ papers: [paperFor(today)], fallbackNote: null });
+        }),
+    );
+    useDigestStore.setState({ loaded: true, lastChecked: { "cs.AI": today, "cs.LG": today } });
+    // Force a missing day so both categories have work to do.
+    useDigestStore.getState().storeDay("cs.AI", today, []);
+    useDigestStore.getState().storeDay("cs.LG", today, []);
+
+    const aiRun = useDigestStore.getState().ensureHistory("cs.AI");
+    // The AI pass is in flight; switching to cs.LG must start its own pass.
+    vi.mocked(fetchPapers).mockResolvedValue({ papers: [paperFor(today)], fallbackNote: null });
+    await useDigestStore.getState().ensureHistory("cs.LG");
+
+    expect(vi.mocked(fetchPapers).mock.calls.some((c) => c[0] === "cs.LG")).toBe(true);
+    expect(useDigestStore.getState().lastChecked["cs.LG"]).toBe(today);
+
+    releaseAi();
+    await aiRun;
+    expect(useDigestStore.getState().lastChecked["cs.AI"]).toBe(today);
+  });
+
+  it("a second backfill for the same category while running is skipped", async () => {
+    let releaseAi: () => void = () => {};
+    vi.mocked(fetchPapers).mockImplementationOnce(
+      () =>
+        new Promise<{ papers: Paper[]; fallbackNote: string | null }>((resolve) => {
+          releaseAi = () => resolve({ papers: [paperFor(today)], fallbackNote: null });
+        }),
+    );
+    useDigestStore.setState({ loaded: true, lastChecked: { "cs.AI": today } });
+    useDigestStore.getState().storeDay("cs.AI", today, []);
+
+    const first = useDigestStore.getState().ensureHistory("cs.AI");
+    const second = useDigestStore.getState().ensureHistory("cs.AI");
+    releaseAi();
+    await Promise.all([first, second]);
+
+    // Only the first pass fetched anything (one call, not two).
+    expect(vi.mocked(fetchPapers).mock.calls).toHaveLength(1);
+  });
+
+  it("load drops malformed day entries that are not paper lists", () => {
+    localStorage.setItem(
+      "papyrus-digest-v2",
+      JSON.stringify({
+        byCategory: {
+          "cs.AI": { [today]: [{ id: "x", title: "ok" }], "2026-01-01": "not an array" },
+          "cs.LG": { [today]: [{ id: "y" }] },
+        },
+        lastChecked: { "cs.AI": today },
+      }),
+    );
+    useDigestStore.setState({ loaded: false });
+    useDigestStore.getState().load();
+    const state = useDigestStore.getState();
+    expect(state.days("cs.AI")).toEqual([today]);
+    expect(state.days("cs.LG")).toEqual([]);
+  });
 });

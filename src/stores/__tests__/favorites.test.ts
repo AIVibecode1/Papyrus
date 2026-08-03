@@ -76,6 +76,20 @@ describe("favorites store", () => {
     expect(s.loaded).toBe(true);
   });
 
+  it("toggle still works when localStorage.setItem throws", () => {
+    const original = localStorageMock.setItem.bind(localStorageMock);
+    localStorageMock.setItem = () => {
+      throw new Error("QuotaExceededError");
+    };
+    try {
+      expect(() => useFavoritesStore.getState().toggle(makePaper("2607.00001v1"))).not.toThrow();
+      expect(useFavoritesStore.getState().ids).toEqual(["2607.00001v1"]);
+      expect(useFavoritesStore.getState().byId["2607.00001v1"].title).toBe("Paper 2607.00001v1");
+    } finally {
+      localStorageMock.setItem = original;
+    }
+  });
+
   it("saved order is insertion order", () => {
     useFavoritesStore.getState().toggle(makePaper("2607.00001v1"));
     useFavoritesStore.getState().toggle(makePaper("2607.00002v1"));

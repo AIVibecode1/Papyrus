@@ -49,8 +49,39 @@ interface DigestState {
   persist: () => void;
 }
 
-// Guards against concurrent backfills of the same or different categories.
-let running = false;
+// Guards against concurrent backfills: per-category, so switching to a
+// category whose backfill has not started is never skipped by another
+// category's in-flight pass. arXiv politeness is enforced server-side by
+// the shared per-source rate limiter, so concurrent passes are safe.
+const runningCategories = new Set<string>();
+
+/** Minimal Paper shape guard for persisted digest data. */
+function isPaperLike(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.id === "string" && typeof v.title === "string";
+}
+
+/**
+ * Drops malformed persisted days (non-arrays, entries that are not paper
+ * shapes) so corrupted or hand-edited storage can never inject bad data
+ * into the digest. Valid days are preserved verbatim.
+ */
+function sanitizeByCategory(raw: unknown): Record<string, Record<string, Paper[]>> {
+  const out: Record<string, Record<string, Paper[]>> = {};
+  if (typeof raw !== "object" || raw === null) return out;
+  for (const [cat, days] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof days !== "object" || days === null) continue;
+    const dayMap: Record<string, Paper[]> = {};
+    for (const [date, papers] of Object.entries(days as Record<string, unknown>)) {
+      if (Array.isArray(papers) && papers.every(isPaperLike)) {
+        dayMap[date] = papers as Paper[];
+      }
+    }
+    out[cat] = dayMap;
+  }
+  return out;
+}
 
 export const useDigestStore = create<DigestState>((set, get) => ({
   byCategory: {},
@@ -62,10 +93,7 @@ export const useDigestStore = create<DigestState>((set, get) => ({
     if (get().loaded) return;
     try {
       const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Record<string, unknown>;
-      const byCategory =
-        raw.byCategory && typeof raw.byCategory === "object"
-          ? (raw.byCategory as Record<string, Record<string, Paper[]>>)
-          : {};
+      const byCategory = sanitizeByCategory(raw.byCategory);
       const lastChecked =
         raw.lastChecked && typeof raw.lastChecked === "object"
           ? (raw.lastChecked as Record<string, string>)
@@ -79,7 +107,7 @@ export const useDigestStore = create<DigestState>((set, get) => ({
 
   ensureHistory: async (category) => {
     get().load();
-    if (running) return;
+    if (runningCategories.has(category)) return;
     const today = todayStr();
     // The backfill covers today too: the day picker's newest day must be
     // the current day (yesterday-only made the picker lag a day behind,
@@ -91,7 +119,7 @@ export const useDigestStore = create<DigestState>((set, get) => ({
     const storedToday = get().byCategory[category]?.[today];
     if (last && last >= today && storedToday?.length) return;
 
-    running = true;
+    runningCategories.add(category);
     try {
       const earliest = addDays(today, -(BACKFILL_DAYS - 1));
       let from = last && last > earliest ? addDays(last, 1) : earliest;
@@ -132,7 +160,7 @@ export const useDigestStore = create<DigestState>((set, get) => ({
       get().prune();
       get().persist();
     } finally {
-      running = false;
+      runningCategories.delete(category);
     }
   },
 

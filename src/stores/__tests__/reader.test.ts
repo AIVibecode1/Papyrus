@@ -342,4 +342,68 @@ describe("reader store", () => {
     expect(s.pdfBytes).toBeNull();
     expect(s.sections).toHaveLength(0);
   });
+
+  it("a slow open for paper A cannot overwrite paper B opened after it", async () => {
+    const paperB = { ...paper, id: "2607.00002", title: "Paper B" };
+    // Paper A's PDF download resolves AFTER paper B's open finished.
+    let resolveA: (bytes: Uint8Array) => void = () => {};
+    vi.mocked(getPdfBytes).mockImplementationOnce(
+      () => new Promise<Uint8Array>((resolve) => (resolveA = resolve)),
+    );
+    const openA = useReaderStore.getState().open(paper);
+    expect(useReaderStore.getState().loadStatus).toBe("loading");
+
+    // Paper B opens and completes normally.
+    vi.mocked(getPdfBytes).mockResolvedValueOnce(new Uint8Array([9, 9, 9]));
+    await useReaderStore.getState().open(paperB);
+    expect(useReaderStore.getState().paper?.id).toBe("2607.00002");
+    expect(useReaderStore.getState().loadStatus).toBe("ready");
+
+    // Now A's download finishes: its results must be dropped entirely.
+    resolveA(new Uint8Array([1, 2, 3]));
+    await openA;
+    const s = useReaderStore.getState();
+    expect(s.paper?.id).toBe("2607.00002");
+    expect(s.pdfBytes).toEqual(new Uint8Array([9, 9, 9]));
+    expect(s.loadStatus).toBe("ready");
+  });
+
+  it("close invalidates an in-flight open", async () => {
+    let resolveBytes: (bytes: Uint8Array) => void = () => {};
+    vi.mocked(getPdfBytes).mockImplementationOnce(
+      () => new Promise<Uint8Array>((resolve) => (resolveBytes = resolve)),
+    );
+    const openPromise = useReaderStore.getState().open(paper);
+    useReaderStore.getState().close();
+    resolveBytes(new Uint8Array([1, 2, 3]));
+    await openPromise;
+    // The stale open must not resurrect a closed reader.
+    expect(useReaderStore.getState().paper).toBeNull();
+    expect(useReaderStore.getState().loadStatus).toBe("idle");
+  });
+
+  it("malformed persisted chat entries are dropped on load", async () => {
+    localStorage.setItem(
+      "papyrus-reader-chat-v1",
+      JSON.stringify({
+        [paper.id]: [
+          { id: 1, role: "user", text: "valid", status: "done", error: null, selection: null },
+          {
+            id: 2,
+            role: "system",
+            text: "invalid role",
+            status: "done",
+            error: null,
+            selection: null,
+          },
+          { id: 3, role: "assistant", text: 42, status: "done", error: null, selection: null },
+          null,
+        ],
+      }),
+    );
+    await useReaderStore.getState().open(paper);
+    const s = useReaderStore.getState();
+    expect(s.chat).toHaveLength(1);
+    expect(s.chat[0].text).toBe("valid");
+  });
 });

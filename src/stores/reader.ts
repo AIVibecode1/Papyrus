@@ -70,7 +70,9 @@ function loadChat(paperId: string): ChatMessage[] {
       ChatMessage[]
     >;
     const list = raw[paperId] ?? [];
-    return list.filter((m) => m && typeof m.text === "string");
+    return list.filter(
+      (m) => m && typeof m.text === "string" && (m.role === "user" || m.role === "assistant"),
+    );
   } catch {
     return [];
   }
@@ -94,6 +96,10 @@ export const useReaderStore = create<ReaderState>((set, get) => {
   // a superseded run (same pattern as the explanation store).
   let wtGen = 0;
   let chatGen = 0;
+  // Open-generation token: only the newest open() (or close()) may apply
+  // its async PDF/text results, so a slow open for paper A can never
+  // overwrite paper B opened right after it.
+  let openGen = 0;
 
   return {
     paper: null,
@@ -108,18 +114,23 @@ export const useReaderStore = create<ReaderState>((set, get) => {
     selection: null,
 
     open: async (paper) => {
+      const gen = ++openGen;
       set({ paper, pdfBytes: null, loadStatus: "loading", loadError: null });
       try {
         const bytes = await getPdfBytes(paper.id, paper.pdfUrl);
         const text = await extractTextFromPdf(bytes);
+        // A newer open (or close) superseded this one: drop the results.
+        if (openGen !== gen) return;
         const sections = splitIntoSections(text);
         if (sections.length === 0) {
+          if (openGen !== gen) return;
           set({
             loadStatus: "error",
             loadError: "No readable text could be extracted from this PDF.",
           });
           return;
         }
+        if (openGen !== gen) return;
         set({
           pdfBytes: bytes,
           sections,
@@ -131,6 +142,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           loadStatus: "ready",
         });
       } catch (err) {
+        if (openGen !== gen) return;
         set({
           loadStatus: "error",
           loadError: err instanceof Error ? err.message : String(err),
@@ -138,7 +150,9 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       }
     },
 
-    close: () =>
+    close: () => {
+      // Invalidate any in-flight open: closing the reader must win.
+      openGen += 1;
       set({
         paper: null,
         pdfBytes: null,
@@ -150,7 +164,8 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         synthesis: null,
         chat: [],
         selection: null,
-      }),
+      });
+    },
 
     setSelection: (text) => set({ selection: text }),
     clearSelection: () => set({ selection: null }),

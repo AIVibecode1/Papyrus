@@ -48,7 +48,13 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
       const byId = { ...s.byId };
       if (ids.includes(paper.id)) byId[paper.id] = paper;
       else delete byId[paper.id];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(byId));
+      // Persistence is best-effort: a quota-disabled or unavailable store
+      // must not break the in-memory action the user just performed.
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(byId));
+      } catch {
+        // Storage full or unavailable: the toggle still applies in memory.
+      }
       return { ids, byId };
     }),
   isFavorite: (id) => get().ids.includes(id),
