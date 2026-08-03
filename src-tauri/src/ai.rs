@@ -350,40 +350,101 @@ fn validate_provider(provider: &ProviderConfig) -> Result<(), String> {
 }
 
 /// Generates a streaming explanation of a paper in the current UI language.
+/// Explains a paper by trying an ordered chain of providers, failing over
+/// to the next one when the active provider fails BEFORE delivering any
+/// content. Returns the winning provider's id so the UI can show who
+/// actually answered.
 #[tauri::command]
+// The argument list is the IPC contract between the frontend and Rust.
+#[allow(clippy::too_many_arguments)]
 pub async fn explain_paper(
-    provider: ProviderConfig,
+    providers: Vec<ProviderConfig>,
     paper: Paper,
     language: String,
     on_chunk: Channel<String>,
-) -> Result<(), String> {
-    validate_provider(&provider)?;
+) -> Result<String, String> {
     CANCEL_EXPLAIN.store(false, Ordering::SeqCst);
-
-    let key = load_key(&provider)?;
-    let url = build_chat_url(&provider.base_url)?;
-    let client = shared_client();
-
-    let body = json!({
-        "model": provider.model,
-        "messages": build_messages(&paper, &language),
-        "stream": true,
-        "temperature": 0.4,
-    });
-
-    stream_chat(
-        client,
-        &url,
-        &key,
-        body,
-        EXPLAIN_TIMEOUT,
-        &CANCEL_EXPLAIN,
-        &mut |chunk| {
-            let _ = on_chunk.send(chunk.to_string());
-        },
-    )
+    explain_with_failover(&CANCEL_EXPLAIN, &providers, &paper, &language, &mut |c| {
+        let _ = on_chunk.send(c.to_string());
+    })
     .await
-    .map(|_| ())
+}
+
+/// Internal chain: try each provider; retry ONLY pre-first-chunk failures.
+/// The typed cancellation marker is terminal (never retried, never folded
+/// into the aggregate); post-first-chunk errors propagate because partial
+/// text is already on screen.
+async fn explain_with_failover(
+    cancel_flag: &AtomicBool,
+    providers: &[ProviderConfig],
+    paper: &Paper,
+    language: &str,
+    on_chunk: &mut (dyn FnMut(&str) + Send),
+) -> Result<String, String> {
+    if providers.is_empty() {
+        return Err("No providers configured".into());
+    }
+    let client = shared_client();
+    let mut failures: Vec<String> = Vec::new();
+    for provider in providers {
+        // A Stop pressed between attempts aborts the whole chain.
+        if cancel_flag.load(Ordering::SeqCst) {
+            return Err(cancelled_marker().into());
+        }
+        if let Err(e) = validate_provider(provider) {
+            failures.push(format!("{}: {e}", provider.name));
+            continue;
+        }
+        let key = match load_key(provider) {
+            Ok(k) => k,
+            Err(e) => {
+                failures.push(format!("{}: {e}", provider.name));
+                continue;
+            }
+        };
+        let url = match build_chat_url(&provider.base_url) {
+            Ok(u) => u,
+            Err(e) => {
+                failures.push(format!("{}: {e}", provider.name));
+                continue;
+            }
+        };
+        let body = json!({
+            "model": provider.model,
+            "messages": build_messages(paper, language),
+            "stream": true,
+            "temperature": 0.4,
+        });
+        // The discriminator: retrying after the first chunk would
+        // duplicate partial text on screen.
+        let mut delivered = false;
+        let result = stream_chat(
+            client,
+            &url,
+            &key,
+            body,
+            EXPLAIN_TIMEOUT,
+            cancel_flag,
+            &mut |c| {
+                delivered = true;
+                on_chunk(c);
+            },
+        )
+        .await;
+        match result {
+            Ok(_) => return Ok(provider.id.clone()),
+            // Marker contract: terminal — never retried, never aggregated.
+            Err(e) if e.starts_with(cancelled_marker()) => return Err(e),
+            // Partial text is already on screen — retrying would duplicate it.
+            Err(e) if delivered => return Err(e),
+            Err(e) => failures.push(format!("{}: {e}", provider.name)),
+        }
+    }
+    Err(format!(
+        "All {} providers failed: {}",
+        providers.len(),
+        truncate(&failures.join(" | "), 500)
+    ))
 }
 
 /// Sends a minimal request to verify a provider configuration.
@@ -681,6 +742,8 @@ mod tests {
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpListener;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::thread;
 
     fn sample_paper() -> Paper {
@@ -810,6 +873,175 @@ mod tests {
             }
         });
         format!("http://{addr}")
+    }
+
+    /// Spawns a server that answers a fixed QUEUE of status codes (one
+    /// connection per code) for failover tests. A 200 response streams one
+    /// content chunk then [DONE]; other codes return an empty body. The
+    /// returned counter records how many connections were accepted.
+    fn spawn_scripted_server(statuses: Vec<u16>) -> (String, Arc<AtomicUsize>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let connections = Arc::new(AtomicUsize::new(0));
+        let conns = connections.clone();
+        thread::spawn(move || {
+            for status in statuses {
+                if let Ok((mut stream, _)) = listener.accept() {
+                    conns.fetch_add(1, Ordering::SeqCst);
+                    // Read the request (best effort) so the client can finish.
+                    let mut req = Vec::new();
+                    let mut buf = [0u8; 4096];
+                    loop {
+                        match stream.read(&mut buf) {
+                            Ok(0) => break,
+                            Ok(n) => {
+                                req.extend_from_slice(&buf[..n]);
+                                if req.windows(4).any(|w| w == b"\r\n\r\n") {
+                                    break;
+                                }
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                    let body = if status == 200 {
+                        concat!(
+                            "HTTP/1.1 200 OK\r\n",
+                            "Content-Type: text/event-stream\r\n",
+                            "Connection: close\r\n\r\n",
+                            "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n",
+                        )
+                        .to_string()
+                    } else {
+                        format!(
+                            "HTTP/1.1 {status} Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        )
+                    };
+                    let _ = stream.write_all(body.as_bytes());
+                    // Send [DONE] in a SEPARATE write after a pause, so a
+                    // client that cancels right after the first chunk sees
+                    // its flag checked before [DONE] arrives (both lines in
+                    // one read batch would return Ok first).
+                    if status == 200 {
+                        thread::sleep(Duration::from_millis(5));
+                        let _ = stream.write_all(b"data: [DONE]\n\n");
+                    }
+                }
+            }
+        });
+        (format!("http://{addr}"), connections)
+    }
+
+    fn provider_at(base: &str, id: &str) -> ProviderConfig {
+        ProviderConfig {
+            id: id.to_string(),
+            name: format!("Provider {id}"),
+            base_url: format!("{base}/v1"),
+            model: "mock-model".into(),
+        }
+    }
+
+    fn run_failover(providers: &[ProviderConfig], cancel: &AtomicBool) -> Result<String, String> {
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(explain_with_failover(
+                cancel,
+                providers,
+                &sample_paper(),
+                "en",
+                &mut |_| {},
+            ))
+    }
+
+    #[test]
+    fn failover_tries_next_provider_after_http_error() {
+        let (url, connections) = spawn_scripted_server(vec![500, 200]);
+        let cancel = AtomicBool::new(false);
+        let providers = vec![provider_at(&url, "a"), provider_at(&url, "b")];
+
+        let winner = run_failover(&providers, &cancel).expect("second provider should win");
+
+        assert_eq!(winner, "b");
+        assert_eq!(connections.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn failover_returns_winner_on_first_success() {
+        let (url, connections) = spawn_scripted_server(vec![200]);
+        let cancel = AtomicBool::new(false);
+        let providers = vec![provider_at(&url, "a"), provider_at(&url, "b")];
+
+        let winner = run_failover(&providers, &cancel).expect("first provider should win");
+
+        assert_eq!(winner, "a");
+        assert_eq!(connections.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn failover_aggregates_when_all_fail() {
+        let (url, _) = spawn_scripted_server(vec![500, 500]);
+        let cancel = AtomicBool::new(false);
+        let providers = vec![provider_at(&url, "a"), provider_at(&url, "b")];
+
+        let err = run_failover(&providers, &cancel).expect_err("all providers failed");
+
+        assert!(err.contains("All 2 providers failed"), "got: {err}");
+        assert!(err.contains("Provider a"), "got: {err}");
+        assert!(err.contains("Provider b"), "got: {err}");
+    }
+
+    #[test]
+    fn failover_propagates_marker_and_skips_remaining_providers() {
+        let (url, connections) = spawn_scripted_server(vec![200]);
+        let cancel = AtomicBool::new(false);
+        let providers = vec![provider_at(&url, "a"), provider_at(&url, "b")];
+
+        // Press Stop before the chain starts: the first between-attempt
+        // check must return the typed marker without contacting anyone.
+        cancel.store(true, Ordering::SeqCst);
+        let err = run_failover(&providers, &cancel).expect_err("cancelled chain");
+
+        assert!(err.starts_with(cancelled_marker()), "got: {err}");
+        assert_eq!(connections.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn failover_does_not_retry_after_first_chunk() {
+        // Stop is pressed the moment the first chunk arrives (simulated by
+        // setting the cancel flag inside on_chunk): the parser's next
+        // cancellation check fires right after the chunk, so the chain
+        // sees Err(marker) with delivered == true and must propagate it
+        // WITHOUT trying the second provider (retrying would duplicate
+        // partial text on screen).
+        let (url, connections) = spawn_scripted_server(vec![200, 200]);
+        let cancel = AtomicBool::new(false);
+        let providers = vec![provider_at(&url, "a"), provider_at(&url, "b")];
+
+        let err = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(explain_with_failover(
+                &cancel,
+                &providers,
+                &sample_paper(),
+                "en",
+                &mut |_| {
+                    cancel.store(true, Ordering::SeqCst);
+                },
+            ))
+            .expect_err("cancel right after first chunk");
+
+        assert!(err.starts_with(cancelled_marker()), "got: {err}");
+        assert_eq!(
+            connections.load(Ordering::SeqCst),
+            1,
+            "second provider must not be contacted"
+        );
+    }
+
+    #[test]
+    fn failover_rejects_empty_chain() {
+        let cancel = AtomicBool::new(false);
+        let err = run_failover(&[], &cancel).expect_err("empty chain");
+        assert_eq!(err, "No providers configured");
     }
 
     #[test]

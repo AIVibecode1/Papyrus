@@ -75,26 +75,32 @@ function buildMessages(paper: Paper, language: string) {
 }
 
 export interface ExplainOptions {
-  provider: ProviderConfig;
+  /** Ordered chain: the picked provider first, then fallbacks (deduped). */
+  providers: ProviderConfig[];
   paper: Paper;
   language: string;
   onChunk: (chunk: string) => void;
 }
 
-/** Streams an explanation. Inside Tauri it goes through the Rust backend
- * (key fetched from the OS keychain there); in a plain browser it calls the
- * provider directly using the in-memory dev key. */
-export async function streamExplanation(opts: ExplainOptions): Promise<void> {
-  const { provider, paper, language, onChunk } = opts;
+/** Streams an explanation through the provider chain. Inside Tauri the
+ * Rust backend tries each provider (keys fetched from the OS keychain
+ * there); in a plain browser the same loop runs here with the in-memory
+ * dev keys. Resolves with the WINNING provider id. */
+export async function streamExplanation(opts: ExplainOptions): Promise<string> {
+  const { providers, paper, language, onChunk } = opts;
 
   if (isTauri()) {
     const channel = new Channel<string>();
     channel.onmessage = (msg) => onChunk(msg);
-    await invoke("explain_paper", { provider, paper, language, onChunk: channel });
-    return;
+    return await invoke<string>("explain_paper", {
+      providers,
+      paper,
+      language,
+      onChunk: channel,
+    });
   }
 
-  await streamExplanationBrowser(opts);
+  return streamExplanationBrowser(opts);
 }
 
 export { streamChatBrowser };
@@ -184,9 +190,31 @@ async function streamChatBrowser(
   }
 }
 
-async function streamExplanationBrowser(opts: ExplainOptions): Promise<void> {
-  const { provider, paper, language, onChunk } = opts;
-  await streamChatBrowser(provider, buildMessages(paper, language), onChunk);
+async function streamExplanationBrowser(opts: ExplainOptions): Promise<string> {
+  const { providers, paper, language, onChunk } = opts;
+  const messages = buildMessages(paper, language);
+  // Browser mirror of the Rust failover loop (same discriminator: only
+  // pre-first-chunk failures are retried; the marker is terminal).
+  const failures: string[] = [];
+  for (const provider of providers) {
+    if (activeController?.signal.aborted) throw new Error(CANCELLED_MARKER);
+    let delivered = false;
+    try {
+      await streamChatBrowser(provider, messages, (chunk) => {
+        delivered = true;
+        onChunk(chunk);
+      });
+      return provider.id;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.startsWith(CANCELLED_MARKER)) throw err;
+      if (delivered) throw err;
+      failures.push(`${provider.name}: ${message}`);
+    }
+  }
+  throw new Error(
+    `All ${providers.length} providers failed: ${failures.join(" | ").slice(0, 500)}`,
+  );
 }
 
 /** Minimal chat request used by the Settings "Test" button (browser preview). */

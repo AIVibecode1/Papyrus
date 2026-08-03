@@ -69,6 +69,18 @@ export function ExplainPanel({ paper }: ExplainPanelProps) {
         )}
       </div>
 
+      {status === "done" &&
+        explanation?.providerId &&
+        explanation.providerId !== activeProviderId && (
+          <p className="text-xs text-muted-foreground">
+            {t("explain.byProvider", {
+              provider:
+                providers.find((p) => p.id === explanation.providerId)?.name ??
+                explanation.providerId,
+            })}
+          </p>
+        )}
+
       {providers.length === 0 && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <AlertCircle className="size-4" />

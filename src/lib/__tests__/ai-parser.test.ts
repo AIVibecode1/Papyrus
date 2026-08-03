@@ -54,7 +54,7 @@ describe("streamExplanation (browser SSE parser)", () => {
       sseResponse(['data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n', "data: [DONE]\n\n"]),
     );
 
-    await streamExplanation({ provider, paper, language: "en", onChunk });
+    await streamExplanation({ providers: [provider], paper, language: "en", onChunk });
 
     expect(onChunk).toHaveBeenCalledTimes(1);
     expect(onChunk).toHaveBeenCalledWith("Hello");
@@ -71,7 +71,7 @@ describe("streamExplanation (browser SSE parser)", () => {
       ]),
     );
 
-    await streamExplanation({ provider, paper, language: "en", onChunk });
+    await streamExplanation({ providers: [provider], paper, language: "en", onChunk });
 
     expect(onChunk).toHaveBeenCalledTimes(1);
     expect(onChunk).toHaveBeenCalledWith("Hello");
@@ -88,7 +88,7 @@ describe("streamExplanation (browser SSE parser)", () => {
       ]),
     );
 
-    await streamExplanation({ provider, paper, language: "en", onChunk });
+    await streamExplanation({ providers: [provider], paper, language: "en", onChunk });
 
     expect(onChunk).toHaveBeenCalledTimes(1);
     expect(onChunk).toHaveBeenCalledWith("Hi");
@@ -98,9 +98,9 @@ describe("streamExplanation (browser SSE parser)", () => {
     const onChunk = vi.fn();
     fetchMock.mockResolvedValue(new Response("unauthorized", { status: 401 }));
 
-    await expect(streamExplanation({ provider, paper, language: "en", onChunk })).rejects.toThrow(
-      "HTTP 401: unauthorized",
-    );
+    await expect(
+      streamExplanation({ providers: [provider], paper, language: "en", onChunk }),
+    ).rejects.toThrow("HTTP 401: unauthorized");
     expect(onChunk).not.toHaveBeenCalled();
   });
 
@@ -113,8 +113,8 @@ describe("streamExplanation (browser SSE parser)", () => {
     // Current behavior: the loop breaks on done — no throw. (The Rust parser
     // errors here; fixed by plan 001 — the TS side is the reference.)
     await expect(
-      streamExplanation({ provider, paper, language: "en", onChunk }),
-    ).resolves.toBeUndefined();
+      streamExplanation({ providers: [provider], paper, language: "en", onChunk }),
+    ).resolves.toBe(provider.id);
     expect(onChunk).toHaveBeenCalledWith("Bye");
   });
 });
@@ -146,7 +146,7 @@ describe("stopExplanation (browser abort)", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const promise = streamExplanation({
-      provider,
+      providers: [provider],
       paper,
       language: "en",
       onChunk,

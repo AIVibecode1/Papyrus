@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { CANCELLED_MARKER, streamExplanation, stopExplanation } from "@/lib/ai";
 import { createStreamBuffer } from "@/lib/stream";
+import { useSettingsStore } from "@/stores/settings";
 import type { Paper, ProviderConfig } from "@/lib/types";
 
 export type ExplainStatus = "idle" | "loading" | "streaming" | "done" | "error" | "stopped";
@@ -66,8 +67,15 @@ export const useExplanationStore = create<ExplanationState>((set, get) => ({
     }));
 
     try {
-      await streamExplanation({
+      // Failover chain: the picked provider first, then the others in
+      // configuration order (deduped). The Rust backend iterates it and
+      // resolves with the winning provider's id.
+      const chain = [
         provider,
+        ...useSettingsStore.getState().providers.filter((p) => p.id !== provider.id),
+      ];
+      const winnerId = await streamExplanation({
+        providers: chain,
         paper,
         language,
         onChunk: (chunk) => buffer.push(chunk),
@@ -78,7 +86,7 @@ export const useExplanationStore = create<ExplanationState>((set, get) => ({
       set((s) => ({
         byPaper: {
           ...s.byPaper,
-          [id]: { ...s.byPaper[id], status: "done" },
+          [id]: { ...s.byPaper[id], status: "done", providerId: winnerId },
         },
       }));
     } catch (err) {

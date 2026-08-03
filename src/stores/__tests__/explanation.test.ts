@@ -15,6 +15,7 @@ vi.mock("@/lib/ai", () => ({
 }));
 
 import { useExplanationStore } from "@/stores/explanation";
+import { useSettingsStore } from "@/stores/settings";
 
 const paper: Paper = {
   id: "p1",
@@ -34,7 +35,7 @@ const provider: ProviderConfig = {
 };
 
 describe("explanation store", () => {
-  let resolveStream!: (v: void) => void;
+  let resolveStream!: (v: string) => void;
   let rejectStream!: (e: unknown) => void;
   let onChunk!: (chunk: string) => void;
 
@@ -46,12 +47,13 @@ describe("explanation store", () => {
     stopExplanationMock.mockReset();
     streamExplanationMock.mockImplementation((opts: { onChunk: (chunk: string) => void }) => {
       onChunk = opts.onChunk;
-      return new Promise<void>((resolve, reject) => {
+      return new Promise<string>((resolve, reject) => {
         resolveStream = resolve;
         rejectStream = reject;
       });
     });
     useExplanationStore.setState({ byPaper: {}, expandedId: null, generations: {} });
+    useSettingsStore.setState({ providers: [], activeProviderId: null });
   });
 
   afterEach(() => {
@@ -62,7 +64,7 @@ describe("explanation store", () => {
     const p = useExplanationStore.getState().start(paper, provider, "en");
     expect(useExplanationStore.getState().byPaper[paper.id]?.status).toBe("loading");
 
-    resolveStream();
+    resolveStream(provider.id);
     await p;
 
     const after = useExplanationStore.getState().byPaper[paper.id];
@@ -82,7 +84,7 @@ describe("explanation store", () => {
     expect(mid?.status).toBe("streaming");
     expect(mid?.text).toBe("ab");
 
-    resolveStream();
+    resolveStream(provider.id);
     await p;
     expect(useExplanationStore.getState().byPaper[paper.id]?.status).toBe("done");
   });
@@ -105,7 +107,7 @@ describe("explanation store", () => {
     vi.advanceTimersByTime(50);
     expect(texts).toEqual(["", "ab"]); // one batched update for both chunks
 
-    resolveStream();
+    resolveStream(provider.id);
     await p;
     unsubscribe();
   });
@@ -125,7 +127,7 @@ describe("explanation store", () => {
     expect(after?.text).toBe("a");
     expect(after?.status).toBe("stopped");
 
-    resolveStream();
+    resolveStream(provider.id);
     await p;
   });
 
@@ -161,5 +163,40 @@ describe("explanation store", () => {
     const after = useExplanationStore.getState().byPaper[paper.id];
     expect(after?.status).toBe("stopped");
     expect(after?.error).toBeNull();
+  });
+
+  it("start passes the provider chain and records the winning provider", async () => {
+    const other: ProviderConfig = {
+      id: "prov2",
+      name: "Fallback provider",
+      baseUrl: "https://fallback.example/v1",
+      model: "fallback-model",
+    };
+    useSettingsStore.setState({
+      providers: [provider, other],
+      activeProviderId: provider.id,
+    });
+
+    const p = useExplanationStore.getState().start(paper, provider, "en");
+
+    // The chain is the picked provider first, then the rest in order.
+    const opts = streamExplanationMock.mock.calls[0][0];
+    expect(opts.providers.map((x: ProviderConfig) => x.id)).toEqual(["prov1", "prov2"]);
+
+    // The winning provider (a fallback) is recorded on the entry.
+    resolveStream(other.id);
+    await p;
+    expect(useExplanationStore.getState().byPaper[paper.id]?.providerId).toBe("prov2");
+  });
+
+  it("start dedupes the picked provider in the chain", async () => {
+    useSettingsStore.setState({ providers: [provider, provider], activeProviderId: provider.id });
+
+    const p = useExplanationStore.getState().start(paper, provider, "en");
+    const opts = streamExplanationMock.mock.calls[0][0];
+    expect(opts.providers).toHaveLength(1);
+
+    resolveStream(provider.id);
+    await p;
   });
 });

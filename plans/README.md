@@ -13,8 +13,8 @@ row when done.
 | ---- | ---------------------------------------------------- | -------- | --------- | ---------------------- | ------ |
 | 001  | Remove the dead Cairo font payload                   | P1       | S         | —                      | DONE   |
 | 002  | Component tests for the reader surfaces              | P1       | M         | —                      | DONE   |
-| 003  | Consolidate the four streaming flush implementations | P1       | M         | 002 (recommended)      | TODO   |
-| 010  | Provider failover chain (spike spec build)           | P1       | M         | —                      | TODO   |
+| 003  | Consolidate the four streaming flush implementations | P1       | M         | 002 (recommended)      | DONE   |
+| 010  | Provider failover chain (spike spec build)           | P1       | M         | —                      | DONE   |
 | 004  | Bound PDF rendering work (render queue)              | P2       | S         | 002                    | TODO   |
 | 005  | Persist citation counts on disk with a TTL           | P2       | S         | —                      | TODO   |
 | 007  | Test the development tooling (mock server, capture)  | P2       | S-M       | —                      | TODO   |

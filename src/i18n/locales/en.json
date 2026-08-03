@@ -134,6 +134,7 @@
     "noProvider": "No AI provider configured",
     "goToSettings": "Open Settings",
     "error": "Explanation failed",
-    "retry": "Retry"
+    "retry": "Retry",
+    "byProvider": "Explained by {{provider}}"
   }
 }
