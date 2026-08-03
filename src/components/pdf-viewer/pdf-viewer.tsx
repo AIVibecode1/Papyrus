@@ -286,6 +286,9 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   };
 
   const goToPage = (n: number) => {
+    // Update the indicator immediately; the scroll tracker agrees once the
+    // scroll settles (and in environments where scrolling is a no-op).
+    setCurrentPage(n);
     const wrap = pageWrapRefs.current[n - 1];
     wrap?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -442,6 +445,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
             <Input
               ref={searchInputRef}
               autoFocus
+              aria-label={t("reader.searchInPdf")}
               value={searchQuery}
               onChange={(e) => {
                 const value = e.target.value;

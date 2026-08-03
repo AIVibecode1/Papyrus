@@ -1,0 +1,121 @@
+// @vitest-environment jsdom
+import "@testing-library/jest-dom/vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import "@/i18n";
+import { ReaderView } from "@/features/reader/reader-view";
+import type { Paper } from "@/lib/types";
+import { useReaderStore } from "@/stores/reader";
+import { useSettingsStore } from "@/stores/settings";
+import { useUiStore } from "@/stores/ui";
+import type { ProviderConfig } from "@/lib/types";
+
+// Isolate the reader screen from pdf.js: the viewer component has its own
+// test file (pdf-viewer.test.tsx). The Markdown renderer (mermaid-lazy)
+// is stubbed so the tests assert wiring, not rendering.
+vi.mock("@/components/pdf-viewer/pdf-viewer", () => ({
+  PdfViewer: () => <div data-testid="pdf-viewer" />,
+}));
+vi.mock("@/components/markdown/markdown", () => ({
+  Markdown: ({ children }: { children: string }) => <div data-testid="markdown">{children}</div>,
+}));
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
+// The reader store imports pdf-text, which imports pdfjs-dist at module
+// level; jsdom lacks DOMMatrix. The viewer itself is mocked above, so a
+// stub module is enough to satisfy the import chain.
+vi.mock("pdfjs-dist", () => ({
+  getDocument: vi.fn(),
+  GlobalWorkerOptions: { workerSrc: "" },
+  TextLayer: class {},
+}));
+
+const paper: Paper = {
+  id: "2607.00001v1",
+  title: "A Test Paper about Encoders",
+  authors: ["A. Author", "B. Author"],
+  published: "2026-07-30",
+  summary: "A short summary.",
+  pdfUrl: "https://arxiv.org/pdf/2607.00001v1",
+  categories: ["cs.AI"],
+};
+
+const provider: ProviderConfig = {
+  id: "mock-1",
+  name: "Mock AI",
+  baseUrl: "http://localhost:8765/v1",
+  model: "mock-model",
+};
+
+beforeEach(() => {
+  localStorage.clear();
+  useUiStore.setState({ view: "reader" });
+  useSettingsStore.setState({ providers: [provider], activeProviderId: provider.id });
+  useReaderStore.setState({
+    paper,
+    pdfBytes: new Uint8Array([37, 80, 68, 70]),
+    loadStatus: "ready",
+    loadError: null,
+    sections: ["Section one about encoders", "Section two about attention"],
+    sectionEntries: [],
+    synthesis: null,
+    chat: [],
+    selection: null,
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("ReaderView", () => {
+  it("shows the back button and returns to the papers view", () => {
+    render(<ReaderView />);
+    const back = screen.getByRole("button", { name: "Back to papers" });
+    fireEvent.click(back);
+    expect(useUiStore.getState().view).toBe("papers");
+  });
+
+  it("shows the selection chip with copy and clear actions", async () => {
+    useReaderStore.setState({ selection: "The encoder maps tokens to vectors." });
+    render(<ReaderView />);
+
+    expect(screen.getByText(/The encoder maps tokens to vectors\./)).toBeInTheDocument();
+
+    const copy = screen.getByRole("button", { name: "Copy selection" });
+    fireEvent.click(copy);
+    // The copied state flips after the clipboard promise settles.
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(screen.queryByText(/The encoder maps tokens to vectors\./)).not.toBeInTheDocument();
+  });
+
+  it("asks a question from the Ask tab and calls the store", () => {
+    const askSpy = vi.spyOn(useReaderStore.getState(), "ask").mockResolvedValue(undefined);
+    render(<ReaderView />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    const input = screen.getByPlaceholderText("Ask about the paper…");
+    fireEvent.change(input, { target: { value: "What is an embedding?" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(askSpy).toHaveBeenCalledWith("What is an embedding?", provider, "en");
+  });
+
+  it("starts the whole-paper walkthrough from the walkthrough tab", () => {
+    const startSpy = vi
+      .spyOn(useReaderStore.getState(), "startWalkthrough")
+      .mockResolvedValue(undefined);
+    render(<ReaderView />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Explain the whole paper" }));
+
+    expect(startSpy).toHaveBeenCalledWith(provider, "en");
+  });
+
+  it("renders the mocked PDF viewer when the paper is loaded", () => {
+    render(<ReaderView />);
+    expect(screen.getByTestId("pdf-viewer")).toBeInTheDocument();
+  });
+});

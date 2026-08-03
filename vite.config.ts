@@ -18,6 +18,10 @@ export default defineConfig(async () => ({
 
   test: {
     environment: "node",
+    // Enable testing-library's automatic cleanup after each test (without
+    // globals, RTL cannot register afterEach and rendered components leak
+    // into the next test).
+    globals: true,
     include: ["src/**/*.test.{ts,tsx}"],
   },
 

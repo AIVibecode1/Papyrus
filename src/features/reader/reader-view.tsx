@@ -135,15 +135,21 @@ export function ReaderView() {
       ]);
     } catch {
       // Fallback for restricted contexts (headless preview, older webviews):
-      // select the text in a hidden textarea and execCommand("copy").
-      const textarea = document.createElement("textarea");
-      textarea.value = reader.selection;
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      textarea.remove();
+      // select the text in a hidden textarea and execCommand("copy"). Some
+      // webviews lack execCommand entirely — then the copy just does not
+      // happen, but the UI still gives feedback.
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = reader.selection;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        if (typeof document.execCommand === "function") document.execCommand("copy");
+        textarea.remove();
+      } catch {
+        // clipboard unavailable in this context; nothing more to try
+      }
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
