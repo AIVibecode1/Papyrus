@@ -32,10 +32,26 @@ export async function renderInQueue(
   render: (view: PageView, index: number) => Promise<void>,
   isCancelled: () => boolean,
 ): Promise<void> {
-  for (let i = 0; i < views.length; i += 1) {
-    if (isCancelled()) return;
-    await render(views[i], i);
-  }
+  // Render several pages concurrently: a strictly sequential queue paints
+  // slowly on long PDFs, leaving scrolled-to pages black for seconds.
+  // Each page takes a unique index before any await, so no page is
+  // rendered twice; per-page failures are contained (renderPage catches).
+  const CONCURRENCY = 4;
+  let next = 0;
+  const worker = async () => {
+    while (!isCancelled()) {
+      const i = next;
+      next += 1;
+      if (i >= views.length) return;
+      try {
+        await render(views[i], i);
+      } catch {
+        // never let one page take down the run
+      }
+    }
+  };
+  const workers = Array.from({ length: Math.min(CONCURRENCY, views.length) }, () => worker());
+  await Promise.all(workers);
 }
 
 interface PdfViewerProps {
@@ -139,6 +155,15 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Current scale mirror + last auto-fit value: a manual zoom wins over
+  // the resize re-fit (see the ResizeObserver effect below).
+  const scaleRef = useRef(scale);
+  const lastFitRef = useRef(0);
+  const [repaintTick, setRepaintTick] = useState(0);
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
+
   // --- load ----------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
@@ -166,6 +191,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
         const containerWidth = containerRef.current?.clientWidth ?? 800;
         const fit = Math.max(0.5, Math.min(2.5, (containerWidth - 48) / first.width));
         setScale(fit);
+        lastFitRef.current = fit;
         const views = pageObjects.map((page) => ({
           page,
           viewport: page.getViewport({ scale: fit }),
@@ -190,6 +216,12 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   );
 
   // --- render pages (scale changes re-render everything) -------------------
+  // In-flight render tasks per page index: a newer run (zoom, resize,
+  // re-fit) cancels them, so pdf.js never gets a second render() on a
+  // canvas whose previous render is still running (that throws, and one
+  // thrown page used to kill the whole queue, leaving the rest black).
+  const renderTasksRef = useRef(new Map<number, pdfjsLib.RenderTask>());
+
   const renderPage = useCallback(
     async (page: PDFPageProxy, index: number, viewport: PageView["viewport"]) => {
       const canvas = canvasRefs.current[index];
@@ -200,7 +232,23 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
       // pdfjs v6 renders with the canvas element directly.
-      await page.render({ canvas, viewport }).promise;
+      try {
+        const task = page.render({ canvas, viewport });
+        renderTasksRef.current.set(index, task);
+        try {
+          await task.promise;
+        } finally {
+          renderTasksRef.current.delete(index);
+        }
+      } catch (err) {
+        // Cancelled by a newer run: expected, the new run repaints this
+        // canvas. Anything else: skip this page and keep painting the
+        // rest; a single bad page must never black out the whole PDF.
+        if (!(err instanceof Error) || !err.message.toLowerCase().includes("cancel")) {
+          console.warn("pdf page render failed:", err);
+        }
+        return;
+      }
 
       layer.innerHTML = "";
       layer.style.width = `${viewport.width}px`;
@@ -245,13 +293,19 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       clearTimeout(timer);
       // A newer effect cycle started: cancel any run still in flight.
       renderRunRef.current += 1;
+      renderTasksRef.current.forEach((task) => task.cancel());
+      renderTasksRef.current.clear();
     };
-  }, [scale]);
+  }, [scale, repaintTick]);
 
   // Re-fit when the container resizes (window resize or split drag): the
   // initial fit is computed once at load, and WebView2 sometimes leaves
   // canvases black after a resize unless a fresh render happens. The
-  // debounce keeps drags from re-rendering every frame.
+  // debounce keeps drags from re-rendering every frame. Keyed on
+  // pages.length: the container div does not exist while the spinner
+  // shows, so a mount-time observer would see a null ref and never attach.
+  // A manual zoom wins over re-fitting: once the user zooms, resizes only
+  // repaint at the current scale instead of resetting their zoom.
   useEffect(() => {
     if (typeof ResizeObserver === "undefined") return;
     const el = containerRef.current;
@@ -267,7 +321,14 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
           0.5,
           Math.min(2.5, (width - 48) / first.getViewport({ scale: 1 }).width),
         );
-        setScale((prev) => (Math.abs(prev - fit) < 0.01 ? prev : fit));
+        const userZoomed = Math.abs(scaleRef.current - lastFitRef.current) >= 0.01;
+        if (userZoomed) {
+          // Keep the user's zoom; a fresh paint clears any stale canvas.
+          setRepaintTick((t) => t + 1);
+        } else {
+          lastFitRef.current = fit;
+          setScale(fit);
+        }
       }, 200);
     });
     observer.observe(el);
@@ -275,7 +336,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, []);
+  }, [pages.length]);
 
   // --- search --------------------------------------------------------------
   const applyHighlights = (layer: HTMLElement, query: string) => {

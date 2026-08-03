@@ -131,26 +131,29 @@ describe("PdfViewer", () => {
 });
 
 describe("renderInQueue", () => {
-  it("renders every page in order when not cancelled", async () => {
+  it("renders every page exactly once", async () => {
     const calls: number[] = [];
-    const views = [{ page: {} as never, viewport: {} as never } as never, 1, 2].map(() => ({
+    const views = [0, 1, 2].map(() => ({
       page: {} as never,
       viewport: {} as never,
     }));
 
     await renderInQueue(
       views,
-      async (_view, i) => void calls.push(i),
+      async (_view, i) => {
+        await new Promise((r) => setTimeout(r, Math.random() * 5));
+        calls.push(i);
+      },
       () => false,
     );
 
-    expect(calls).toEqual([0, 1, 2]);
+    expect([...calls].sort()).toEqual([0, 1, 2]);
   });
 
-  it("stops immediately once cancelled", async () => {
+  it("stops taking new pages once cancelled", async () => {
     const calls: number[] = [];
     let cancelled = false;
-    const views = [{ page: {} as never, viewport: {} as never }, 1, 2].map(() => ({
+    const views = [0, 1, 2, 3, 4, 5].map(() => ({
       page: {} as never,
       viewport: {} as never,
     }));
@@ -159,11 +162,14 @@ describe("renderInQueue", () => {
       views,
       async (_view, i) => {
         calls.push(i);
-        if (i === 1) cancelled = true; // a zoom change lands mid-run
+        if (i === 0) cancelled = true; // a zoom change lands after page 1
+        await new Promise((r) => setTimeout(r, 5));
       },
       () => cancelled,
     );
 
-    expect(calls).toEqual([0, 1]); // page 2 never rendered
+    // Only the first concurrency window may start before the cancel flag
+    // lands; pages beyond it must never render.
+    expect(Math.max(...calls)).toBeLessThanOrEqual(3);
   });
 });

@@ -314,7 +314,7 @@ export function ReaderView() {
           {/* AI panel: tabs on top, then per-tab content. The Ask tab keeps
               its input pinned at the bottom, always visible. */}
           <aside
-            className="flex min-h-0 flex-col border-t bg-background lg:border-s lg:border-t-0"
+            className="flex min-h-0 min-w-0 flex-col border-t bg-background lg:border-s lg:border-t-0"
             style={
               isRow
                 ? { flexBasis: `${(1 - split) * 100}%`, flexGrow: 0, flexShrink: 0 }

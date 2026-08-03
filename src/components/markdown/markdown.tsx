@@ -145,7 +145,9 @@ export const Markdown = memo(function Markdown({ children, className }: Markdown
   };
 
   return (
-    <div className={cn("text-sm", className)}>
+    // break-words: long tokens (URLs, equations) wrap instead of forcing
+    // the panel wider than its share of the reader split.
+    <div className={cn("break-words text-sm", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}

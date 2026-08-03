@@ -19,9 +19,62 @@ Rules:
 
 ---
 
-## v1.0.3 - 2026-08-03
+## v1.0.4 - 2026-08-03
 
 Status: installers built, not yet published on GitHub.
+Built from: (filled at commit time)
+Quality gates: 146 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
+Prettier, strict typecheck, CI on Windows and macOS.
+
+Bullet points for the GitHub release description:
+
+- Bilingual by design: full English and Arabic interfaces with proper RTL
+  support, switchable instantly
+- Browse the latest arXiv papers in six fields (AI, ML, NLP, CV, neural
+  evolution, stats), search arXiv, and step back through any past day with
+  real paper counts
+- The day picker always reaches the current day: today's papers are
+  selectable the moment they appear (previously the newest day lagged one
+  day behind), and an empty today refetches automatically once papers land
+- Arabic mode: paper titles, dates and English terms inside AI answers
+  keep their correct direction, no more flipped text
+- Semantic Scholar as a second source: search with citation counts, TLDRs
+  and venues, with an automatic honest fallback to arXiv when the free
+  rate limit is busy; a friendly translated hint guides you when a search
+  term is needed
+- Read mode: built-in PDF reader with find-in-page, a draggable split
+  between the paper and the explanation panel, and a section-by-section
+  walkthrough
+- Walkthrough controls: after stopping or finishing a section you can
+  Regenerate it (re-run the explanation in place) or Continue to the next
+- The PDF viewer re-fits when the window or split is resized, which also
+  clears the black-canvas glitch some resizes caused
+- PDF pages paint fast: long papers render several pages at once, so the whole document appears in about a second instead of one page at a time
+- Black pages are gone: a failing page no longer kills the render queue (in-flight renders are cancelled cleanly when you zoom or resize, failed pages are skipped), so the whole PDF always paints
+- Your zoom level survives resizing: re-sizing re-fits only while you have not zoomed manually; after a manual zoom it just repaints so nothing is undone
+- The split stays exactly where you dragged it while explanations stream:
+  the AI panel can no longer grow wider than its share of the reader
+- AI explanations powered by your own providers: OpenAI-compatible
+  (OpenAI, OpenRouter, DeepSeek, Groq, Ollama, OpenCode Go, or any custom
+  endpoint), with preset URLs locked and providers named by their model
+- Ask questions about the paper in a chat panel with history; equations
+  in answers render as real math (KaTeX)
+- Resilient AI streams: long explanations survive provider resets and
+  gateway timeouts (partial answers are kept, streaming timeout is 10
+  minutes)
+- Three themes: light, sepia and dark
+- Save favorites and export your data to a timestamped JSON file
+- Privacy first: API keys live only in the OS keychain (Windows
+  Credential Manager / macOS Keychain), never in files or logs
+- The Settings page shows the app version (1.0.4)
+- Installers for Windows: MSI and NSIS setup
+
+---
+
+Status: superseded before publishing. Per the version-pump
+rule (every user-facing change bumps the version), its fixes rolled
+into v1.0.4. Kept here as a tracking log entry.
+Built from: c110295
 Built from: c110295
 Quality gates: 146 frontend tests, 75 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, CI on Windows and macOS.
