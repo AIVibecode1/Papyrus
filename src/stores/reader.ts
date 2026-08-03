@@ -5,6 +5,7 @@ import { getPdfBytes } from "@/lib/pdf";
 import { extractTextFromPdf } from "@/lib/pdf-text";
 import { capTotal, findContextSection, splitIntoSections } from "@/lib/paper-text";
 import { streamAsk, streamSectionExplanation, streamSynthesis } from "@/lib/reader-ai";
+import { createStreamBuffer } from "@/lib/stream";
 import type { Paper, ProviderConfig } from "@/lib/types";
 
 export type ReaderStatus = "idle" | "loading" | "ready" | "error";
@@ -27,8 +28,6 @@ export interface ChatMessage {
 
 const CHAT_STORAGE_KEY = "papyrus-reader-chat-v1";
 const CHAT_PERSIST_LIMIT = 30;
-const FLUSH_INTERVAL_MS = 50;
-
 interface ReaderState {
   paper: Paper | null;
   pdfBytes: Uint8Array | null;
@@ -174,29 +173,18 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           sectionEntries: [...s.sectionEntries, { text: "", status: "loading", error: null }],
         }));
 
-        let pending: string[] = [];
-        let flushTimer: ReturnType<typeof setTimeout> | null = null;
-        const clearTimer = () => {
-          if (flushTimer !== null) {
-            clearTimeout(flushTimer);
-            flushTimer = null;
-          }
-        };
-        const flush = () => {
-          flushTimer = null;
-          const buf = pending;
-          pending = [];
-          if (buf.length === 0) return;
-          set((s) => {
+        const buffer = createStreamBuffer<ReaderState>(set, {
+          isCurrent: () => wtGen === gen,
+          apply: (s, text) => {
             const entry = s.sectionEntries[i];
             // Apply to loading AND streaming entries: the first flush flips
             // the status, and later flushes must keep appending.
             if (!entry || (entry.status !== "loading" && entry.status !== "streaming")) return s;
             const entries = [...s.sectionEntries];
-            entries[i] = { ...entry, text: entry.text + buf.join(""), status: "streaming" };
+            entries[i] = { ...entry, text: entry.text + text, status: "streaming" };
             return { sectionEntries: entries };
-          });
-        };
+          },
+        });
 
         try {
           await streamSectionExplanation({
@@ -206,15 +194,10 @@ export const useReaderStore = create<ReaderState>((set, get) => {
             totalSections: sections.length,
             sectionText: sections[i],
             language,
-            onChunk: (chunk) => {
-              if (wtGen !== gen) return;
-              pending.push(chunk);
-              if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
-            },
+            onChunk: (chunk) => buffer.push(chunk),
           });
           if (wtGen !== gen) return;
-          clearTimer();
-          flush();
+          buffer.flushNow();
           set((s) => {
             const entries = [...s.sectionEntries];
             const entry = entries[i];
@@ -223,7 +206,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           });
         } catch (err) {
           if (wtGen !== gen) return;
-          clearTimer();
+          buffer.dispose();
           const message = err instanceof Error ? err.message : String(err);
           const stopped = message.startsWith(CANCELLED_MARKER);
           set((s) => {
@@ -245,46 +228,30 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       if (!synthesis || synthesis.status !== "done") {
         const gen = ++wtGen;
         set({ synthesis: { text: "", status: "loading", error: null } });
-        let pending: string[] = [];
-        let flushTimer: ReturnType<typeof setTimeout> | null = null;
-        const clearTimer = () => {
-          if (flushTimer !== null) {
-            clearTimeout(flushTimer);
-            flushTimer = null;
-          }
-        };
-        const flush = () => {
-          flushTimer = null;
-          const buf = pending;
-          pending = [];
-          if (buf.length === 0) return;
-          set((s) => {
+        const buffer = createStreamBuffer<ReaderState>(set, {
+          isCurrent: () => wtGen === gen,
+          apply: (s, text) => {
             const cur = s.synthesis;
             // loading OR streaming: the first flush flips the status and
             // later flushes must keep appending (same rule as sections).
             if (!cur || (cur.status !== "loading" && cur.status !== "streaming")) return s;
-            return { synthesis: { ...cur, text: cur.text + buf.join(""), status: "streaming" } };
-          });
-        };
+            return { synthesis: { ...cur, text: cur.text + text, status: "streaming" } };
+          },
+        });
         try {
           await streamSynthesis({
             provider,
             paper,
             sectionsText: capTotal(sections.join("\n\n")),
             language,
-            onChunk: (chunk) => {
-              if (wtGen !== gen) return;
-              pending.push(chunk);
-              if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
-            },
+            onChunk: (chunk) => buffer.push(chunk),
           });
           if (wtGen !== gen) return;
-          clearTimer();
-          flush();
+          buffer.flushNow();
           set((s) => (s.synthesis ? { synthesis: { ...s.synthesis, status: "done" } } : {}));
         } catch (err) {
           if (wtGen !== gen) return;
-          clearTimer();
+          buffer.dispose();
           const message = err instanceof Error ? err.message : String(err);
           const stopped = message.startsWith(CANCELLED_MARKER);
           set((s) =>
@@ -334,30 +301,19 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         ],
       }));
 
-      let pending: string[] = [];
-      let flushTimer: ReturnType<typeof setTimeout> | null = null;
-      const clearTimer = () => {
-        if (flushTimer !== null) {
-          clearTimeout(flushTimer);
-          flushTimer = null;
-        }
-      };
-      const flush = () => {
-        flushTimer = null;
-        const buf = pending;
-        pending = [];
-        if (buf.length === 0) return;
-        set((s) => {
+      const buffer = createStreamBuffer<ReaderState>(set, {
+        isCurrent: () => chatGen === gen,
+        apply: (s, text) => {
           const list = [...s.chat];
           const msg = list.find((m) => m.id === assistantId);
           // loading OR streaming: the first flush flips the status and
           // later flushes must keep appending (same rule as sections).
           if (!msg || (msg.status !== "loading" && msg.status !== "streaming")) return s;
-          msg.text += buf.join("");
+          msg.text += text;
           msg.status = "streaming";
           return { chat: list };
-        });
-      };
+        },
+      });
 
       // Ground the answer: the section containing the selection (or the
       // first section when there is no selection), so the model never
@@ -384,15 +340,10 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           context,
           history,
           language,
-          onChunk: (chunk) => {
-            if (chatGen !== gen) return;
-            pending.push(chunk);
-            if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_INTERVAL_MS);
-          },
+          onChunk: (chunk) => buffer.push(chunk),
         });
         if (chatGen !== gen) return;
-        clearTimer();
-        flush();
+        buffer.flushNow();
         set((s) => {
           const list = s.chat.map((m) =>
             m.id === assistantId ? { ...m, status: "done" as const } : m,
@@ -402,7 +353,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         });
       } catch (err) {
         if (chatGen !== gen) return;
-        clearTimer();
+        buffer.dispose();
         const message = err instanceof Error ? err.message : String(err);
         const stopped = message.startsWith(CANCELLED_MARKER);
         const status: StreamStatus = stopped ? "stopped" : "error";
