@@ -118,6 +118,20 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
 - If a change is too small to warrant a changelog row, say so in the
   commit message instead of silently skipping the rule.
 
+## Release Notes Rule (must follow)
+
+- `release.md` tracks every release: bullet points, build provenance,
+  quality gate counts, and the release checklist. It is written for
+  humans and for AI agents.
+- **Every change that reaches users (feature, fix, upgrade) MUST be
+  reflected in the current release's bullet points in `release.md`**,
+  updated in the same commit as the change.
+- When a release is tagged and published, freeze its section (status,
+  built-from commit, gate counts) and never edit old sections afterwards.
+- New releases are added by copying the template section in `release.md`.
+- If a change is too small to warrant a release bullet, say so in the
+  commit message instead of silently skipping the rule.
+
 ---
 
 ## Internationalization Rules
