@@ -95,9 +95,10 @@ describe("digest store", () => {
     const threeDaysAgo = addDays(yesterday, -2);
     useDigestStore.setState({ loaded: true, lastChecked: { "cs.AI": threeDaysAgo } });
 
-    vi.mocked(fetchPapers).mockImplementation(async (_cat, _max, _q, date) => [
-      paperFor(date ?? ""),
-    ]);
+    vi.mocked(fetchPapers).mockImplementation(async (_cat, _max, _q, date) => ({
+      papers: [paperFor(date ?? "")],
+      fallbackNote: null,
+    }));
 
     await useDigestStore.getState().ensureHistory("cs.AI");
 
@@ -124,7 +125,7 @@ describe("digest store", () => {
 
   it("caps the first backfill window", async () => {
     // Never checked before: only the last BACKFILL_DAYS (14) are fetched.
-    vi.mocked(fetchPapers).mockResolvedValue([]);
+    vi.mocked(fetchPapers).mockResolvedValue({ papers: [], fallbackNote: null });
 
     await useDigestStore.getState().ensureHistory("cs.AI");
 
@@ -143,7 +144,7 @@ describe("digest store", () => {
 
     vi.mocked(fetchPapers).mockImplementation(async (_cat, _max, _q, date) => {
       if (date === badDay) throw new Error("network down");
-      return [paperFor(date ?? "")];
+      return { papers: [paperFor(date ?? "")], fallbackNote: null };
     });
 
     await useDigestStore.getState().ensureHistory("cs.AI");

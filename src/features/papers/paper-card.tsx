@@ -118,7 +118,9 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
           dir={paper.summary ? "ltr" : undefined}
           className="line-clamp-3 text-sm leading-relaxed text-muted-foreground"
         >
-          {paper.summary || t("papers.noAbstract")}
+          {/* A TLDR is a model-generated one-liner: a fallback for missing
+              abstracts, never a replacement for a present one (spike §4). */}
+          {paper.summary || paper.tldr || t("papers.noAbstract")}
         </p>
 
         <div className="mt-1 flex items-center gap-2">

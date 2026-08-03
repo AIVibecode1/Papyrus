@@ -103,7 +103,7 @@ export const useDigestStore = create<DigestState>((set, get) => ({
       for (let i = 0; i < missing.length; i++) {
         const day = missing[i];
         try {
-          const papers = await fetchPapers(category, DAY_PAGE_SIZE, undefined, day);
+          const { papers } = await fetchPapers(category, DAY_PAGE_SIZE, undefined, day);
           get().storeDay(category, day, papers);
         } catch {
           // Transient failure: leave the day missing so the next launch

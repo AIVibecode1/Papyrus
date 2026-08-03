@@ -755,6 +755,9 @@ mod tests {
             summary: "A summary of the test paper.".into(),
             pdf_url: "https://arxiv.org/pdf/2607.12345".into(),
             categories: vec!["cs.AI".into()],
+            citation_count: None,
+            tldr: None,
+            venue: None,
         }
     }
 
@@ -1445,6 +1448,9 @@ mod tests {
             summary: "A sample abstract.".into(),
             pdf_url: "https://arxiv.org/pdf/2607.00001".into(),
             categories: vec!["cs.AI".into()],
+            citation_count: None,
+            tldr: None,
+            venue: None,
         }
     }
 

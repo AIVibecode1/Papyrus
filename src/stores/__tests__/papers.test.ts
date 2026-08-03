@@ -4,7 +4,7 @@ import type { Paper } from "@/lib/types";
 vi.mock("@/lib/arxiv", () => ({ fetchPapers: vi.fn() }));
 vi.mock("@/lib/citations", () => ({ fetchCitations: vi.fn().mockResolvedValue({}) }));
 
-import { fetchPapers } from "@/lib/arxiv";
+import { fetchPapers, type FetchPapersResult } from "@/lib/arxiv";
 import { fetchCitations } from "@/lib/citations";
 import { usePapersStore } from "@/stores/papers";
 
@@ -29,8 +29,8 @@ const lgPaper: Paper = {
 };
 
 describe("papers store", () => {
-  let resolveFirst!: (papers: Paper[]) => void;
-  let resolveSecond!: (papers: Paper[]) => void;
+  let resolveFirst!: (result: FetchPapersResult) => void;
+  let resolveSecond!: (result: FetchPapersResult) => void;
 
   beforeEach(() => {
     vi.mocked(fetchPapers).mockReset();
@@ -51,7 +51,7 @@ describe("papers store", () => {
     let call = 0;
     vi.mocked(fetchPapers).mockImplementation(() => {
       call += 1;
-      return new Promise<Paper[]>((resolve) => {
+      return new Promise<FetchPapersResult>((resolve) => {
         if (call === 1) resolveFirst = resolve;
         else resolveSecond = resolve;
       });
@@ -62,7 +62,7 @@ describe("papers store", () => {
 
     // Resolve the FIRST (stale) request after the second one started:
     // its result must be dropped entirely.
-    resolveFirst([aiPaper]);
+    resolveFirst({ papers: [aiPaper], fallbackNote: null });
     await Promise.resolve();
 
     const mid = usePapersStore.getState();
@@ -71,7 +71,7 @@ describe("papers store", () => {
     expect(mid.category).toBe("cs.LG");
 
     // The newest request still lands.
-    resolveSecond([lgPaper]);
+    resolveSecond({ papers: [lgPaper], fallbackNote: null });
     await Promise.resolve();
 
     const after = usePapersStore.getState();
@@ -89,12 +89,14 @@ describe("papers store", () => {
   });
 
   it("setQuery triggers refresh with the query", async () => {
-    const fetchMock = vi.mocked(fetchPapers).mockResolvedValue([aiPaper]);
+    const fetchMock = vi
+      .mocked(fetchPapers)
+      .mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
 
     usePapersStore.getState().setQuery("transformer");
 
     // refresh() calls fetchPapers synchronously; the query must reach it.
-    expect(fetchMock).toHaveBeenCalledWith("cs.MATH", 20, "transformer", undefined);
+    expect(fetchMock).toHaveBeenCalledWith("cs.MATH", 20, "transformer", undefined, 0, "arxiv");
     await Promise.resolve();
 
     const state = usePapersStore.getState();
@@ -104,12 +106,14 @@ describe("papers store", () => {
   });
 
   it("setDate triggers refresh for that day", async () => {
-    const fetchMock = vi.mocked(fetchPapers).mockResolvedValue([aiPaper]);
+    const fetchMock = vi
+      .mocked(fetchPapers)
+      .mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
 
     usePapersStore.getState().setDate("2026-08-01");
 
     // The date must reach the fetch layer as the 4th argument.
-    expect(fetchMock).toHaveBeenCalledWith("cs.MATH", 20, undefined, "2026-08-01");
+    expect(fetchMock).toHaveBeenCalledWith("cs.MATH", 20, undefined, "2026-08-01", 0, "arxiv");
     await Promise.resolve();
 
     const state = usePapersStore.getState();
@@ -119,12 +123,14 @@ describe("papers store", () => {
   });
 
   it("setDate(null) returns to the latest view", async () => {
-    const fetchMock = vi.mocked(fetchPapers).mockResolvedValue([aiPaper]);
+    const fetchMock = vi
+      .mocked(fetchPapers)
+      .mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
 
     usePapersStore.getState().setDate("2026-08-01");
     usePapersStore.getState().setDate(null);
 
-    expect(fetchMock).toHaveBeenLastCalledWith("cs.MATH", 20, undefined, undefined);
+    expect(fetchMock).toHaveBeenLastCalledWith("cs.MATH", 20, undefined, undefined, 0, "arxiv");
     await Promise.resolve();
 
     expect(usePapersStore.getState().date).toBeNull();
@@ -134,7 +140,7 @@ describe("papers store", () => {
     let call = 0;
     vi.mocked(fetchPapers).mockImplementation(() => {
       call += 1;
-      return new Promise<Paper[]>((resolve) => {
+      return new Promise<FetchPapersResult>((resolve) => {
         if (call === 1) resolveFirst = resolve;
         else resolveSecond = resolve;
       });
@@ -145,7 +151,7 @@ describe("papers store", () => {
 
     // Resolve the FIRST (stale) search after the second one started:
     // its result must be dropped entirely.
-    resolveFirst([aiPaper]);
+    resolveFirst({ papers: [aiPaper], fallbackNote: null });
     await Promise.resolve();
 
     const mid = usePapersStore.getState();
@@ -154,7 +160,7 @@ describe("papers store", () => {
     expect(mid.query).toBe("attention");
 
     // The newest search still lands.
-    resolveSecond([lgPaper]);
+    resolveSecond({ papers: [lgPaper], fallbackNote: null });
     await Promise.resolve();
 
     const after = usePapersStore.getState();
@@ -164,8 +170,8 @@ describe("papers store", () => {
 
   it("loadMore appends the next page and dedupes", async () => {
     vi.mocked(fetchPapers)
-      .mockResolvedValueOnce([aiPaper])
-      .mockResolvedValueOnce([lgPaper, aiPaper]); // page 2 overlaps page 1
+      .mockResolvedValueOnce({ papers: [aiPaper], fallbackNote: null })
+      .mockResolvedValueOnce({ papers: [lgPaper, aiPaper], fallbackNote: null }); // page 2 overlaps page 1
 
     usePapersStore.setState({ category: "cs.AI" });
     await usePapersStore.getState().refresh();
@@ -176,12 +182,12 @@ describe("papers store", () => {
     // The duplicated aiPaper from page 2 must not appear twice.
     expect(usePapersStore.getState().papers).toEqual([aiPaper, lgPaper]);
     // Page 2 was requested with start = current length.
-    expect(fetchPapers).toHaveBeenLastCalledWith("cs.AI", 20, undefined, undefined, 1);
+    expect(fetchPapers).toHaveBeenLastCalledWith("cs.AI", 20, undefined, undefined, 1, "arxiv");
     expect(usePapersStore.getState().loadingMore).toBe(false);
   });
 
   it("loadMore does nothing while loading", async () => {
-    vi.mocked(fetchPapers).mockResolvedValue([aiPaper]);
+    vi.mocked(fetchPapers).mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
     usePapersStore.setState({ category: "cs.AI", loading: true });
 
     await usePapersStore.getState().loadMore();
@@ -198,7 +204,7 @@ describe("papers store", () => {
   });
 
   it("refresh enriches the list with citation counts", async () => {
-    vi.mocked(fetchPapers).mockResolvedValue([aiPaper]);
+    vi.mocked(fetchPapers).mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
     vi.mocked(fetchCitations).mockResolvedValue({ ai1: 7 });
 
     usePapersStore.setState({ category: "cs.AI" });
@@ -207,5 +213,46 @@ describe("papers store", () => {
 
     expect(fetchCitations).toHaveBeenCalledWith(["ai1"]);
     expect(usePapersStore.getState().citations).toEqual({ ai1: 7 });
+  });
+
+  it("setSource passes the source through to the fetch layer", async () => {
+    const fetchMock = vi
+      .mocked(fetchPapers)
+      .mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
+
+    usePapersStore.getState().setSource("semanticscholar");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "cs.MATH",
+      20,
+      undefined,
+      undefined,
+      0,
+      "semanticscholar",
+    );
+    await Promise.resolve();
+    expect(usePapersStore.getState().source).toBe("semanticscholar");
+  });
+
+  it("stores the fallback note and clears it on refresh", async () => {
+    vi.mocked(fetchPapers).mockResolvedValueOnce({
+      papers: [aiPaper],
+      fallbackNote: "Semantic Scholar API returned HTTP 429",
+    });
+    usePapersStore.setState({ source: "semanticscholar" });
+
+    await usePapersStore.getState().refresh();
+    expect(usePapersStore.getState().fallbackNote).toBe("Semantic Scholar API returned HTTP 429");
+
+    // The next successful refresh clears the note.
+    vi.mocked(fetchPapers).mockResolvedValueOnce({ papers: [lgPaper], fallbackNote: null });
+    await usePapersStore.getState().refresh();
+    expect(usePapersStore.getState().fallbackNote).toBeNull();
+  });
+
+  it("clearFallbackNote dismisses the notice", async () => {
+    usePapersStore.setState({ fallbackNote: "boom" });
+    usePapersStore.getState().clearFallbackNote();
+    expect(usePapersStore.getState().fallbackNote).toBeNull();
   });
 });

@@ -86,7 +86,9 @@
     "nextDay": "Next day",
     "browseByDay": "Browse by day",
     "noPapersOnDay": "No papers found for this day.",
-    "historyLoading": "Collecting history… {{done}}/{{total}}"
+    "historyLoading": "Collecting history… {{done}}/{{total}}",
+    "sourceFallback": "Semantic Scholar is unavailable, showing arXiv results.",
+    "dismiss": "Dismiss"
   },
   "presets": {
     "openai": "OpenAI",
@@ -123,7 +125,10 @@
     "showKey": "Show key",
     "hideKey": "Hide key",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "paperSource": "Paper source",
+    "sourceArxiv": "arXiv",
+    "sourceSemanticScholar": "Semantic Scholar"
   },
   "explain": {
     "selectProvider": "Choose provider",

@@ -1,0 +1,33 @@
+{
+  "data": [
+    {
+      "paperId": "abc123def456",
+      "title": "Attention Is All You Need",
+      "authors": [{ "name": "Jane Doe" }, { "name": "John Smith" }],
+      "publicationDate": "2026-07-31",
+      "year": 2026,
+      "abstract": "A transformer architecture for sequence modeling.",
+      "tldr": {
+        "model": "tldr-model",
+        "text": "A transformer architecture that processes sequences in parallel."
+      },
+      "venue": "NeurIPS",
+      "citationCount": 123456,
+      "openAccessPdf": { "url": "https://example.com/paper.pdf" },
+      "s2FieldsOfStudy": ["Computer Science", "Machine Learning"]
+    },
+    {
+      "paperId": "xyz789",
+      "title": "A Sparse Paper",
+      "authors": [],
+      "publicationDate": null,
+      "year": 2025,
+      "abstract": null,
+      "tldr": null,
+      "venue": null,
+      "citationCount": 0,
+      "openAccessPdf": null,
+      "s2FieldsOfStudy": []
+    }
+  ]
+}

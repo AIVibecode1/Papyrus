@@ -6,6 +6,11 @@ export interface Paper {
   summary: string;
   pdfUrl: string;
   categories: string[];
+  /** Semantic Scholar enrichment; absent for arXiv papers. */
+  citationCount?: number;
+  /** Model-generated one-liner (S2); used as a summary fallback only. */
+  tldr?: string;
+  venue?: string;
 }
 
 export interface ProviderConfig {

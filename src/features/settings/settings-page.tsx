@@ -2,7 +2,16 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Plus, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { PaperSource } from "@/lib/arxiv";
 import type { ProviderConfig } from "@/lib/types";
+import { usePapersStore } from "@/stores/papers";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
 import { ProviderCard } from "./provider-card";
@@ -13,6 +22,8 @@ const emptyForm = { name: "", baseUrl: "", model: "", key: "" };
 export function SettingsPage() {
   const { t } = useTranslation();
   const setView = useUiStore((s) => s.setView);
+  const source = usePapersStore((s) => s.source);
+  const setSource = usePapersStore((s) => s.setSource);
   const { providers, activeProviderId, removeProvider, setActiveProvider, deleteKey, hasKey } =
     useSettingsStore();
 
@@ -81,6 +92,25 @@ export function SettingsPage() {
       <div className="mt-4 flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
         <ShieldCheck className="size-4 shrink-0" />
         {t("settings.securityNote")}
+      </div>
+
+      <div className="mt-6 flex items-center justify-between border-t pt-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold">{t("settings.paperSource")}</h2>
+          <Select
+            value={source}
+            onValueChange={(v) => setSource(v as PaperSource)}
+            aria-label={t("settings.paperSource")}
+          >
+            <SelectTrigger className="h-8 w-52 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="arxiv">{t("settings.sourceArxiv")}</SelectItem>
+              <SelectItem value="semanticscholar">{t("settings.sourceSemanticScholar")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="mt-6 flex items-center justify-between">

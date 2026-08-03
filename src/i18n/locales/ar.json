@@ -86,7 +86,9 @@
     "nextDay": "اليوم التالي",
     "browseByDay": "تصفح حسب اليوم",
     "noPapersOnDay": "لا توجد أبحاث لهذا اليوم.",
-    "historyLoading": "جارٍ جمع السجل… {{done}}/{{total}}"
+    "historyLoading": "جارٍ جمع السجل… {{done}}/{{total}}",
+    "sourceFallback": "Semantic Scholar غير متاح، يتم عرض نتائج arXiv.",
+    "dismiss": "إغلاق"
   },
   "presets": {
     "openai": "OpenAI",
@@ -123,7 +125,10 @@
     "showKey": "إظهار المفتاح",
     "hideKey": "إخفاء المفتاح",
     "save": "حفظ",
-    "cancel": "إلغاء"
+    "cancel": "إلغاء",
+    "paperSource": "مصدر الأوراق",
+    "sourceArxiv": "arXiv",
+    "sourceSemanticScholar": "Semantic Scholar"
   },
   "explain": {
     "selectProvider": "اختر المزوّد",

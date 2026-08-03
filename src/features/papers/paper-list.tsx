@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Loader2,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -54,7 +55,8 @@ function formatDay(date: string, language: string): string {
 
 export function PaperList() {
   const { t, i18n } = useTranslation();
-  const { papers, loading, error, refresh, lastUpdated } = usePapersStore();
+  const { papers, loading, error, refresh, lastUpdated, fallbackNote, clearFallbackNote } =
+    usePapersStore();
   const category = usePapersStore((s) => s.category);
   const date = usePapersStore((s) => s.date);
   const setDate = usePapersStore((s) => s.setDate);
@@ -190,6 +192,26 @@ export function PaperList() {
           </span>
         )}
       </div>
+
+      {!loading && fallbackNote && (
+        <div
+          role="status"
+          className="flex items-start justify-between gap-3 rounded-md border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          <span className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+            {t("papers.sourceFallback")}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={clearFallbackNote}
+            aria-label={t("papers.dismiss")}
+          >
+            <X className="size-3.5" />
+          </Button>
+        </div>
+      )}
 
       {loading && (
         <div className="flex flex-col gap-4" aria-label={t("papers.loading")}>
