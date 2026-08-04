@@ -34,6 +34,7 @@ describe("papers store", () => {
 
   beforeEach(() => {
     vi.mocked(fetchPapers).mockReset();
+    vi.mocked(fetchCitations).mockClear();
     // Start on a category other than cs.AI so setCategory("cs.AI") below
     // actually fires a refresh (setCategory no-ops on the same category).
     usePapersStore.setState({
@@ -45,6 +46,7 @@ describe("papers store", () => {
       loading: false,
       error: null,
       lastUpdated: null,
+      citations: {},
     });
   });
 
@@ -267,6 +269,16 @@ describe("papers store", () => {
     await Promise.resolve();
 
     expect(usePapersStore.getState().citations).toEqual({ ai1: 42 });
+  });
+
+  it("loadCitations skips ids whose counts are already known", async () => {
+    // A seeded S2 count must not trigger a redundant batch request.
+    usePapersStore.setState({ citations: { ai1: 42 } });
+    usePapersStore.getState().loadCitations(["ai1", "lg1"]);
+    await Promise.resolve();
+
+    expect(fetchCitations).toHaveBeenCalledTimes(1);
+    expect(fetchCitations).toHaveBeenCalledWith(["lg1"]);
   });
 
   it("refresh enriches the list with citation counts", async () => {

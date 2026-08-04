@@ -176,6 +176,24 @@ fn next_redirect_target(
     Ok(Some(location.to_string()))
 }
 
+/// Interprets a guarded hop's response: Ok(None) means the download is
+/// final (success), Ok(Some(next)) means follow the redirect, Err is a
+/// policy violation or HTTP failure. Pure so the decision sequence is
+/// testable; the loop re-validates the next target with
+/// validate_public_https before requesting it.
+fn interpret_hop(
+    status: reqwest::StatusCode,
+    headers: &reqwest::header::HeaderMap,
+) -> Result<Option<String>, String> {
+    if let Some(next) = next_redirect_target(status, headers)? {
+        return Ok(Some(next));
+    }
+    if !status.is_success() {
+        return Err(format!("PDF download returned HTTP {status}"));
+    }
+    Ok(None)
+}
+
 /// Full download path for the command: validates the https/public policy,
 /// pins the connection to the validated addresses (DNS-rebinding guard),
 /// and follows redirects only one hop at a time, re-validating each target.
@@ -189,12 +207,9 @@ async fn download_pdf_guarded(url: &str) -> Result<Vec<u8>, String> {
             .await
             .map_err(|e| format!("Failed to download the PDF: {e}"))?;
         let status = response.status();
-        if let Some(next) = next_redirect_target(status, response.headers())? {
+        if let Some(next) = interpret_hop(status, response.headers())? {
             target = next;
             continue;
-        }
-        if !status.is_success() {
-            return Err(format!("PDF download returned HTTP {status}"));
         }
         return fetch_body(response, MAX_PDF_BYTES).await;
     }
@@ -498,7 +513,7 @@ mod tests {
             .expect_err("plaintext redirect targets must be rejected");
         assert!(err.contains("must be https"), "unexpected error: {err}");
 
-        let mut no_location = reqwest::header::HeaderMap::new();
+        let no_location = reqwest::header::HeaderMap::new();
         let err = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &no_location) })
             .expect_err("a redirect without a location must be rejected");
         assert!(
@@ -510,6 +525,58 @@ mod tests {
         let next = run(async { next_redirect_target(reqwest::StatusCode::OK, &mut ok_headers) })
             .expect("a non-redirect status is not a hop");
         assert!(next.is_none());
+    }
+
+    #[test]
+    fn interpret_hop_decides_follow_error_and_done() {
+        let mut redirect = reqwest::header::HeaderMap::new();
+        redirect.insert(
+            reqwest::header::LOCATION,
+            reqwest::header::HeaderValue::from_static("https://cdn.example/paper.pdf"),
+        );
+        let next = interpret_hop(reqwest::StatusCode::FOUND, &redirect)
+            .expect("redirect must be followed");
+        assert_eq!(next.as_deref(), Some("https://cdn.example/paper.pdf"));
+
+        let err = interpret_hop(reqwest::StatusCode::INTERNAL_SERVER_ERROR, &redirect)
+            .expect_err("an http error is terminal");
+        assert!(err.contains("500"), "unexpected error: {err}");
+
+        let done = interpret_hop(reqwest::StatusCode::OK, &redirect).expect("ok is final");
+        assert!(done.is_none());
+    }
+
+    #[test]
+    fn guarded_redirect_chain_revalidates_the_next_target() {
+        // The guarded loop's re-validation is what blocks SSRF via
+        // redirects: hop 1 returns a Location, and the loop calls
+        // validate_public_https on that target BEFORE requesting it. A
+        // redirect pointing at a loopback/private host must be rejected
+        // mid-chain, exactly as the real loop would.
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::LOCATION,
+            reqwest::header::HeaderValue::from_static("https://127.0.0.1/evil.pdf"),
+        );
+        let next = interpret_hop(reqwest::StatusCode::FOUND, &headers)
+            .expect("the hop decision accepts the redirect");
+        let next = next.expect("a redirect target");
+
+        let err = run(validate_public_https(&next))
+            .expect_err("the redirect target must fail re-validation");
+        assert!(err.contains("private"), "unexpected error: {err}");
+
+        // The same for a host name resolving to loopback.
+        let mut local_headers = reqwest::header::HeaderMap::new();
+        local_headers.insert(
+            reqwest::header::LOCATION,
+            reqwest::header::HeaderValue::from_static("https://localhost/evil.pdf"),
+        );
+        let next = interpret_hop(reqwest::StatusCode::FOUND, &local_headers)
+            .expect("the hop decision accepts the redirect");
+        let err = run(validate_public_https(&next.expect("a redirect target")))
+            .expect_err("localhost must fail re-validation");
+        assert!(err.contains("private"), "unexpected error: {err}");
     }
 
     #[test]

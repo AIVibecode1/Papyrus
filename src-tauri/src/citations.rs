@@ -193,11 +193,16 @@ async fn fetch_citations_impl(ids: Vec<String>) -> HashMap<String, u32> {
         }
     }
 
-    let missing: Vec<String> = ids
+    let mut missing: Vec<String> = ids
         .iter()
         .filter(|id| !result.contains_key(*id))
         .cloned()
         .collect();
+    // Only arXiv-shaped ids can be resolved by the batch endpoint: S2
+    // papers (s2:...) already carry citationCount in the search payload,
+    // and sending "ARXIV:s2:..." would waste a request that returns
+    // nothing.
+    missing.retain(|id| !id.starts_with("s2:"));
     if missing.is_empty() {
         return result;
     }

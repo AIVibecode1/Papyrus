@@ -188,7 +188,13 @@ export const usePapersStore = create<PapersState>((set, get) => ({
     if (seeded.length > 0) {
       set((s) => ({ citations: { ...s.citations, ...Object.fromEntries(seeded) } }));
     }
-    void fetchCitations(ids).then((counts) => {
+    // Only batch-fetch ids whose counts are still unknown: seeded S2
+    // papers need no extra request (the batch cannot resolve s2: ids
+    // anyway).
+    const known = new Set(Object.keys(get().citations));
+    const needed = ids.filter((id) => !known.has(id));
+    if (needed.length === 0) return;
+    void fetchCitations(needed).then((counts) => {
       const entries = Object.entries(counts);
       if (entries.length === 0) return;
       set((s) => ({ citations: { ...s.citations, ...Object.fromEntries(entries) } }));
