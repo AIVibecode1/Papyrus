@@ -19,6 +19,47 @@ Rules:
 
 ---
 
+## v1.0.5 - 2026-08-04
+
+Status: installers built, not yet published on GitHub.
+Built from: (filled after the release commit)
+Quality gates: 208 frontend tests, 84 Rust tests, clippy, rustfmt, ESLint,
+Prettier, strict typecheck, release-integrity checker, CI on Windows and
+macOS.
+
+Bullet points for the GitHub release description:
+
+- "Today's picks" strip: a quick look at the five newest papers in your
+  field above the feed, dismissible for the session, never citation-based
+- Clearer paper actions: Read is now the primary action, Explain is
+  secondary, and the external PDF is a quiet link; every card shows its
+  provenance (arXiv or Scholar) and flags when the summary is a TLDR
+  instead of an abstract
+- Reader context row: the active mode (Walkthrough or Ask), live section
+  progress, and the selected passage are always visible, in English and
+  Arabic
+- Opening a paper is faster: the PDF appears right away and the whole-
+  paper text is extracted only when you start the Walkthrough or Ask
+  (previously every open parsed the PDF twice)
+- Fixed: a fresh install opened with the PDF pane squeezed to 30% width
+  (the intended 62% default now applies until you drag the split)
+- AI streaming is safer: stopping one explanation can never cancel
+  another running one, and citation counts expire after 7 days even when
+  the app stays open for weeks
+- PDF downloads are hardened: the destination is validated and pinned
+  against DNS tricks, redirects are re-checked at every hop, oversized
+  files are refused while downloading, and the cache uses collision-free
+  names
+- Settings got clearer: fields validate inline with Arabic-friendly
+  messages, test failures explain the fix (URL, key, network, model),
+  and the sections are grouped by task
+- Fixes: stale reader opens can no longer overwrite the paper you are
+  reading, favorites keep saving even when storage is full, and the
+  daily digest backfills per field so switching fields never skips the
+  backfill
+
+---
+
 ## v1.0.4 - 2026-08-03
 
 Status: installers built, not yet published on GitHub.
