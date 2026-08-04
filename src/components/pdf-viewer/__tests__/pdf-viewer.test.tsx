@@ -33,8 +33,9 @@ function mockDocument(numPages: number, behavior: PageBehavior = {}) {
 }
 
 interface PageBehavior {
-  /** Per-index render behavior; default resolves. */
-  render?: (index: number) => { promise: Promise<void> };
+  /** Per-index render behavior; default resolves. Args are the render
+   * parameters the component passed (canvas, viewport, transform). */
+  render?: (index: number, args?: unknown) => { promise: Promise<void> };
   /** Per-index viewport size; default is 100x150 at scale 1. */
   viewport?: (index: number, scale: number) => { width: number; height: number };
 }
@@ -54,7 +55,7 @@ function mockLoadingTask(numPages: number, behavior: PageBehavior = {}) {
       getPage: async (index: number) => ({
         ...fakePage,
         pageNumber: index, // used as the React key, like real pdf.js pages
-        render: () => render(index),
+        render: (args: unknown) => render(index, args),
         // pdf.js signature: getViewport({ scale }); the mock extracts it.
         getViewport: (opts: { scale: number }) => viewport(index, opts.scale),
       }),
@@ -332,6 +333,63 @@ describe("render cancellation and repaint", () => {
   // counters as signals instead of canvas.width.
   const canvasWidthAttr = () =>
     Number(document.querySelector("canvas")?.getAttribute("width") ?? 0);
+
+  it("scales the canvas backing store on HiDPI displays", async () => {
+    // A HiDPI screen (dpr 2) must get a dpr-scaled backing store while
+    // the CSS size stays the CSS-pixel viewport, and the render call
+    // carries the matching transform. Without this the PDF is blurry.
+    Object.defineProperty(window, "devicePixelRatio", { value: 2, configurable: true });
+    let renderArgs: unknown = null;
+    mockDocument(1, {
+      render: (_i, args) => {
+        renderArgs = args;
+        return { promise: Promise.resolve() };
+      },
+    });
+    render(<PdfViewer bytes={BYTES} onSelect={onSelect} />);
+    await waitFor(() => expect(screen.getByText("250%")).toBeInTheDocument());
+    await waitFor(
+      () => {
+        const canvas = document.querySelector("canvas")!;
+        // 100 CSS px at fit scale 2.5 -> 250 CSS px, doubled on the
+        // backing store, CSS size pinned to the CSS pixels.
+        expect(canvas.width).toBe(500);
+        expect(canvas.height).toBe(750);
+        expect(canvas.style.width).toBe("250px");
+        expect(canvas.style.height).toBe("375px");
+      },
+      { timeout: 3000 },
+    );
+    expect(renderArgs).toMatchObject({ transform: [2, 0, 0, 2, 0, 0] });
+    delete (window as { devicePixelRatio?: number }).devicePixelRatio;
+  });
+
+  it("shows a Retry affordance for a page that never paints, and re-paints on click", async () => {
+    const calls: Record<number, number> = {};
+    mockDocument(1, {
+      // Always rejects: first attempt, the retry backoff, and the
+      // deferred repaint all fail, so the page ends in the failed state.
+      render: (i) => {
+        calls[i] = (calls[i] ?? 0) + 1;
+        return { promise: Promise.reject(new Error("canvas busy")) };
+      },
+    });
+    render(<PdfViewer bytes={BYTES} onSelect={onSelect} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument(), {
+      timeout: 4000,
+    });
+    const before = calls[1];
+    // The page repaint cycle flips the status between "failed" (button
+    // visible) and "painting" (button hidden), so click as soon as the
+    // button is findable instead of assuming it is stable.
+    await waitFor(() => {
+      const btn = screen.queryByRole("button", { name: "Retry" });
+      if (!btn) throw new Error("Retry button not visible yet");
+      fireEvent.click(btn);
+    });
+    // The click must drive real render attempts, not just flip UI.
+    await waitFor(() => expect(calls[1]).toBeGreaterThan(before), { timeout: 4000 });
+  });
 
   it("repaints a page whose final render attempt failed (black-page safety net)", async () => {
     const calls: Record<number, number> = {};

@@ -91,6 +91,9 @@ interface PageView {
   viewport: ReturnType<PDFPageProxy["getViewport"]>;
 }
 
+/** Surface lifecycle of one rendered page. */
+type PageStatus = "pending" | "painting" | "ready" | "failed";
+
 // ---------------------------------------------------------------------------
 // Search helpers (pure, exported for unit tests)
 // ---------------------------------------------------------------------------
@@ -225,6 +228,9 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   // animation frame so a transient WebView2 busy-canvas can never leave
   // a page black until the user manually zooms.
   const pendingRepaintRef = useRef(new Set<number>());
+  // Per-page surface state, so a page that can never paint shows a
+  // Retry affordance instead of a silent blank rectangle.
+  const [pageStatus, setPageStatus] = useState<Record<number, PageStatus>>({});
 
   const renderPage = useCallback(
     async (view: PageView, index: number, isCancelled: () => boolean) => {
@@ -255,16 +261,32 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       // race it.
       if (isCancelled()) return;
 
+      // HiDPI: the canvas backing store is scaled by devicePixelRatio,
+      // the CSS size stays the pdf.js CSS-pixel viewport, and the render
+      // transform maps the PDF onto the backing store. Without this the
+      // PDF looks blurry on any HiDPI display.
+      const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+      const cssWidth = Math.floor(viewport.width);
+      const cssHeight = Math.floor(viewport.height);
+
+      setPageStatus((s) => ({ ...s, [index]: "painting" }));
+
       // One retry after a backoff: transient failures (a canvas still
       // busy from a cancelled run) resolve on the second attempt, so a
       // single hiccup can never leave a black page.
       for (let attempt = 0; ; attempt += 1) {
         if (isCancelled()) return;
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
+        canvas.style.width = `${cssWidth}px`;
+        canvas.style.height = `${cssHeight}px`;
+        canvas.width = Math.floor(cssWidth * dpr);
+        canvas.height = Math.floor(cssHeight * dpr);
         // pdfjs v6 renders with the canvas element directly.
         try {
-          const task = page.render({ canvas, viewport });
+          const task = page.render({
+            canvas,
+            viewport,
+            transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
+          });
           renderTasksRef.current.set(index, task);
           try {
             await task.promise;
@@ -284,6 +306,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
           if (cancelled) return;
           if (attempt >= 1) {
             pendingRepaintRef.current.add(index);
+            setPageStatus((s) => ({ ...s, [index]: "failed" }));
             return;
           }
           await new Promise((r) => setTimeout(r, 100));
@@ -301,8 +324,20 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       await textLayer.render();
       // Search highlights survive scale changes only if re-applied.
       if (searchQuery.trim()) applyHighlights(layer, searchQuery);
+      setPageStatus((s) => ({ ...s, [index]: "ready" }));
     },
     [searchQuery],
+  );
+
+  /** Manual retry for a page whose final paint attempt failed. */
+  const retryPage = useCallback(
+    (index: number) => {
+      const views = viewportsRef.current;
+      if (!views[index]) return;
+      const run = renderRunRef.current;
+      void renderPage(views[index], index, () => run !== renderRunRef.current);
+    },
+    [renderPage],
   );
 
   // Monotonic id of the current render run: bumping it cancels the
@@ -322,6 +357,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
         const next = views.map(({ page }) => ({ page, viewport: page.getViewport({ scale }) }));
         viewportsRef.current = next;
         setPages(next);
+        setPageStatus({});
         await renderInQueue(
           next,
           (view, index) => renderPage(view, index, () => run !== renderRunRef.current),
@@ -736,7 +772,11 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
               ref={(el) => {
                 pageWrapRefs.current[i] = el;
               }}
-              className="relative shadow-sm"
+              /* The surface behind the canvas is always paper-white,
+                 regardless of the app theme: a PDF is a light document,
+                 and a dark wrapper would read as a black hole in
+                 dark/sepia mode while the page paints (or fails). */
+              className="relative bg-white shadow-sm"
               style={{ width: viewport.width }}
             >
               <canvas
@@ -753,6 +793,18 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
                 }}
                 className="textLayer absolute inset-0"
               />
+              {pageStatus[i] === "failed" && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white">
+                  <button
+                    type="button"
+                    onClick={() => retryPage(i)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <RotateCcw className="size-3.5" />
+                    {t("reader.retryPage")}
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
