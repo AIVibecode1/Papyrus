@@ -22,8 +22,8 @@ Rules:
 ## v1.0.8 - 2026-08-04
 
 Status: installers built, not yet published on GitHub.
-Built from: a515c4c
-Quality gates: 216 frontend tests, 84 Rust tests, clippy, rustfmt, ESLint,
+Built from: 9458b9f
+Quality gates: 218 frontend tests, 86 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, release-integrity checker, CI on Windows and
 macOS.
 
