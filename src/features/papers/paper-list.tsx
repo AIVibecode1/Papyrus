@@ -24,10 +24,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { pickPapers } from "@/lib/picks";
 import { useFavoritesStore } from "@/stores/favorites";
 import { usePapersStore, SCHOLAR_SEARCH_REQUIRED } from "@/stores/papers";
 import { useDigestStore, addDays, todayStr } from "@/stores/digest";
+import { useReaderStore } from "@/stores/reader";
+import { useUiStore } from "@/stores/ui";
 import { PaperCard } from "@/features/papers/paper-card";
+import { TodayPicks } from "@/features/papers/today-picks";
 
 function PaperSkeleton() {
   return (
@@ -78,6 +82,20 @@ export function PaperList() {
   const dayCount = (d: string) => byCategory[category]?.[d]?.length ?? 0;
   const [savedOnly, setSavedOnly] = useState(false);
   const [searchInput, setSearchInput] = useState("");
+  const openReader = useReaderStore((s) => s.open);
+  const setView = useUiStore((s) => s.setView);
+  // Per-category session dismissal for the picks strip: sessionStorage
+  // survives re-mounts but resets on the next app launch.
+  const picksKey = `papyrus-picks-dismissed-${category}`;
+  const [picksDismissed, setPicksDismissed] = useState(
+    () => sessionStorage.getItem(picksKey) === "1",
+  );
+  const picks = pickPapers(byCategory, category);
+
+  const dismissPicks = () => {
+    sessionStorage.setItem(picksKey, "1");
+    setPicksDismissed(true);
+  };
 
   // Auto-aggregator: backfill recent days for the current field so the
   // day list is populated. ensureHistory is concurrency-guarded.
@@ -220,6 +238,20 @@ export function PaperList() {
             <X className="size-3.5" />
           </Button>
         </div>
+      )}
+
+      {/* Today's picks: heuristic strip on the latest view only (hidden
+          while browsing a specific day or the saved list). */}
+      {!loading && !error && !savedOnly && !date && picks.papers.length > 0 && !picksDismissed && (
+        <TodayPicks
+          papers={picks.papers}
+          date={picks.date}
+          onDismiss={dismissPicks}
+          onOpen={(p) => {
+            void openReader(p);
+            setView("reader");
+          }}
+        />
       )}
 
       {loading && (

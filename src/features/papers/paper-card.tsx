@@ -94,9 +94,23 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
           >
             {paper.title}
           </h3>
-          <Badge variant="secondary" className="shrink-0 font-mono text-xs" dir="ltr">
+        </div>
+
+        {/* Provenance row: where the paper came from and what the summary
+            really is. Direction-safe so Arabic layout cannot reorder the
+            arXiv/Scholar ids. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="outline" className="font-mono text-[10px]" dir="ltr">
+            {paper.id.startsWith("s2:") ? t("papers.sourceScholar") : t("papers.sourceArxiv")}
+          </Badge>
+          <Badge variant="secondary" className="shrink-0 font-mono text-[10px]" dir="ltr">
             {paper.categories[0] ?? paper.id.split("v")[0]}
           </Badge>
+          {!paper.summary && paper.tldr && (
+            <Badge variant="outline" className="text-[10px]">
+              {t("papers.tldrBadge")}
+            </Badge>
+          )}
         </div>
 
         <p dir="ltr" className="font-mono text-[11px] leading-relaxed text-muted-foreground">
@@ -145,14 +159,10 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
           >
             {favorited ? <BookmarkCheck className="size-4" /> : <Bookmark className="size-4" />}
           </Button>
-          <Button variant="outline" size="sm" asChild>
-            <a href={paper.pdfUrl} target="_blank" rel="noreferrer" onClick={handleOpenPdf}>
-              <ExternalLink className="size-3.5" />
-              {t("papers.openPdf")}
-            </a>
-          </Button>
+          {/* Action hierarchy: the in-app Read workspace is the primary
+              action; Quick explanation is secondary; the external PDF is
+              a plain link so it never competes for attention. */}
           <Button
-            variant="outline"
             size="sm"
             onClick={() => {
               void openReader(paper);
@@ -163,6 +173,7 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
             {t("papers.read")}
           </Button>
           <Button
+            variant="outline"
             size="sm"
             disabled={providers.length === 0}
             title={providers.length === 0 ? t("explain.noProvider") : undefined}
@@ -171,6 +182,12 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
           >
             <Lightbulb className="size-3.5" />
             {t("papers.explain")}
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
+            <a href={paper.pdfUrl} target="_blank" rel="noreferrer" onClick={handleOpenPdf}>
+              <ExternalLink className="size-3.5" />
+              {t("papers.openPdf")}
+            </a>
           </Button>
         </div>
 

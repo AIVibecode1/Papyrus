@@ -264,6 +264,33 @@ export function ReaderView() {
         )}
       </header>
 
+      {/* Reader context row: current mode, walkthrough progress, and the
+          selected passage, so the user always knows what the AI panel is
+          working with. Compact and direction-safe. */}
+      {reader.loadStatus === "ready" && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-muted/20 px-4 py-1.5 text-[11px] text-muted-foreground">
+          <span className="font-medium text-foreground">
+            {tab === "walkthrough" ? t("reader.walkthroughTab") : t("reader.askTab")}
+          </span>
+          {tab === "walkthrough" &&
+            !walkthroughDone &&
+            reader.sectionEntries.length > 0 &&
+            reader.sections.length > 0 && (
+              <span dir="ltr">
+                {t("reader.sectionOf", {
+                  current: Math.min(
+                    reader.sectionEntries.length + (wtBusy ? 1 : 0),
+                    reader.sections.length,
+                  ),
+                  total: reader.sections.length,
+                })}
+              </span>
+            )}
+          {tab === "walkthrough" && walkthroughDone && <span>{t("reader.synthesis")}</span>}
+          {reader.selection && <span>{t("reader.passageSelected")}</span>}
+        </div>
+      )}
+
       {reader.loadStatus === "loading" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
           <Loader2 className="size-6 animate-spin" />
