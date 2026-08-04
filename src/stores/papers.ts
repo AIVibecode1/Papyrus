@@ -139,6 +139,10 @@ export const usePapersStore = create<PapersState>((set, get) => ({
   loadMore: async () => {
     const { papers, category, query, date, source, loading, loadingMore } = get();
     if (loading || loadingMore || papers.length === 0) return;
+    // Same generation token as refresh: a category/query/source/date
+    // change that lands while this request is in flight must invalidate
+    // it, so a stale page-2 can never be appended to a newer list.
+    const seq = ++requestSeq;
     set({ loadingMore: true });
     try {
       const { papers: next, fallbackNote } = await fetchPapers(
@@ -149,6 +153,12 @@ export const usePapersStore = create<PapersState>((set, get) => ({
         papers.length,
         source,
       );
+      if (seq !== requestSeq) {
+        // Stale: never touch the list, but always release the busy flag
+        // or loadMore would be stuck for the whole session.
+        set({ loadingMore: false });
+        return;
+      }
       if (fallbackNote) set({ fallbackNote });
       // Merge, dropping duplicates (arXiv can shift entries between pages).
       const known = new Set(papers.map((p) => p.id));
@@ -156,6 +166,10 @@ export const usePapersStore = create<PapersState>((set, get) => ({
       set({ papers: [...papers, ...fresh], loadingMore: false });
       get().loadCitations(fresh.map((p) => p.id));
     } catch (err) {
+      if (seq !== requestSeq) {
+        set({ loadingMore: false });
+        return;
+      }
       set({
         loadingMore: false,
         error: err instanceof Error ? err.message : String(err),

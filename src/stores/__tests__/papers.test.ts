@@ -229,6 +229,38 @@ describe("papers store", () => {
     expect(fetchPapers).toHaveBeenCalledTimes(0);
   });
 
+  it("drops a stale loadMore response after a category change", async () => {
+    let resolvePage2!: (result: FetchPapersResult) => void;
+    vi.mocked(fetchPapers)
+      .mockResolvedValueOnce({ papers: [aiPaper], fallbackNote: null })
+      // Page 2 stays in flight while the user switches category.
+      .mockReturnValueOnce(
+        new Promise((res) => {
+          resolvePage2 = res;
+        }),
+      )
+      .mockResolvedValueOnce({ papers: [lgPaper], fallbackNote: null });
+
+    usePapersStore.setState({ category: "cs.AI" });
+    await usePapersStore.getState().refresh();
+    expect(usePapersStore.getState().papers).toEqual([aiPaper]);
+
+    const loadMorePromise = usePapersStore.getState().loadMore();
+
+    // The category switch starts a fresh refresh while loadMore hangs.
+    usePapersStore.getState().setCategory("cs.LG");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(usePapersStore.getState().papers).toEqual([lgPaper]);
+
+    // The stale page-2 resolves after the switch: it must be dropped.
+    resolvePage2({ papers: [lgPaper], fallbackNote: null });
+    await loadMorePromise;
+
+    expect(usePapersStore.getState().papers).toEqual([lgPaper]);
+    // The busy flag is released even for the dropped response.
+    expect(usePapersStore.getState().loadingMore).toBe(false);
+  });
+
   it("loadCitations stores the returned counts", async () => {
     vi.mocked(fetchCitations).mockResolvedValue({ ai1: 42 });
     usePapersStore.getState().loadCitations(["ai1", "unknown"]);

@@ -30,14 +30,20 @@ vi.mock("@/lib/reader-ai", () => ({
   streamSynthesis: vi.fn(),
   streamAsk: vi.fn(),
 }));
-vi.mock("@/lib/ai", () => ({
-  CANCELLED_MARKER: "🛑PAPYRUS_CANCELLED",
-  newOperationId: () => "test-op-id",
-  stopExplanation: vi.fn(),
-}));
+vi.mock("@/lib/ai", () => {
+  let opCounter = 0;
+  return {
+    CANCELLED_MARKER: "🛑PAPYRUS_CANCELLED",
+    // Distinct ids per stream so the store's operation-id compare-and-swap
+    // semantics are exercisable (a constant id would hide clobbering bugs).
+    newOperationId: () => `op-${++opCounter}`,
+    stopExplanation: vi.fn(),
+  };
+});
 
 import { getPdfBytes } from "@/lib/pdf";
 import { extractTextFromPdf } from "@/lib/pdf-text";
+import { stopExplanation } from "@/lib/ai";
 import { streamAsk, streamSectionExplanation, streamSynthesis } from "@/lib/reader-ai";
 import { useReaderStore } from "@/stores/reader";
 
@@ -252,6 +258,62 @@ describe("reader store", () => {
 
     const s = useReaderStore.getState();
     expect(s.sectionEntries[0].status).toBe("stopped");
+  });
+
+  it("a stream started during stop's round-trip stays cancellable", async () => {
+    // stop() must not clobber the operation id of a NEW stream that
+    // started while the stop IPC was in flight (compare-and-swap): a
+    // subsequent stop must still reach the new stream's id.
+    let releaseStop!: () => void;
+    vi.mocked(stopExplanation).mockReturnValueOnce(
+      new Promise((res) => {
+        releaseStop = res;
+      }),
+    );
+    await useReaderStore.getState().open(paper);
+
+    // First stream (walkthrough): stays in flight until the backend
+    // cancels it, so stop #1 actually runs the IPC.
+    let rejectFirst!: (err: Error) => void;
+    vi.mocked(streamSectionExplanation).mockImplementationOnce(
+      () =>
+        new Promise((_res, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+    const first = useReaderStore.getState().startWalkthrough(provider, "en");
+    await new Promise((r) => setTimeout(r, 20)); // let the stream start
+
+    const stopPromise = useReaderStore.getState().stop();
+    // Second stream (an ask answer) starts while the stop IPC is pending.
+    let rejectAsk!: (err: Error) => void;
+    vi.mocked(streamAsk).mockImplementationOnce(
+      () =>
+        new Promise((_res, reject) => {
+          rejectAsk = reject;
+        }),
+    );
+    const askPromise = useReaderStore.getState().ask("And now?", provider, "en");
+    await new Promise((r) => setTimeout(r, 10));
+
+    releaseStop();
+    await stopPromise;
+    // The backend cancels the first stream.
+    rejectFirst(new Error("🛑PAPYRUS_CANCELLED"));
+    await first;
+
+    // The ask stream is still streaming: a new stop must reach ITS
+    // operation id (op-2), not a stale null left by the first stop.
+    const stop2 = useReaderStore.getState().stop();
+    await new Promise((r) => setTimeout(r, 10));
+    rejectAsk(new Error("🛑PAPYRUS_CANCELLED"));
+    await stop2;
+    await askPromise;
+
+    expect(vi.mocked(stopExplanation).mock.calls[1]?.[0]).toBe(
+      vi.mocked(streamAsk).mock.calls[0]?.[0].operationId,
+    );
+    expect(useReaderStore.getState().chat[1].status).toBe("stopped");
   });
 
   it("keeps appending chunks across multiple flushes", async () => {

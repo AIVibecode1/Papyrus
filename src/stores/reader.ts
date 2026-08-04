@@ -508,8 +508,12 @@ export const useReaderStore = create<ReaderState>((set, get) => {
 
       if (wtBusy) {
         wtGen += 1;
-        await stopExplanation(activeOperationId);
-        activeOperationId = null;
+        // Capture the id before the await: a new stream started during
+        // the IPC round-trip owns activeOperationId, and the stop must
+        // not clobber it (otherwise the new stream becomes un-cancellable).
+        const idToStop = activeOperationId;
+        await stopExplanation(idToStop);
+        if (activeOperationId === idToStop) activeOperationId = null;
         set((s) => ({
           sectionEntries: s.sectionEntries.map((e) =>
             e.status === "loading" || e.status === "streaming"
@@ -523,8 +527,9 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         }));
       } else if (chatBusy) {
         chatGen += 1;
-        await stopExplanation(activeOperationId);
-        activeOperationId = null;
+        const idToStop = activeOperationId;
+        await stopExplanation(idToStop);
+        if (activeOperationId === idToStop) activeOperationId = null;
         if (paper) {
           set((s) => {
             const list = s.chat.map((m) =>

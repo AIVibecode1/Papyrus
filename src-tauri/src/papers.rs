@@ -1,4 +1,4 @@
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -45,6 +45,12 @@ fn source_interval(source: &str) -> Duration {
 /// Per-source last-request timestamps.
 static LAST_REQUESTS: OnceLock<Mutex<std::collections::HashMap<String, Instant>>> = OnceLock::new();
 
+/// Per-source serialization locks: a caller holds its source's lock across
+/// the sleep, so concurrent fetches of one source can never fire together.
+static RATE_LIMIT_LOCKS: OnceLock<
+    Mutex<std::collections::HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+> = OnceLock::new();
+
 /// Shared HTTP client with keep-alive across commands.
 pub fn shared_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -77,14 +83,25 @@ pub struct Paper {
 /// (arXiv 3 s, Semantic Scholar 1.1 s — no cross-source blocking).
 async fn rate_limit(source: &str) {
     let interval = source_interval(source);
+    // Serialize per source: the lock is held across the sleep, so a
+    // concurrent caller cannot start (and fire) while this one is
+    // waiting — two callers can never fire together.
+    let lock = RATE_LIMIT_LOCKS
+        .get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .entry(source.to_string())
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone();
+    let _permit = lock.lock().await;
+
     let wait_for = {
-        let mut last = LAST_REQUESTS
+        let last = LAST_REQUESTS
             .get_or_init(|| Mutex::new(std::collections::HashMap::new()))
             .lock()
             .unwrap_or_else(|p| p.into_inner());
         let now = Instant::now();
         let elapsed = last.get(source).map(|t| now.duration_since(*t));
-        last.insert(source.to_string(), now);
         elapsed
             .map(|e| interval.saturating_sub(e))
             .unwrap_or_default()
@@ -92,6 +109,14 @@ async fn rate_limit(source: &str) {
     if !wait_for.is_zero() {
         tokio::time::sleep(wait_for).await;
     }
+    // The timestamp is recorded AFTER the sleep: it marks the moment the
+    // request actually fires, so the next caller waits the full interval
+    // from it.
+    LAST_REQUESTS
+        .get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .insert(source.to_string(), Instant::now());
 }
 
 /// Builds the arXiv API query URL for a category browse, a free-text
@@ -1181,6 +1206,56 @@ mod tests {
         );
         // Unknown sources get the arXiv interval (never zero).
         assert_eq!(source_interval("openalex"), Duration::from_secs(3));
+    }
+
+    #[test]
+    fn concurrent_rate_limits_serialize_per_source() {
+        // Two simultaneous callers must fire interval-apart, never
+        // together (the old code recorded the timestamp before sleeping,
+        // so both callers computed the same wait and fired at once).
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("runtime");
+        let start = Instant::now();
+        rt.block_on(async {
+            let a = tokio::spawn(rate_limit("semanticscholar"));
+            let b = tokio::spawn(rate_limit("semanticscholar"));
+            a.await.expect("first rate limit task panicked");
+            b.await.expect("second rate limit task panicked");
+        });
+        // The second caller must fire a full interval after the first
+        // (~1.1s total). The old code let both fire together (~0s).
+        assert!(
+            start.elapsed() >= Duration::from_millis(1000),
+            "concurrent rate limits fired together: {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn rate_limit_isolation_between_sources() {
+        // Different sources must not block each other (no cross-source
+        // serialization): the second source fires immediately even while
+        // the first is sleeping.
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("runtime");
+        let start = Instant::now();
+        rt.block_on(async {
+            let a = tokio::spawn(rate_limit("arxiv"));
+            let b = tokio::spawn(rate_limit("semanticscholar"));
+            a.await.expect("arxiv rate limit task panicked");
+            b.await.expect("scholar rate limit task panicked");
+        });
+        // arXiv sleeps ~3s, scholar ~1.1s; the total must not be ~4.1s
+        // (serialized across sources) but ~3s (parallel).
+        assert!(
+            start.elapsed() < Duration::from_millis(3800),
+            "sources were serialized against each other: {:?}",
+            start.elapsed()
+        );
     }
 
     #[test]
