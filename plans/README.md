@@ -6,21 +6,25 @@ plans begin at 014; execute them in the order below unless dependencies say
 otherwise. These plans are advisory: do not modify source unless an executor
 is explicitly asked to implement a selected plan.
 
+**All plans 014-024 were implemented on 2026-08-04 and shipped in v1.0.5**
+(commit `fd3d842` and its plan commits). This index is kept as audit
+history; the next audit round starts a fresh plan set.
+
 ## Execution order and status
 
 | Plan | Title                                                              | Priority |  Effort | Depends on      | Status |
 | ---- | ------------------------------------------------------------------ | -------: | ------: | --------------- | ------ |
-| 014  | Make PDF fetching and caching robust against URL and cache attacks |       P1 |       M | none            | TODO   |
-| 015  | Harden reader rendering and preserve the user's split              |       P1 |       M | none            | TODO   |
-| 016  | Add a source adapter boundary for open-access discovery            |       P2 | M spike | none            | TODO   |
-| 017  | Restore release-log integrity and automate version checks          |       P1 |       S | none            | TODO   |
-| 018  | Make AI stream lifecycle and provider contracts explicit           |       P2 |       M | none            | TODO   |
-| 019  | Prevent stale reader opens and persistence failures                |       P1 |       M | none            | TODO   |
-| 020  | Reduce PDF startup cost and test the reader boundary               |       P2 |       L | 019 recommended | TODO   |
-| 021  | Productize paper discovery and make provenance visible             |       P2 |       M | none            | TODO   |
-| 022  | Make settings errors and mixed RTL content explicit                |       P1 |       M | none            | TODO   |
-| 023  | Isolate AI cancellation and expire citation memory                 |       P1 |       M | 018 recommended | TODO   |
-| 024  | Reconcile release version metadata across all manifests            |       P1 |       S | 017 recommended | TODO   |
+| 014  | Make PDF fetching and caching robust against URL and cache attacks |       P1 |       M | none            | DONE   |
+| 015  | Harden reader rendering and preserve the user's split              |       P1 |       M | none            | DONE   |
+| 016  | Add a source adapter boundary for open-access discovery            |       P2 | M spike | none            | DONE   |
+| 017  | Restore release-log integrity and automate version checks          |       P1 |       S | none            | DONE   |
+| 018  | Make AI stream lifecycle and provider contracts explicit           |       P2 |       M | none            | DONE   |
+| 019  | Prevent stale reader opens and persistence failures                |       P1 |       M | none            | DONE   |
+| 020  | Reduce PDF startup cost and test the reader boundary               |       P2 |       L | 019 recommended | DONE   |
+| 021  | Productize paper discovery and make provenance visible             |       P2 |       M | none            | DONE   |
+| 022  | Make settings errors and mixed RTL content explicit                |       P1 |       M | none            | DONE   |
+| 023  | Isolate AI cancellation and expire citation memory                 |       P1 |       M | 018 recommended | DONE   |
+| 024  | Reconcile release version metadata across all manifests            |       P1 |       S | 017 recommended | DONE   |
 
 Historical plans 001-013 remain in this directory as completed audit history;
 they are not duplicated or rewritten here.
