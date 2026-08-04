@@ -21,7 +21,7 @@ Rules:
 
 ## v1.0.5 - 2026-08-04
 
-Status: installers built, not yet published on GitHub.
+Status: published on GitHub (release v1.0.5, installers attached).
 Built from: fd3d842
 Quality gates: 208 frontend tests, 84 Rust tests, clippy, rustfmt, ESLint,
 Prettier, strict typecheck, release-integrity checker, CI on Windows and
