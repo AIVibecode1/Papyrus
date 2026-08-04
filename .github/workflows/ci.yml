@@ -48,3 +48,13 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # tauri-action only uploads when a tag/release is configured; without
+      # one it builds and discards the bundles. Upload them explicitly so
+      # every push exposes fresh installers as run artifacts (macOS dmg +
+      # .app, Windows msi + nsis).
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: papyrus-${{ matrix.platform }}
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: warn

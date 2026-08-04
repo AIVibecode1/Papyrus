@@ -1,0 +1,49 @@
+# Builds signed-free installers for Windows and macOS on every version tag
+# (v1.0.10, v1.1.0, ...) and attaches them to a DRAFT GitHub release. The
+# release is created by the first job to finish; the others add their
+# bundles to it. Publish the draft from the Releases page when ready.
+#
+# To ship a version:
+#   git tag vX.Y.Z && git push origin vX.Y.Z
+# The tag MUST match the app version in src-tauri/tauri.conf.json.
+#
+# NOTE: macOS installers are unsigned and not notarized (no Apple
+# Developer account configured), so macOS Gatekeeper will block the first
+# open: right-click the app -> Open, or run
+# `xattr -dr com.apple.quarantine /Applications/Papyrus.app`.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ""
+          - platform: macos-latest
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Papyrus ${{ github.ref_name }}"
+          releaseBody: "Installers for ${{ github.ref_name }}. See release.md for the full changelog."
+          releaseDraft: true
+          prerelease: false

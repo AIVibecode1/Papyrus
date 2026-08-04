@@ -59,6 +59,12 @@ per-page surface state; Settings gained guided setup and test memory.
 - Stream errors in the reader UI are redacted as defense in depth
   (truncateError + redactSecrets) so secret-shaped text can never reach
   the screen even if an upstream path regresses.
+- CI now uploads the installers it builds: every push exposes fresh
+  Windows (msi + nsis) and macOS (dmg + app) bundles as workflow-run
+  artifacts (tauri-action discards them unless a release is configured),
+  and pushing a `vX.Y.Z` tag builds both platforms and attaches the
+  bundles to a draft GitHub release. macOS builds are unsigned, so the
+  first open needs right-click -> Open (or `xattr -dr com.apple.quarantine`).
 - The three correctness fixes from v1.0.9 (rate limiter serialization,
   load-more generation guard, stop compare-and-swap) were re-verified
   against the acceptance checklist with their test suites.
