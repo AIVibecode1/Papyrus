@@ -229,25 +229,49 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       const wrap = pageWrapRefs.current[index];
       if (!canvas || !layer || !wrap) return;
 
-      canvas.width = Math.floor(viewport.width);
-      canvas.height = Math.floor(viewport.height);
-      // pdfjs v6 renders with the canvas element directly.
-      try {
-        const task = page.render({ canvas, viewport });
-        renderTasksRef.current.set(index, task);
+      // Serialize renders per canvas: a task cancelled by a newer run
+      // (zoom, resize, re-fit) may still be winding down in the pdf.js
+      // worker. Starting a new render() before it settles makes pdf.js
+      // reject with its "same canvas" error, and that page used to be
+      // skipped forever, staying black. Wait for the old task first.
+      const previous = renderTasksRef.current.get(index);
+      if (previous) {
+        await previous.promise.catch(() => {});
+        renderTasksRef.current.delete(index);
+      }
+
+      // One retry after a frame: transient failures (a canvas still busy
+      // from a cancelled run) resolve on the second attempt, so a single
+      // hiccup can never leave a black page.
+      for (let attempt = 0; ; attempt += 1) {
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        // pdfjs v6 renders with the canvas element directly.
         try {
-          await task.promise;
-        } finally {
-          renderTasksRef.current.delete(index);
+          const task = page.render({ canvas, viewport });
+          renderTasksRef.current.set(index, task);
+          try {
+            await task.promise;
+          } finally {
+            renderTasksRef.current.delete(index);
+          }
+          break;
+        } catch (err) {
+          const cancelled =
+            err instanceof Error &&
+            (err.name === "RenderingCancelledException" ||
+              /rendering cancelled/i.test(err.message));
+          // Cancelled by a newer run: expected, the new run repaints this
+          // canvas. Anything else: retry once, then skip the page and
+          // keep painting the rest; a single bad page must never black
+          // out the whole PDF.
+          if (cancelled) return;
+          if (attempt >= 1) {
+            console.warn("pdf page render failed:", err);
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 16));
         }
-      } catch (err) {
-        // Cancelled by a newer run: expected, the new run repaints this
-        // canvas. Anything else: skip this page and keep painting the
-        // rest; a single bad page must never black out the whole PDF.
-        if (!(err instanceof Error) || !err.message.toLowerCase().includes("cancel")) {
-          console.warn("pdf page render failed:", err);
-        }
-        return;
       }
 
       layer.innerHTML = "";
@@ -294,7 +318,10 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       // A newer effect cycle started: cancel any run still in flight.
       renderRunRef.current += 1;
       renderTasksRef.current.forEach((task) => task.cancel());
-      renderTasksRef.current.clear();
+      // Keep the entries: renderPage awaits a cancelled task before
+      // re-rendering its canvas, so a fresh run never races a
+      // still-winding-down render (which pdf.js rejects, and the page
+      // used to stay black).
     };
   }, [scale, repaintTick]);
 

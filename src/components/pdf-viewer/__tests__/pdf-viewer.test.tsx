@@ -291,6 +291,26 @@ describe("render state transitions", () => {
     expect(canvases.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("retries a transient render failure so the page never stays black", async () => {
+    const calls: Record<number, number> = {};
+    mockDocument(2, {
+      // Page 2 fails once with a transient error, then succeeds: the
+      // viewer must retry it (the old behaviour skipped the page and
+      // left its canvas black forever).
+      render: (i) => {
+        calls[i] = (calls[i] ?? 0) + 1;
+        if (calls[i] === 1) return { promise: Promise.reject(new Error("canvas busy")) };
+        return { promise: Promise.resolve() };
+      },
+    });
+    render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+    await waitFor(() => expect(screen.getByText("1 / 2")).toBeInTheDocument());
+    await waitFor(() => expect(calls[2]).toBeGreaterThan(1));
+    const canvases = Array.from(document.querySelectorAll("canvas"));
+    expect(canvases[0]?.width).toBeGreaterThan(0);
+    expect(canvases[1]?.width).toBeGreaterThan(0);
+  });
+
   it("tolerates a zero-size page viewport", async () => {
     mockDocument(3, {
       viewport: (i, scale) =>

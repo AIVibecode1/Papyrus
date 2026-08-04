@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Markdown, normalizeMathDelimiters } from "@/components/markdown/markdown";
+import "@/i18n";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 
@@ -155,11 +156,31 @@ describe("Markdown renderer", () => {
     expect(out).toContain("$L = 1$");
   });
 
-  it("gives every paragraph auto direction so English titles do not flip in Arabic answers", () => {
+  it("keeps prose right-aligned RTL in Arabic even when it starts with an English word", async () => {
+    const { default: i18n } = await import("@/i18n");
+    await i18n.changeLanguage("ar");
     const { container } = render(
-      <Markdown>{"هذه ورقة مهمة بعنوان (Attention Is All You Need) وتشرح المحولات."}</Markdown>,
+      <Markdown>{"Attention Is All You Need is an important paper about transformers."}</Markdown>,
     );
-    const p = container.querySelector("p");
-    expect(p).toHaveAttribute("dir", "auto");
+    // dir="auto" used to flip the whole line to LTR because the first
+    // strong character is English; the UI language must win instead.
+    expect(container.querySelector("p")).toHaveAttribute("dir", "rtl");
+    await i18n.changeLanguage("en");
+  });
+
+  it("keeps prose left-aligned LTR in English", async () => {
+    const { default: i18n } = await import("@/i18n");
+    await i18n.changeLanguage("en");
+    const { container } = render(<Markdown>{"An English paragraph about transformers."}</Markdown>);
+    expect(container.querySelector("p")).toHaveAttribute("dir", "ltr");
+  });
+
+  it("keeps equations LTR-isolated inside Arabic prose", async () => {
+    const { default: i18n } = await import("@/i18n");
+    await i18n.changeLanguage("ar");
+    const { container } = render(<Markdown>{"الطاقة تعطى بالمعادلة $E = mc^2$."}</Markdown>);
+    expect(container.querySelector("p")).toHaveAttribute("dir", "rtl");
+    expect(container.querySelector(".katex")).toBeInTheDocument();
+    await i18n.changeLanguage("en");
   });
 });

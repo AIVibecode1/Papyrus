@@ -550,8 +550,12 @@ export function ReaderView() {
                             key={m.id}
                             className={cn(
                               "max-w-[95%] rounded-lg p-3",
+                              // The user's question sits on the reading
+                              // start side: right in LTR, and right again
+                              // in RTL (self-end would flip it to the
+                              // left in Arabic).
                               m.role === "user"
-                                ? "self-end bg-primary/10"
+                                ? "self-end bg-primary/10 rtl:self-start"
                                 : "self-start border bg-card",
                             )}
                           >

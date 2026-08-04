@@ -19,6 +19,30 @@ Rules:
 
 ---
 
+## v1.0.7 - 2026-08-04
+
+Status: installers built, not yet published on GitHub.
+Built from: (filled after the release commit)
+Quality gates: 212 frontend tests, 84 Rust tests, clippy, rustfmt, ESLint,
+Prettier, strict typecheck, release-integrity checker, CI on Windows and
+macOS.
+
+Bullet points for the GitHub release description:
+
+- PDF pages no longer turn black after resizing the window or dragging
+  the split: page renders are now serialized per canvas (a cancelled
+  render is fully finished before the next one starts), and a transient
+  render failure is retried instead of leaving the page blank
+- In Arabic, your question in the Ask chat now appears on the right like
+  the answer (it used to sit on the left)
+- Arabic AI answers stay right-aligned even when a line starts with an
+  English word; equations keep their own correct left-to-right layout
+- The prompts that shape every explanation (English and Arabic) are
+  documented in the README: they live in src-tauri/prompts.json and can
+  be edited without touching code
+
+---
+
 ## v1.0.6 - 2026-08-04
 
 Status: installers built, not yet published on GitHub.

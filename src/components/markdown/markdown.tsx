@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import { useTranslation } from "react-i18next";
 import "katex/dist/katex.min.css";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -50,6 +51,13 @@ export const Markdown = memo(function Markdown({ children, className }: Markdown
     }
   };
 
+  // The UI language decides the base direction of prose: in Arabic every
+  // paragraph stays right-aligned RTL even when it starts with an English
+  // word (dir="auto" would flip the whole line to LTR). Code, tables and
+  // equations keep their own LTR isolation below.
+  const { i18n } = useTranslation();
+  const proseDir = (i18n.language ?? "en").startsWith("ar") ? "rtl" : "ltr";
+
   const components: Components = {
     a: ({ href, children }) => (
       <a
@@ -63,36 +71,34 @@ export const Markdown = memo(function Markdown({ children, className }: Markdown
       </a>
     ),
     h1: ({ children }) => (
-      <h1 dir="auto" className="mb-2 mt-4 text-lg font-bold tracking-tight first:mt-0">
+      <h1 dir={proseDir} className="mb-2 mt-4 text-lg font-bold tracking-tight first:mt-0">
         {children}
       </h1>
     ),
     h2: ({ children }) => (
-      <h2 dir="auto" className="mb-2 mt-4 text-base font-bold tracking-tight first:mt-0">
+      <h2 dir={proseDir} className="mb-2 mt-4 text-base font-bold tracking-tight first:mt-0">
         {children}
       </h2>
     ),
     h3: ({ children }) => (
-      <h3 dir="auto" className="mb-1.5 mt-3 text-sm font-bold tracking-tight first:mt-0">
+      <h3 dir={proseDir} className="mb-1.5 mt-3 text-sm font-bold tracking-tight first:mt-0">
         {children}
       </h3>
     ),
     h4: ({ children }) => (
-      <h4 dir="auto" className="mb-1 mt-3 text-sm font-semibold first:mt-0">
+      <h4 dir={proseDir} className="mb-1 mt-3 text-sm font-semibold first:mt-0">
         {children}
       </h4>
     ),
     p: ({ children }) => (
-      // dir="auto": each paragraph follows its own dominant script, so an
-      // English paper title inside an Arabic answer is not bidi-flipped.
-      <p dir="auto" className="my-2 leading-relaxed first:mt-0 last:mb-0">
+      <p dir={proseDir} className="my-2 leading-relaxed first:mt-0 last:mb-0">
         {children}
       </p>
     ),
     ul: ({ children }) => <ul className="my-2 list-disc space-y-1 ps-5">{children}</ul>,
     ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 ps-5">{children}</ol>,
     li: ({ children }) => (
-      <li dir="auto" className="leading-relaxed">
+      <li dir={proseDir} className="leading-relaxed">
         {children}
       </li>
     ),
@@ -100,7 +106,7 @@ export const Markdown = memo(function Markdown({ children, className }: Markdown
     em: ({ children }) => <em>{children}</em>,
     blockquote: ({ children }) => (
       <blockquote
-        dir="auto"
+        dir={proseDir}
         className="my-2 border-s-2 border-primary/40 ps-3 text-muted-foreground"
       >
         {children}

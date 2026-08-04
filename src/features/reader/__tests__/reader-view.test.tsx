@@ -4,6 +4,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import "@/i18n";
+import i18n from "@/i18n";
 import { ReaderView } from "@/features/reader/reader-view";
 import type { Paper } from "@/lib/types";
 import { useReaderStore } from "@/stores/reader";
@@ -64,8 +65,11 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks();
+  // Tests may switch the UI language; always restore English so the
+  // next test's English labels resolve.
+  await i18n.changeLanguage("en");
 });
 
 import { clampSplit } from "@/features/reader/reader-view";
@@ -86,6 +90,44 @@ describe("ReaderView", () => {
     const back = screen.getByRole("button", { name: "Back to papers" });
     fireEvent.click(back);
     expect(useUiStore.getState().view).toBe("papers");
+  });
+
+  it("keeps the user's question on the right in Arabic like the answer", async () => {
+    await i18n.changeLanguage("ar");
+    useReaderStore.setState({
+      chat: [
+        {
+          id: 1,
+          role: "user",
+          text: "ما هو المشفر؟",
+          status: "done",
+          error: null,
+          selection: null,
+        },
+        {
+          id: 2,
+          role: "assistant",
+          text: "المشفر هو مكوّن يحوّل المدخلات إلى تمثيلات.",
+          status: "done",
+          error: null,
+          selection: null,
+        },
+      ],
+    });
+    render(<ReaderView />);
+    // The chat lives in the Ask tab.
+    fireEvent.click(screen.getByRole("button", { name: "اسأل" }));
+
+    const question = await screen.findByText("ما هو المشفر؟");
+    // The Markdown mock wraps the text; the bubble is its parent.
+    const questionBubble = question.parentElement;
+    const answer = screen.getByText("المشفر هو مكوّن يحوّل المدخلات إلى تمثيلات.");
+    const answerBubble = answer.parentElement;
+    // In Arabic the user bubble aligns right (self-end would put it
+    // left); the answer keeps its current right-side position.
+    expect(questionBubble?.className).toContain("rtl:self-start");
+    expect(questionBubble?.className).toContain("self-end");
+    expect(answerBubble?.className).toContain("self-start");
   });
 
   it("shows the selection chip with copy and clear actions", async () => {

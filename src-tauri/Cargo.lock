@@ -2616,7 +2616,7 @@ dependencies = [
 
 [[package]]
 name = "papyrus"
-version = "1.0.6"
+version = "1.0.7"
 dependencies = [
  "futures-util",
  "keyring",
