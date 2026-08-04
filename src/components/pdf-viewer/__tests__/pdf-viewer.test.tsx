@@ -325,3 +325,87 @@ describe("render state transitions", () => {
     expect(canvases[2]?.width).toBeGreaterThan(0);
   });
 });
+
+describe("render cancellation and repaint", () => {
+  // jsdom canvases default to 300x150 and never paint, so the tests use
+  // the width ATTRIBUTE (written only by the render path) and render-call
+  // counters as signals instead of canvas.width.
+  const canvasWidthAttr = () =>
+    Number(document.querySelector("canvas")?.getAttribute("width") ?? 0);
+
+  it("repaints a page whose final render attempt failed (black-page safety net)", async () => {
+    const calls: Record<number, number> = {};
+    mockDocument(1, {
+      // Page 1 fails twice (the retry backoff is too short for the mock),
+      // then succeeds on the deferred repaint: the page must end painted.
+      render: (i) => {
+        calls[i] = (calls[i] ?? 0) + 1;
+        if (calls[i] <= 2) return { promise: Promise.reject(new Error("canvas busy")) };
+        return { promise: Promise.resolve() };
+      },
+    });
+    render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+    await waitFor(() => expect(screen.getByText("1 / 1")).toBeInTheDocument());
+    // The third attempt (deferred repaint) must actually run and paint.
+    await waitFor(() => expect(calls[1]).toBeGreaterThanOrEqual(3), { timeout: 3000 });
+    await waitFor(() => expect(canvasWidthAttr()).toBe(250), { timeout: 3000 });
+  });
+
+  it("does not let a never-settling cancelled task block the fresh run", async () => {
+    // Simulates a task whose promise never settles (worker destroyed on
+    // reload). The old code kept the entry and awaited it forever, so the
+    // fresh run could never paint the page. The cleanup must drop the
+    // entry so the next run paints immediately.
+    let first = true;
+    let renders = 0;
+    mockDocument(1, {
+      render: () => {
+        renders += 1;
+        if (first) {
+          first = false;
+          return { promise: new Promise(() => {}), cancel: () => {} };
+        }
+        return { promise: Promise.resolve() };
+      },
+    });
+    render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+    await waitFor(() => expect(screen.getByText("1 / 1")).toBeInTheDocument());
+    // Wait for the first (stuck) render to start, then force a new run.
+    await new Promise((r) => setTimeout(r, 250));
+    fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
+    await waitFor(() => expect(renders).toBeGreaterThanOrEqual(2), { timeout: 3000 });
+    // The fresh run paints the new scale: 250% -> 230% (100*2.3 floors to
+    // 229 due to float precision, so assert the new-scale range).
+    await waitFor(() => expect(canvasWidthAttr()).toBeGreaterThanOrEqual(229), { timeout: 3000 });
+  });
+
+  it("paints the new scale after a run is cancelled mid-render", async () => {
+    let renders = 0;
+    let rejectFirst: ((err: Error) => void) | null = null;
+    mockDocument(1, {
+      render: () => {
+        renders += 1;
+        if (renders === 1) {
+          // The first run's render stays in flight until cancelled.
+          return {
+            promise: new Promise((_res, rej) => {
+              rejectFirst = rej;
+            }),
+            cancel: () => rejectFirst?.(new Error("RenderingCancelledException")),
+          };
+        }
+        return { promise: Promise.resolve() };
+      },
+    });
+    render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+    await waitFor(() => expect(screen.getByText("1 / 1")).toBeInTheDocument());
+    await new Promise((r) => setTimeout(r, 250));
+    // A zoom change cancels the in-flight run and starts a fresh one at
+    // the new scale; the stale run must not leave the canvas black.
+    fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
+    await waitFor(() => expect(renders).toBeGreaterThanOrEqual(2), { timeout: 3000 });
+    // 250% -> 230% (floors to 229 due to float precision): the fresh run
+    // paints the new scale.
+    await waitFor(() => expect(canvasWidthAttr()).toBeGreaterThanOrEqual(229), { timeout: 3000 });
+  });
+});

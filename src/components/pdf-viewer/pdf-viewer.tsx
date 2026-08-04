@@ -221,9 +221,14 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   // canvas whose previous render is still running (that throws, and one
   // thrown page used to kill the whole queue, leaving the rest black).
   const renderTasksRef = useRef(new Map<number, pdfjsLib.RenderTask>());
+  // Pages whose final render attempt failed: re-enqueued on the next
+  // animation frame so a transient WebView2 busy-canvas can never leave
+  // a page black until the user manually zooms.
+  const pendingRepaintRef = useRef(new Set<number>());
 
   const renderPage = useCallback(
-    async (page: PDFPageProxy, index: number, viewport: PageView["viewport"]) => {
+    async (view: PageView, index: number, isCancelled: () => boolean) => {
+      const { page, viewport } = view;
       const canvas = canvasRefs.current[index];
       const layer = layerRefs.current[index];
       const wrap = pageWrapRefs.current[index];
@@ -233,17 +238,28 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       // (zoom, resize, re-fit) may still be winding down in the pdf.js
       // worker. Starting a new render() before it settles makes pdf.js
       // reject with its "same canvas" error, and that page used to be
-      // skipped forever, staying black. Wait for the old task first.
+      // skipped forever, staying black. Wait for the old task first —
+      // but bound the wait: a cancelled task whose promise never settles
+      // (worker destroyed on reload) must not stall this page forever.
       const previous = renderTasksRef.current.get(index);
       if (previous) {
-        await previous.promise.catch(() => {});
+        await Promise.race([
+          previous.promise.catch(() => {}),
+          new Promise((r) => setTimeout(r, 500)),
+        ]);
         renderTasksRef.current.delete(index);
       }
+      // The run may have been cancelled while we waited. A stale run
+      // must never touch the canvas: setting canvas.width clears it to
+      // black synchronously, and a later repaint of the same canvas can
+      // race it.
+      if (isCancelled()) return;
 
-      // One retry after a frame: transient failures (a canvas still busy
-      // from a cancelled run) resolve on the second attempt, so a single
-      // hiccup can never leave a black page.
+      // One retry after a backoff: transient failures (a canvas still
+      // busy from a cancelled run) resolve on the second attempt, so a
+      // single hiccup can never leave a black page.
       for (let attempt = 0; ; attempt += 1) {
+        if (isCancelled()) return;
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
         // pdfjs v6 renders with the canvas element directly.
@@ -262,15 +278,15 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
             (err.name === "RenderingCancelledException" ||
               /rendering cancelled/i.test(err.message));
           // Cancelled by a newer run: expected, the new run repaints this
-          // canvas. Anything else: retry once, then skip the page and
-          // keep painting the rest; a single bad page must never black
-          // out the whole PDF.
+          // canvas. Anything else: retry once with a backoff long enough
+          // for WebView2 to actually free the canvas, then hand the page
+          // to the repaint queue instead of abandoning it black.
           if (cancelled) return;
           if (attempt >= 1) {
-            console.warn("pdf page render failed:", err);
+            pendingRepaintRef.current.add(index);
             return;
           }
-          await new Promise((r) => setTimeout(r, 16));
+          await new Promise((r) => setTimeout(r, 100));
         }
       }
 
@@ -308,20 +324,43 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
         setPages(next);
         await renderInQueue(
           next,
-          (view, index) => renderPage(view.page, index, view.viewport),
+          (view, index) => renderPage(view, index, () => run !== renderRunRef.current),
           () => run !== renderRunRef.current,
         );
+        // Pages whose final render attempt failed are repainted on the
+        // next frame at the current scale, so a transient busy-canvas
+        // can never leave them black until the user re-zooms.
+        if (run === renderRunRef.current && pendingRepaintRef.current.size > 0) {
+          const retry = [...pendingRepaintRef.current];
+          pendingRepaintRef.current.clear();
+          requestAnimationFrame(() => {
+            if (run !== renderRunRef.current) return;
+            void (async () => {
+              for (const i of retry) {
+                if (run !== renderRunRef.current) return;
+                if (i >= next.length) continue;
+                try {
+                  await renderPage(next[i], i, () => run !== renderRunRef.current);
+                } catch {
+                  // contained: one page must never take down the run
+                }
+              }
+            })();
+          });
+        }
       })();
     }, 150);
     return () => {
       clearTimeout(timer);
       // A newer effect cycle started: cancel any run still in flight.
       renderRunRef.current += 1;
+      // Cancel the in-flight tasks and DROP the entries: a cancelled
+      // task's promise may never settle (worker destroyed on reload),
+      // and a new run must not block on such a zombie. The bounded wait
+      // in renderPage plus the retry/repaint queue absorb any residual
+      // "same canvas" rejection from a still-winding-down render.
       renderTasksRef.current.forEach((task) => task.cancel());
-      // Keep the entries: renderPage awaits a cancelled task before
-      // re-rendering its canvas, so a fresh run never races a
-      // still-winding-down render (which pdf.js rejects, and the page
-      // used to stay black).
+      renderTasksRef.current.clear();
     };
   }, [scale, repaintTick]);
 
