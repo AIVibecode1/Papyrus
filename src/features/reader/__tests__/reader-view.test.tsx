@@ -102,6 +102,22 @@ describe("ReaderView", () => {
     expect(useUiStore.getState().view).toBe("settings");
   });
 
+  it("redacts secret-shaped text from stream errors before showing them", () => {
+    useReaderStore.setState({
+      sectionEntries: [
+        {
+          text: "",
+          status: "error",
+          error: "HTTP 401: sk-abc12345XYZ__more9 was rejected",
+        },
+      ],
+    });
+    render(<ReaderView />);
+    // The error is shown, but the key-shaped run never reaches the DOM.
+    expect(screen.getByText(/HTTP 401/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("sk-abc12345XYZ__more9");
+  });
+
   it("keeps the user's question on the right in Arabic like the answer", async () => {
     await i18n.changeLanguage("ar");
     useReaderStore.setState({

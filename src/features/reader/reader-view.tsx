@@ -23,6 +23,7 @@ import { useReaderStore, type ChatMessage, type SectionEntry } from "@/stores/re
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
+import { redactSecrets, truncateError } from "@/lib/provider-errors";
 
 type Tab = "walkthrough" | "ask";
 
@@ -54,7 +55,10 @@ function isRowLayout(): boolean {
 function StatusRow({ status, error }: { status: string; error: string | null }) {
   const { t } = useTranslation();
   if (status === "error" && error) {
-    return <p className="mt-2 text-xs text-destructive">{error}</p>;
+    // Defense in depth: upstream errors are already redacted at the
+    // source, but no secret-shaped text may ever reach the screen even
+    // if a future path forgets.
+    return <p className="mt-2 text-xs text-destructive">{truncateError(redactSecrets(error))}</p>;
   }
   if (status === "stopped") {
     return <p className="mt-2 text-xs text-muted-foreground">{t("explain.stopped")}</p>;
