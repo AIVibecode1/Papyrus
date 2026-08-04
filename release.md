@@ -35,10 +35,11 @@ Bullet points for the GitHub release description:
   equations, and natural Arabic with English terms in parentheses. The
   prompts live in src-tauri/prompts.json and can be edited without any
   code changes
-- New Sort control above the paper list: order the results by Most
-  cited or Newest, so searching a topic can surface the original or
-  most influential paper instead of only the newest hits (works for
-  arXiv search, Scholar search and day browsing, in English and Arabic)
+- New Sort control inside the search box: pick Newest or Most cited
+  from a dropdown at the end of the search field, so searching a topic
+  can surface the original or most influential paper instead of only
+  the newest hits (works for arXiv search, Scholar search and day
+  browsing, in English and Arabic)
 
 ---
 

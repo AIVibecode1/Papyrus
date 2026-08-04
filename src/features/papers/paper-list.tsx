@@ -1,6 +1,5 @@
 import {
   AlertCircle,
-  ArrowUpDown,
   Bookmark,
   BookOpenText,
   CalendarDays,
@@ -152,21 +151,43 @@ export function PaperList() {
               }).format(new Date(lastUpdated)),
             })}
         </div>
-        <Input
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder={t(
-            source === "semanticscholar"
-              ? "papers.searchScholarPlaceholder"
-              : "papers.searchPlaceholder",
+        {/* Search box with the sort dropdown embedded at its end: the
+            user picks Newest or Most cited without leaving the box. */}
+        <div className="flex h-9 w-full max-w-sm items-center gap-1.5 rounded-md border border-input bg-transparent px-2.5 transition-[box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
+          <Search className="size-3.5 shrink-0 text-muted-foreground" />
+          <Input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder={t(
+              source === "semanticscholar"
+                ? "papers.searchScholarPlaceholder"
+                : "papers.searchPlaceholder",
+            )}
+            aria-label={t(
+              source === "semanticscholar"
+                ? "papers.searchScholarPlaceholder"
+                : "papers.searchPlaceholder",
+            )}
+            className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
+          />
+          {papers.length > 0 && (
+            <>
+              <div className="h-4 w-px shrink-0 bg-border" />
+              <Select value={sortMode} onValueChange={(v) => setSortMode(v as PaperSortMode)}>
+                <SelectTrigger
+                  className="h-7 w-auto gap-1 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0"
+                  aria-label={t("papers.sortBy")}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">{t("papers.sortNewest")}</SelectItem>
+                  <SelectItem value="cited">{t("papers.sortCited")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
           )}
-          aria-label={t(
-            source === "semanticscholar"
-              ? "papers.searchScholarPlaceholder"
-              : "papers.searchPlaceholder",
-          )}
-          className="h-9 w-full max-w-xs"
-        />
+        </div>
         <div className="flex items-center gap-2">
           <Button
             variant={savedOnly ? "secondary" : "ghost"}
@@ -222,18 +243,6 @@ export function PaperList() {
           <Button variant="ghost" size="sm" onClick={() => setDate(null)}>
             {t("papers.today")}
           </Button>
-        )}
-        {!loading && papers.length > 0 && (
-          <Select value={sortMode} onValueChange={(v) => setSortMode(v as PaperSortMode)}>
-            <SelectTrigger className="h-8 w-auto gap-2 text-xs" aria-label={t("papers.sortBy")}>
-              <ArrowUpDown className="size-3.5" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">{t("papers.sortNewest")}</SelectItem>
-              <SelectItem value="cited">{t("papers.sortCited")}</SelectItem>
-            </SelectContent>
-          </Select>
         )}
         {backfillActive && (
           <span className="text-xs text-muted-foreground">
