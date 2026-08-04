@@ -24,6 +24,27 @@ export function newOperationId(): string {
   return `op-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * Shape expected by Rust after serde rename_all = "camelCase" (the
+ * ProviderConfig struct in src-tauri/src/ai/mod.rs). Every provider that
+ * crosses the IPC boundary must pass through here so the wire contract
+ * stays explicit — a plain ProviderConfig object serializes to the same
+ * keys, but this makes the dependency visible at each invoke site.
+ */
+export function toIpcProvider(p: ProviderConfig): {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model: string;
+} {
+  return {
+    id: p.id,
+    name: p.name,
+    baseUrl: p.baseUrl,
+    model: p.model,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Dev-only key store for the browser preview (when the app runs outside Tauri
 // there is no OS keychain). Keys stay in memory only — never persisted.
@@ -113,7 +134,7 @@ export async function streamExplanation(opts: ExplainOptions): Promise<string> {
     channel.onmessage = (msg) => onChunk(msg);
     return await invoke<string>("explain_paper", {
       operationId,
-      providers,
+      providers: providers.map(toIpcProvider),
       paper,
       language,
       onChunk: channel,

@@ -28,6 +28,7 @@ pub(crate) use registry::*;
 pub(crate) use stream::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProviderConfig {
     pub id: String,
     pub name: String,
@@ -62,6 +63,30 @@ mod tests {
             tldr: None,
             venue: None,
         }
+    }
+
+    #[test]
+    fn provider_config_deserializes_camel_case_json() {
+        // The frontend sends provider objects with camelCase fields
+        // (baseUrl). Without the serde rename this is exactly the IPC
+        // crash "missing field base_url" that killed explain/test.
+        let json = r#"{
+            "id": "p1",
+            "name": "DeepSeek",
+            "baseUrl": "https://api.deepseek.com/v1",
+            "model": "deepseek-chat"
+        }"#;
+        let p: ProviderConfig = serde_json::from_str(json).expect("camelCase must deserialize");
+        assert_eq!(p.id, "p1");
+        assert_eq!(p.name, "DeepSeek");
+        assert_eq!(p.base_url, "https://api.deepseek.com/v1");
+        assert_eq!(p.model, "deepseek-chat");
+
+        // Serialization must go back out in camelCase too (the wire
+        // contract the frontend sends).
+        let out = serde_json::to_string(&p).unwrap();
+        assert!(out.contains("\"baseUrl\":"), "got: {out}");
+        assert!(!out.contains("base_url"), "got: {out}");
     }
 
     #[test]

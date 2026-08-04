@@ -6,6 +6,7 @@ import {
   isTauri,
   setBrowserKey,
   testProviderBrowser,
+  toIpcProvider,
 } from "@/lib/ai";
 import type { ProviderConfig } from "@/lib/types";
 
@@ -125,7 +126,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   testProvider: async (p) => {
     if (isTauri()) {
-      return invoke<string>("test_provider", { provider: p });
+      return invoke<string>("test_provider", { provider: toIpcProvider(p) });
     }
     return testProviderBrowser(p);
   },

@@ -2,7 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 
 // Single source of truth: the same prompts.json the Rust backend reads.
 import prompts from "../../src-tauri/prompts.json";
-import { isTauri, streamChatBrowser } from "@/lib/ai";
+import { isTauri, streamChatBrowser, toIpcProvider } from "@/lib/ai";
 import type { Paper, ProviderConfig } from "@/lib/types";
 
 export type ReaderStreamKind = "section" | "synthesis" | "qa";
@@ -73,7 +73,7 @@ export async function streamSectionExplanation(opts: SectionStreamOptions): Prom
     channel.onmessage = (msg) => onChunk(msg);
     await invoke("explain_section", {
       operationId,
-      provider,
+      provider: toIpcProvider(provider),
       paper,
       sectionIndex,
       totalSections,
@@ -106,7 +106,7 @@ export async function streamSynthesis(opts: SynthesisStreamOptions): Promise<voi
     channel.onmessage = (msg) => onChunk(msg);
     await invoke("explain_synthesis", {
       operationId,
-      provider,
+      provider: toIpcProvider(provider),
       paper,
       sectionsText,
       language,
@@ -148,7 +148,7 @@ export async function streamAsk(opts: AskStreamOptions): Promise<void> {
     channel.onmessage = (msg) => onChunk(msg);
     await invoke("ask_about_paper", {
       operationId,
-      provider,
+      provider: toIpcProvider(provider),
       paper,
       question,
       selection,
