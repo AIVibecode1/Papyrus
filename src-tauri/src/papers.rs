@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 const ARXIV_API: &str = "https://export.arxiv.org/api/query";
-const USER_AGENT: &str = concat!(
+pub(crate) const USER_AGENT: &str = concat!(
     "Papyrus/",
     env!("CARGO_PKG_VERSION"),
     " (research paper reader)"

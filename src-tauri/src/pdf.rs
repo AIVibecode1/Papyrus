@@ -1,18 +1,63 @@
 use std::fs;
 use std::path::PathBuf;
 
+use futures_util::StreamExt;
 use tauri::ipc::Response;
 use tauri::{AppHandle, Manager};
 
-use crate::papers::shared_client;
+use crate::papers::USER_AGENT;
 
 const MAX_PDF_BYTES: u64 = 30 * 1024 * 1024; // 30 MB safety cap
+const MAX_PDF_REDIRECTS: usize = 5;
 const PDF_CACHE_DIR: &str = "pdfs";
 
-/// Downloads a paper's PDF bytes (no caching). The command wrapper adds
-/// the on-disk cache; this core is unit-testable without a Tauri runtime.
-async fn download_pdf(url: &str) -> Result<Vec<u8>, String> {
-    let response = shared_client()
+/// HTTP client for PDF downloads: same UA as paper fetching, but
+/// redirects are NEVER followed automatically. A redirect is a fresh
+/// decision point (each hop is re-validated and re-pinned), so
+/// auto-following here would be a validation bypass.
+fn pdf_client(pinned: Option<(&str, Vec<std::net::SocketAddr>)>) -> reqwest::Client {
+    let mut builder = reqwest::Client::builder()
+        .user_agent(USER_AGENT)
+        .redirect(reqwest::redirect::Policy::none());
+    if let Some((host, ips)) = pinned {
+        // Pin this download to the IPs we validated: the connection can
+        // no longer be rebound by DNS between validation and connect.
+        // reqwest 0.13 resolves one address per call; they accumulate.
+        for ip in &ips {
+            builder = builder.resolve(host, *ip);
+        }
+    }
+    builder
+        .build()
+        .expect("reqwest client build cannot fail at runtime")
+}
+
+/// Reads a response body in chunks, refusing anything over `limit` BEFORE
+/// unbounded buffering: a declared Content-Length over the limit is
+/// rejected up front, and the stream itself is cut off at the limit.
+async fn fetch_body(response: reqwest::Response, limit: u64) -> Result<Vec<u8>, String> {
+    if let Some(len) = response.content_length()
+        && len > limit
+    {
+        return Err("The PDF is too large to open in the app".into());
+    }
+    let mut bytes: Vec<u8> = Vec::new();
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Failed to read the PDF: {e}"))?;
+        if bytes.len() as u64 + chunk.len() as u64 > limit {
+            return Err("The PDF is too large to open in the app".into());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
+/// Raw downloader core (no URL policy): unit-testable against local
+/// servers. Test-only since the command path uses `download_pdf_guarded`.
+#[cfg(test)]
+async fn download_pdf_with_limit(url: &str, limit: u64) -> Result<Vec<u8>, String> {
+    let response = pdf_client(None)
         .get(url)
         .send()
         .await
@@ -21,14 +66,14 @@ async fn download_pdf(url: &str) -> Result<Vec<u8>, String> {
     if !status.is_success() {
         return Err(format!("PDF download returned HTTP {status}"));
     }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read the PDF: {e}"))?;
-    if bytes.len() as u64 > MAX_PDF_BYTES {
-        return Err("The PDF is too large to open in the app".into());
-    }
-    Ok(bytes.to_vec())
+    fetch_body(response, limit).await
+}
+
+/// Downloads a paper's PDF bytes (no caching). Test-only: the command
+/// path runs the validated, pinned downloader instead.
+#[cfg(test)]
+async fn download_pdf(url: &str) -> Result<Vec<u8>, String> {
+    download_pdf_with_limit(url, MAX_PDF_BYTES).await
 }
 
 /// Builds the canonical arXiv PDF URL from a paper id (e.g.
@@ -65,8 +110,9 @@ fn arxiv_pdf_url(paper_id: &str) -> Result<String, String> {
 /// arbitrary publisher domains, so they cannot be derived from the id).
 /// Rejects anything but https with no credentials, and refuses hosts that
 /// resolve to loopback/private/link-local addresses (the metadata IP
-/// 169.254.169.254 is link-local and covered).
-async fn ensure_public_https(url: &str) -> Result<(), String> {
+/// 169.254.169.254 is link-local and covered). Returns the validated host
+/// and its public addresses so the download can be pinned to them.
+async fn validate_public_https(url: &str) -> Result<(String, Vec<std::net::SocketAddr>), String> {
     let rest = url
         .strip_prefix("https://")
         .ok_or_else(|| "PDF url must be https".to_string())?;
@@ -78,10 +124,14 @@ async fn ensure_public_https(url: &str) -> Result<(), String> {
         .next()
         .filter(|h| !h.is_empty())
         .ok_or_else(|| "PDF url has no host".to_string())?;
-    let ips = tokio::net::lookup_host((host, 443))
+    let ips: Vec<std::net::SocketAddr> = tokio::net::lookup_host((host, 443))
         .await
-        .map_err(|_| "PDF host could not be resolved".to_string())?;
-    for ip in ips {
+        .map_err(|_| "PDF host could not be resolved".to_string())?
+        .collect();
+    if ips.is_empty() {
+        return Err("PDF host could not be resolved".to_string());
+    }
+    for ip in &ips {
         let private = match ip.ip() {
             std::net::IpAddr::V4(v4) => {
                 v4.is_loopback()
@@ -103,7 +153,52 @@ async fn ensure_public_https(url: &str) -> Result<(), String> {
             return Err("PDF host resolves to a private address".into());
         }
     }
-    Ok(())
+    Ok((host.to_string(), ips))
+}
+
+/// Decides the next hop for a response. Returns None when the response is
+/// not a redirect; errors on missing or non-https locations. Pure so the
+/// redirect policy is unit-testable without a server.
+fn next_redirect_target(
+    status: reqwest::StatusCode,
+    headers: &reqwest::header::HeaderMap,
+) -> Result<Option<String>, String> {
+    if !status.is_redirection() {
+        return Ok(None);
+    }
+    let location = headers
+        .get(reqwest::header::LOCATION)
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| "PDF redirect without a location".to_string())?;
+    if !location.starts_with("https://") {
+        return Err("PDF redirect target must be https".into());
+    }
+    Ok(Some(location.to_string()))
+}
+
+/// Full download path for the command: validates the https/public policy,
+/// pins the connection to the validated addresses (DNS-rebinding guard),
+/// and follows redirects only one hop at a time, re-validating each target.
+async fn download_pdf_guarded(url: &str) -> Result<Vec<u8>, String> {
+    let mut target = url.to_string();
+    for _ in 0..=MAX_PDF_REDIRECTS {
+        let (host, ips) = validate_public_https(&target).await?;
+        let response = pdf_client(Some((host.as_str(), ips)))
+            .get(&target)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to download the PDF: {e}"))?;
+        let status = response.status();
+        if let Some(next) = next_redirect_target(status, response.headers())? {
+            target = next;
+            continue;
+        }
+        if !status.is_success() {
+            return Err(format!("PDF download returned HTTP {status}"));
+        }
+        return fetch_body(response, MAX_PDF_BYTES).await;
+    }
+    Err("Too many PDF redirects".into())
 }
 
 /// Downloads a paper's PDF and caches it on disk keyed by the paper id, so
@@ -117,7 +212,7 @@ pub async fn fetch_pdf(
     paper_id: String,
     url: Option<String>,
 ) -> Result<Response, String> {
-    let path = cache_path(&app, &paper_id)?;
+    let path = cache_path(&app, &paper_id, url.as_deref())?;
     if let Ok(bytes) = fs::read(&path)
         && !bytes.is_empty()
     {
@@ -125,34 +220,75 @@ pub async fn fetch_pdf(
     }
 
     let target = if paper_id.starts_with("s2:") {
-        let url = url.ok_or_else(|| "A PDF url is required for this paper".to_string())?;
-        ensure_public_https(&url).await?;
-        url
+        url.ok_or_else(|| "A PDF url is required for this paper".to_string())?
     } else {
         arxiv_pdf_url(&paper_id)?
     };
-    let bytes = download_pdf(&target).await?;
+    // Validation and DNS pinning happen inside, per hop, including
+    // redirects; the webview never picks a fetch target.
+    let bytes = download_pdf_guarded(&target).await?;
     // Best-effort cache write: a full disk is not a reason to fail the read.
     let _ = fs::write(&path, &bytes);
     Ok(Response::new(bytes))
 }
 
-fn cache_path(app: &AppHandle, paper_id: &str) -> Result<PathBuf, String> {
+/// Stable FNV-1a 64-bit hash. Cache names must be deterministic across app
+/// versions (std's DefaultHasher is explicitly not) and distinct for
+/// distinct identities, so the filename derives from the complete source
+/// identity instead of character filtering.
+fn stable_hash(input: &str) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in input.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
+/// Cache identity: source plus paper id, and for S2 papers the validated
+/// URL (the host is part of what the bytes came from).
+fn cache_file_name(source: &str, paper_id: &str, url: Option<&str>) -> String {
+    let mut identity = format!("{source}|{paper_id}");
+    if let Some(url) = url {
+        identity.push('|');
+        identity.push_str(url);
+    }
+    format!("pdf-{:016x}.pdf", stable_hash(&identity))
+}
+
+/// The pre-hash cache name (safe characters only), kept as a one-time
+/// migration target so existing users keep their cache hits.
+fn legacy_cache_name(paper_id: &str) -> Option<String> {
+    let safe: String = paper_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+        .collect();
+    if safe.is_empty() { None } else { Some(safe) }
+}
+
+fn cache_path(app: &AppHandle, paper_id: &str, url: Option<&str>) -> Result<PathBuf, String> {
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("App data directory unavailable: {e}"))?
         .join(PDF_CACHE_DIR);
     fs::create_dir_all(&dir).map_err(|e| format!("Cannot create the PDF cache directory: {e}"))?;
-    // arXiv ids are [a-z]+.[0-9]+v[0-9]+ — keep only safe characters.
-    let safe: String = paper_id
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
-        .collect();
-    if safe.is_empty() {
-        return Err("Invalid paper id".into());
+    let source = if paper_id.starts_with("s2:") {
+        "s2"
+    } else {
+        "arxiv"
+    };
+    let path = dir.join(cache_file_name(source, paper_id, url));
+    if !path.exists()
+        && let Some(legacy) = legacy_cache_name(paper_id)
+    {
+        let legacy_path = dir.join(format!("{legacy}.pdf"));
+        if legacy_path.exists() {
+            // One-time migration: keep the cached bytes, new name from now on.
+            let _ = fs::rename(&legacy_path, &path);
+        }
     }
-    Ok(dir.join(format!("{safe}.pdf")))
+    Ok(path)
 }
 
 #[cfg(test)]
@@ -231,16 +367,149 @@ mod tests {
 
     #[test]
     fn cache_path_sanitizes_ids_and_rejects_empty() {
-        let safe: String = "cs.ai.2607.00001v1"
-            .chars()
-            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
-            .collect();
-        assert_eq!(safe, "cs.ai.2607.00001v1");
-        let empty: String = "!@#$%"
-            .chars()
-            .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
-            .collect();
-        assert!(empty.is_empty());
+        // The legacy (pre-hash) name keeps only safe characters; the
+        // collision-resistant name derives from the full identity.
+        assert_eq!(
+            legacy_cache_name("cs.ai.2607.00001v1").as_deref(),
+            Some("cs.ai.2607.00001v1")
+        );
+        assert_eq!(legacy_cache_name("!@#$%"), None);
+        let name = cache_file_name("arxiv", "cs.ai.2607.00001v1", None);
+        assert!(name.starts_with("pdf-") && name.ends_with(".pdf"));
+    }
+
+    #[test]
+    fn cache_names_are_stable_and_collision_resistant() {
+        let a = cache_file_name("arxiv", "2607.00001", None);
+        let b = cache_file_name("arxiv", "2607.00002", None);
+        assert_ne!(a, b, "distinct ids must not share a cache file");
+        assert_eq!(
+            cache_file_name("arxiv", "2607.00001", None),
+            a,
+            "the same identity must hash stably"
+        );
+        let c = cache_file_name("s2", "s2:abc", Some("https://a.example/paper.pdf"));
+        let d = cache_file_name("s2", "s2:abc", Some("https://b.example/paper.pdf"));
+        assert_ne!(c, d, "distinct source urls must not share a cache file");
+        assert_ne!(a, c, "arxiv and s2 identities must not collide");
+        let e = cache_file_name("arxiv", "cs.ai.2607.00001", None);
+        assert_ne!(a, e, "ids sharing a sanitized prefix must not collide");
+    }
+
+    #[test]
+    fn rejects_a_declared_oversized_body_before_reading() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf);
+                // Declares far more than the limit; must be rejected on the
+                // header alone, before any body byte is consumed.
+                let crlf = String::from_utf8(vec![13, 10]).unwrap();
+                let head = format!(
+                    "HTTP/1.1 200 OK{crlf}content-length: 99999999{crlf}connection: close{crlf}{crlf}"
+                );
+                let _ = stream.write_all(head.as_bytes());
+                // No body is sent: if the client tried to read it, this
+                // test would hang; the declared-length guard must fire.
+            }
+        });
+        let url = format!("http://{addr}/huge.pdf");
+        let err = run(download_pdf_with_limit(&url, 1024)).expect_err("must reject the size");
+        assert!(err.contains("too large"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn rejects_an_oversized_body_while_streaming() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf);
+                // No content-length: the limit must be enforced mid-stream.
+                let crlf = String::from_utf8(vec![13, 10]).unwrap();
+                let head = format!("HTTP/1.1 200 OK{crlf}connection: close{crlf}{crlf}");
+                let _ = stream.write_all(head.as_bytes());
+                let chunk = vec![b'x'; 4096];
+                for _ in 0..4 {
+                    let _ = stream.write_all(&chunk);
+                }
+            }
+        });
+        let url = format!("http://{addr}/big.pdf");
+        let err = run(download_pdf_with_limit(&url, 1024)).expect_err("must stop at the limit");
+        assert!(err.contains("too large"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn redirects_are_never_followed_automatically() {
+        // A redirect to a second server that would happily serve bytes:
+        // the downloader must return the 3xx as an error instead of
+        // chasing it (each hop must go through validation again).
+        let target = TcpListener::bind("127.0.0.1:0").unwrap();
+        let target_addr = target.local_addr().unwrap();
+        thread::spawn(move || {
+            for stream in target.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf);
+                let _ = stream.write_all(PDF_BYTES);
+            }
+        });
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut buf = [0u8; 2048];
+                let _ = stream.read(&mut buf);
+                let crlf = String::from_utf8(vec![13, 10]).unwrap();
+                let head = format!(
+                    "HTTP/1.1 302 Found{crlf}location: http://{target_addr}/paper.pdf{crlf}content-length: 0{crlf}connection: close{crlf}{crlf}"
+                );
+                let _ = stream.write_all(head.as_bytes());
+            }
+        });
+        let url = format!("http://{addr}/paper.pdf");
+        let err = run(download_pdf(&url)).expect_err("a redirect must not be followed");
+        assert!(err.contains("HTTP 302"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn redirect_policy_rejects_everything_but_absolute_https() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::LOCATION,
+            reqwest::header::HeaderValue::from_static("https://cdn.example/paper.pdf"),
+        );
+        let next = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &headers) })
+            .expect("a valid redirect target must be accepted");
+        assert_eq!(next.as_deref(), Some("https://cdn.example/paper.pdf"));
+
+        headers.insert(
+            reqwest::header::LOCATION,
+            reqwest::header::HeaderValue::from_static("http://evil.example/paper.pdf"),
+        );
+        let err = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &headers) })
+            .expect_err("plaintext redirect targets must be rejected");
+        assert!(err.contains("must be https"), "unexpected error: {err}");
+
+        let mut no_location = reqwest::header::HeaderMap::new();
+        let err = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &no_location) })
+            .expect_err("a redirect without a location must be rejected");
+        assert!(
+            err.contains("without a location"),
+            "unexpected error: {err}"
+        );
+
+        let mut ok_headers = reqwest::header::HeaderMap::new();
+        let next = run(async { next_redirect_target(reqwest::StatusCode::OK, &mut ok_headers) })
+            .expect("a non-redirect status is not a hop");
+        assert!(next.is_none());
     }
 
     #[test]
@@ -292,7 +561,7 @@ mod tests {
             "https:///paper.pdf",                       // no host
         ];
         for url in cases {
-            let err = run(ensure_public_https(url)).expect_err("must reject {url}");
+            let err = run(validate_public_https(url)).expect_err("must reject {url}");
             assert!(!err.is_empty(), "expected an error for {url}");
         }
     }
