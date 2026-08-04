@@ -78,18 +78,21 @@ fn load_disk_cache(app: Option<&tauri::AppHandle>) {
     let session = guard.get_or_insert_with(HashMap::new);
     for (id, count) in counts {
         if let Some(n) = count.as_u64() {
-            session.insert(id.clone(), n as u32);
+            session.insert(id.clone(), (n as u32, saved_at));
         }
     }
 }
 
 /// Persists the session cache to disk with the current timestamp so the
-/// next launch (within the TTL window) starts with known counts.
+/// next launch (within the TTL window) starts with known counts. The
+/// savedAt is the time of THIS write; per-entry freshness is discarded.
 fn save_disk_cache(app: Option<&tauri::AppHandle>) {
     let snapshot: HashMap<String, u32> = {
         let guard = cache().lock().unwrap_or_else(|p| p.into_inner());
         match guard.as_ref() {
-            Some(map) if !map.is_empty() => map.clone(),
+            Some(map) if !map.is_empty() => {
+                map.iter().map(|(id, (c, _))| (id.clone(), *c)).collect()
+            }
             _ => return,
         }
     };
@@ -108,10 +111,21 @@ fn save_disk_cache(app: Option<&tauri::AppHandle>) {
 }
 
 /// Session cache so repeated list refreshes do not re-query the API.
-static CITATION_CACHE: Mutex<Option<HashMap<String, u32>>> = Mutex::new(None);
+/// Each entry carries the unix time it was fetched (or, for entries loaded
+/// from disk, the disk snapshot's savedAt) so the same TTL that governs
+/// the disk cache also expires in-memory entries — a long-running session
+/// can never keep serving counts older than the freshness window.
+static CITATION_CACHE: Mutex<Option<HashMap<String, (u32, i64)>>> = Mutex::new(None);
 
-fn cache() -> &'static Mutex<Option<HashMap<String, u32>>> {
+fn cache() -> &'static Mutex<Option<HashMap<String, (u32, i64)>>> {
     &CITATION_CACHE
+}
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 /// arXiv ids may carry a version suffix ("2607.00001v2"); Semantic Scholar
@@ -155,12 +169,24 @@ async fn fetch_citations_impl(ids: Vec<String>) -> HashMap<String, u32> {
         return result;
     }
 
-    // Serve already-known ids from the session cache.
+    // Serve already-known ids from the session cache. Stale entries
+    // (older than the TTL) are dropped so they get refetched and so a
+    // later save_disk_cache cannot re-stamp them as fresh.
     {
-        let guard = cache().lock().unwrap_or_else(|p| p.into_inner());
-        if let Some(cache) = guard.as_ref() {
+        let mut guard = cache().lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(cache) = guard.as_mut() {
+            let ttl = cache_ttl().as_secs() as i64;
+            let now = now_secs();
+            let stale: Vec<String> = cache
+                .iter()
+                .filter(|(_, (_, fetched_at))| now.saturating_sub(*fetched_at) >= ttl)
+                .map(|(id, _)| id.clone())
+                .collect();
+            for id in &stale {
+                cache.remove(id);
+            }
             for id in &ids {
-                if let Some(count) = cache.get(id) {
+                if let Some((count, _)) = cache.get(id) {
                     result.insert(id.clone(), *count);
                 }
             }
@@ -245,11 +271,12 @@ async fn fetch_citations_impl(ids: Vec<String>) -> HashMap<String, u32> {
     {
         let mut guard = cache().lock().unwrap_or_else(|p| p.into_inner());
         let cache = guard.get_or_insert_with(HashMap::new);
+        let now = now_secs();
         for id in &ids {
             let bare = bare_arxiv_id(id);
             if let Some(count) = fetched.get(&bare) {
                 result.insert(id.clone(), *count);
-                cache.insert(id.clone(), *count);
+                cache.insert(id.clone(), (*count, now));
             }
         }
     }
@@ -525,6 +552,200 @@ mod tests {
             std::env::remove_var("PAPYRUS_CACHE_DIR");
             std::env::remove_var("PAPYRUS_S2_URL");
         }
+    }
+
+    #[test]
+    fn session_cache_expires_entries_with_the_ttl() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_session_cache();
+        unsafe {
+            std::env::set_var("PAPYRUS_CACHE_TTL_SECS", "0");
+        }
+        let fetch_impl = |ids: Vec<String>| {
+            tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(fetch_citations_impl(ids))
+        };
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let served = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let served_for_thread = std::sync::Arc::clone(&served);
+        let body = serde_json::to_string(&[serde_json::json!({
+            "paperId": "ARXIV:2607.00001",
+            "citationCount": 42,
+        })])
+        .unwrap();
+        thread::spawn(move || {
+            while let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let mut req = Vec::new();
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            req.extend_from_slice(&buf[..n]);
+                            if req.windows(4).any(|w| w == [13, 10, 13, 10]) {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                if let Some(len_str) = String::from_utf8_lossy(&req)
+                    .lines()
+                    .find_map(|l| {
+                        l.to_ascii_lowercase()
+                            .strip_prefix("content-length:")
+                            .map(|v| v.trim().to_string())
+                    })
+                    .and_then(|l| l.parse::<usize>().ok())
+                {
+                    let header_end = req
+                        .windows(4)
+                        .position(|w| w == [13, 10, 13, 10])
+                        .map(|p| p + 4)
+                        .unwrap_or(0);
+                    let mut body_buf = req[header_end..].to_vec();
+                    while body_buf.len() < len_str {
+                        if stream.read(&mut buf).unwrap_or(0) == 0 {
+                            break;
+                        }
+                        body_buf.extend_from_slice(&buf);
+                    }
+                }
+                served_for_thread.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let crlf = String::from_utf8(vec![13, 10]).unwrap();
+                let head = format!(
+                    "HTTP/1.1 200 OK{crlf}Content-Type: application/json{crlf}Content-Length: {}{crlf}Connection: close{crlf}{crlf}",
+                    body.len()
+                );
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(body.as_bytes());
+            }
+        });
+        let url = format!("http://{addr}");
+        let first = {
+            unsafe {
+                std::env::set_var("PAPYRUS_S2_URL", &url);
+            }
+            let r = fetch_impl(vec!["2607.00001".into()]);
+            unsafe {
+                std::env::remove_var("PAPYRUS_S2_URL");
+            }
+            r
+        };
+        assert_eq!(first.get("2607.00001"), Some(&42));
+        let second = {
+            unsafe {
+                std::env::set_var("PAPYRUS_S2_URL", &url);
+            }
+            let r = fetch_impl(vec!["2607.00001".into()]);
+            unsafe {
+                std::env::remove_var("PAPYRUS_S2_URL");
+            }
+            r
+        };
+        assert_eq!(second.get("2607.00001"), Some(&42));
+        assert_eq!(served.load(std::sync::atomic::Ordering::SeqCst), 2);
+        unsafe {
+            std::env::remove_var("PAPYRUS_CACHE_TTL_SECS");
+        }
+    }
+
+    #[test]
+    fn session_cache_serves_fresh_entries_without_network() {
+        // ENV_LOCK serializes with the TTL test, which mutates shared env
+        // vars (PAPYRUS_CACHE_TTL_SECS) that this test's fetch reads.
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_session_cache();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let served = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let served_for_thread = std::sync::Arc::clone(&served);
+        let body = serde_json::to_string(&[serde_json::json!({
+            "paperId": "ARXIV:2607.00001",
+            "citationCount": 42,
+        })])
+        .unwrap();
+        thread::spawn(move || {
+            while let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 4096];
+                let mut req = Vec::new();
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            req.extend_from_slice(&buf[..n]);
+                            if req.windows(4).any(|w| w == [13, 10, 13, 10]) {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                if let Some(len_str) = String::from_utf8_lossy(&req)
+                    .lines()
+                    .find_map(|l| {
+                        l.to_ascii_lowercase()
+                            .strip_prefix("content-length:")
+                            .map(|v| v.trim().to_string())
+                    })
+                    .and_then(|l| l.parse::<usize>().ok())
+                {
+                    let header_end = req
+                        .windows(4)
+                        .position(|w| w == [13, 10, 13, 10])
+                        .map(|p| p + 4)
+                        .unwrap_or(0);
+                    let mut body_buf = req[header_end..].to_vec();
+                    while body_buf.len() < len_str {
+                        if stream.read(&mut buf).unwrap_or(0) == 0 {
+                            break;
+                        }
+                        body_buf.extend_from_slice(&buf);
+                    }
+                }
+                served_for_thread.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let crlf = String::from_utf8(vec![13, 10]).unwrap();
+                let head = format!(
+                    "HTTP/1.1 200 OK{crlf}Content-Type: application/json{crlf}Content-Length: {}{crlf}Connection: close{crlf}{crlf}",
+                    body.len()
+                );
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(body.as_bytes());
+            }
+        });
+        let url = format!("http://{addr}");
+        // Direct fetch_citations_impl calls: fetch_with_override resets the
+        // session cache between calls, which would defeat this test.
+        let fetch_impl = |ids: Vec<String>| {
+            tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(fetch_citations_impl(ids))
+        };
+        let first = {
+            unsafe {
+                std::env::set_var("PAPYRUS_S2_URL", &url);
+            }
+            let r = fetch_impl(vec!["2607.00001".into()]);
+            unsafe {
+                std::env::remove_var("PAPYRUS_S2_URL");
+            }
+            r
+        };
+        assert_eq!(first.get("2607.00001"), Some(&42));
+        let second = {
+            unsafe {
+                std::env::set_var("PAPYRUS_S2_URL", &url);
+            }
+            let r = fetch_impl(vec!["2607.00001".into()]);
+            unsafe {
+                std::env::remove_var("PAPYRUS_S2_URL");
+            }
+            r
+        };
+        assert_eq!(second.get("2607.00001"), Some(&42));
+        assert_eq!(served.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     #[test]

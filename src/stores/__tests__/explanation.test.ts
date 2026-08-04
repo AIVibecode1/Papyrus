@@ -11,6 +11,7 @@ const { streamExplanationMock, stopExplanationMock, CANCELLED_MARKER } = vi.hois
 vi.mock("@/lib/ai", () => ({
   streamExplanation: streamExplanationMock,
   stopExplanation: stopExplanationMock,
+  newOperationId: () => "test-op-id",
   CANCELLED_MARKER,
 }));
 

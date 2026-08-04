@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::StreamExt;
@@ -14,7 +16,43 @@ const KEYRING_SERVICE: &str = "papyrus";
 const EXPLAIN_TIMEOUT: Duration = Duration::from_secs(600);
 const TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-static CANCEL_EXPLAIN: AtomicBool = AtomicBool::new(false);
+/// In-flight AI operations keyed by the frontend-supplied operation id.
+/// Every streaming command owns a fresh cancellation flag, so stopping one
+/// explanation can never cancel (or reset) another. The entry is removed
+/// when the command finishes, succeeds or fails.
+static OPERATIONS: OnceLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = OnceLock::new();
+
+fn operations() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
+    OPERATIONS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn register_operation(id: &str) -> Arc<AtomicBool> {
+    let flag = Arc::new(AtomicBool::new(false));
+    operations()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .insert(id.to_string(), flag.clone());
+    flag
+}
+
+/// Sets the cancellation flag of ONE operation. Unknown ids are a no-op
+/// (the operation already finished or never started).
+fn cancel_operation(id: &str) {
+    if let Some(flag) = operations()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(id)
+    {
+        flag.store(true, Ordering::SeqCst);
+    }
+}
+
+fn unregister_operation(id: &str) {
+    operations()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .remove(id);
+}
 
 /// Shared AI-layer resource (system prompts + cancellation marker) — the
 /// single source of truth for both languages. Rust reads it via
@@ -368,16 +406,19 @@ fn validate_provider(provider: &ProviderConfig) -> Result<(), String> {
 // The argument list is the IPC contract between the frontend and Rust.
 #[allow(clippy::too_many_arguments)]
 pub async fn explain_paper(
+    operation_id: String,
     providers: Vec<ProviderConfig>,
     paper: Paper,
     language: String,
     on_chunk: Channel<String>,
 ) -> Result<String, String> {
-    CANCEL_EXPLAIN.store(false, Ordering::SeqCst);
-    explain_with_failover(&CANCEL_EXPLAIN, &providers, &paper, &language, &mut |c| {
+    let flag = register_operation(&operation_id);
+    let result = explain_with_failover(&flag, &providers, &paper, &language, &mut |c| {
         let _ = on_chunk.send(c.to_string());
     })
-    .await
+    .await;
+    unregister_operation(&operation_id);
+    result
 }
 
 /// Internal chain: try each provider; retry ONLY pre-first-chunk failures.
@@ -472,23 +513,26 @@ pub async fn test_provider(provider: ProviderConfig) -> Result<String, String> {
         "max_tokens": 8,
     });
 
+    let cancel_flag = AtomicBool::new(false);
     let reply = stream_chat(
         client,
         &url,
         &key,
         body,
         TEST_TIMEOUT,
-        &CANCEL_EXPLAIN,
+        &cancel_flag,
         &mut |_| {},
     )
     .await?;
     Ok(reply.trim().to_string())
 }
 
-/// Cancels the currently running explanation (if any).
+/// Cancels ONE in-flight explanation by its operation id. Unknown ids are
+/// a no-op: the operation already finished or never started, and nothing
+/// else may be affected.
 #[tauri::command]
-pub fn stop_explaining() {
-    CANCEL_EXPLAIN.store(true, Ordering::SeqCst);
+pub fn stop_explaining(operation_id: String) {
+    cancel_operation(&operation_id);
 }
 
 fn prompt_for(language: &str, en: &'static str, ar: &'static str) -> &'static str {
@@ -631,12 +675,12 @@ fn build_qa_messages(
 /// Streams a chat completion with a prebuilt message list, sharing the
 /// cancellation flag and timeout of the main explain command.
 async fn stream_messages(
+    cancel_flag: &AtomicBool,
     provider: &ProviderConfig,
     messages: Vec<Value>,
     on_chunk: Channel<String>,
 ) -> Result<(), String> {
     validate_provider(provider)?;
-    CANCEL_EXPLAIN.store(false, Ordering::SeqCst);
     let key = load_key(provider)?;
     let url = build_chat_url(&provider.base_url)?;
     let client = shared_client();
@@ -652,7 +696,7 @@ async fn stream_messages(
         &key,
         body,
         EXPLAIN_TIMEOUT,
-        &CANCEL_EXPLAIN,
+        cancel_flag,
         &mut |chunk| {
             let _ = on_chunk.send(chunk.to_string());
         },
@@ -663,7 +707,10 @@ async fn stream_messages(
 
 /// Mentor walkthrough of a single paper section (whole-paper reader).
 #[tauri::command]
+// The argument list is the IPC contract between the frontend and Rust.
+#[allow(clippy::too_many_arguments)]
 pub async fn explain_section(
+    operation_id: String,
     provider: ProviderConfig,
     paper: Paper,
     section_index: usize,
@@ -679,12 +726,16 @@ pub async fn explain_section(
         &section_text,
         &language,
     );
-    stream_messages(&provider, messages, on_chunk).await
+    let flag = register_operation(&operation_id);
+    let result = stream_messages(&flag, &provider, messages, on_chunk).await;
+    unregister_operation(&operation_id);
+    result
 }
 
 /// Final synthesis after all sections were walked through.
 #[tauri::command]
 pub async fn explain_synthesis(
+    operation_id: String,
     provider: ProviderConfig,
     paper: Paper,
     sections_text: String,
@@ -692,7 +743,10 @@ pub async fn explain_synthesis(
     on_chunk: Channel<String>,
 ) -> Result<(), String> {
     let messages = build_synthesis_messages(&paper, &sections_text, &language);
-    stream_messages(&provider, messages, on_chunk).await
+    let flag = register_operation(&operation_id);
+    let result = stream_messages(&flag, &provider, messages, on_chunk).await;
+    unregister_operation(&operation_id);
+    result
 }
 
 /// Answers a question about the paper, grounded in the selected passage
@@ -703,6 +757,7 @@ pub async fn explain_synthesis(
 // of the fields the webview must send.
 #[allow(clippy::too_many_arguments)]
 pub async fn ask_about_paper(
+    operation_id: String,
     provider: ProviderConfig,
     paper: Paper,
     question: String,
@@ -720,7 +775,10 @@ pub async fn ask_about_paper(
         &history,
         &language,
     );
-    stream_messages(&provider, messages, on_chunk).await
+    let flag = register_operation(&operation_id);
+    let result = stream_messages(&flag, &provider, messages, on_chunk).await;
+    unregister_operation(&operation_id);
+    result
 }
 
 /// Saves an API key to the OS keychain (Windows Credential Manager / macOS Keychain).
@@ -749,6 +807,11 @@ pub async fn has_api_key(provider_id: String) -> Result<bool, String> {
 
 #[cfg(test)]
 mod tests {
+    /// Shared never-cancelled flag for parser tests that do not
+    /// exercise cancellation (each such test gets its own local
+    /// flag when it does).
+    static TEST_FLAG: AtomicBool = AtomicBool::new(false);
+
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpListener;
@@ -1078,7 +1141,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
-                &CANCEL_EXPLAIN,
+                &TEST_FLAG,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("stream should succeed");
@@ -1123,7 +1186,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
-                &CANCEL_EXPLAIN,
+                &TEST_FLAG,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("stream should succeed");
@@ -1164,7 +1227,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
-                &CANCEL_EXPLAIN,
+                &TEST_FLAG,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("partial content must be returned, not an error");
@@ -1197,7 +1260,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
-                &CANCEL_EXPLAIN,
+                &TEST_FLAG,
                 &mut |_| {},
             ))
             .expect_err("an empty broken stream must error");
@@ -1226,7 +1289,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
-                &CANCEL_EXPLAIN,
+                &TEST_FLAG,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("non-streaming should succeed");
@@ -1246,7 +1309,7 @@ mod tests {
             "bad-key",
             json!({ "model": "mock", "messages": [] }),
             Duration::from_secs(10),
-            &CANCEL_EXPLAIN,
+            &TEST_FLAG,
             &mut |_| {},
         ));
         let msg = result.expect_err("should fail with 401");
@@ -1316,7 +1379,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
-                &CANCEL_EXPLAIN,
+                &TEST_FLAG,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("split stream should succeed");
@@ -1351,7 +1414,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
-                &CANCEL_EXPLAIN,
+                &TEST_FLAG,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("stream with keep-alives should succeed");
@@ -1380,7 +1443,7 @@ mod tests {
                 "test-key",
                 json!({ "model": "mock", "messages": [] }),
                 Duration::from_secs(10),
-                &CANCEL_EXPLAIN,
+                &TEST_FLAG,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("clean close without [DONE] should succeed");
@@ -1392,7 +1455,7 @@ mod tests {
     fn cancel_returns_marker() {
         // A mid-stream user stop must abort with the typed marker, not a
         // human string: the frontend classifies stops by exact marker.
-        CANCEL_EXPLAIN.store(false, Ordering::SeqCst);
+        // (each test owns a local flag; no global reset needed)
 
         // The mock writes one content event every ~5ms, so the test can
         // cancel while later events are still in flight (~300ms of stream
@@ -1698,11 +1761,38 @@ mod tests {
                 "test-key",
                 body,
                 Duration::from_secs(10),
-                &CANCEL_EXPLAIN,
+                &TEST_FLAG,
                 &mut |c| chunks.push(c.to_string()),
             ))
             .expect("stream should succeed");
         assert_eq!(full, "Section explained.");
         assert_eq!(chunks.join(""), "Section explained.");
+    }
+
+    #[test]
+    fn operations_cancel_independently() {
+        // Two registered operations: stopping one must not touch the other,
+        // and an unknown id must be a no-op.
+        let flag_a = register_operation("op-a");
+        let flag_b = register_operation("op-b");
+
+        cancel_operation("op-a");
+        cancel_operation("does-not-exist");
+
+        assert!(flag_a.load(Ordering::SeqCst), "op-a must be cancelled");
+        assert!(!flag_b.load(Ordering::SeqCst), "op-b must be untouched");
+
+        unregister_operation("op-a");
+        unregister_operation("op-b");
+    }
+
+    #[test]
+    fn unregister_removes_the_flag_so_late_stops_are_noops() {
+        let flag = register_operation("op-late");
+        unregister_operation("op-late");
+        // The stored Arc is the only reference left after unregistering:
+        // a stop can no longer reach it (and must not panic).
+        cancel_operation("op-late");
+        assert!(!flag.load(Ordering::SeqCst), "late stop must not cancel");
     }
 }

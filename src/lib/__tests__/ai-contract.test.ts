@@ -113,7 +113,13 @@ describe("cross-language contract checks", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("data: [DONE]\n\n", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     try {
-      await streamExplanation({ providers: [provider], paper, language: "en", onChunk });
+      await streamExplanation({
+        providers: [provider],
+        paper,
+        language: "en",
+        operationId: "contract-op",
+        onChunk,
+      });
     } finally {
       vi.unstubAllGlobals();
     }

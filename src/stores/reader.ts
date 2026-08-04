@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { CANCELLED_MARKER, stopExplanation } from "@/lib/ai";
+import { CANCELLED_MARKER, newOperationId, stopExplanation } from "@/lib/ai";
 import { getPdfBytes } from "@/lib/pdf";
 import { extractTextFromPdf } from "@/lib/pdf-text";
 import { capTotal, findContextSection, splitIntoSections } from "@/lib/paper-text";
@@ -100,6 +100,9 @@ export const useReaderStore = create<ReaderState>((set, get) => {
   // its async PDF/text results, so a slow open for paper A can never
   // overwrite paper B opened right after it.
   let openGen = 0;
+  // Operation id of the most recent stream (section, synthesis or ask);
+  // stop() targets exactly it, so a stop can never hit unrelated work.
+  let activeOperationId: string | null = null;
 
   return {
     paper: null,
@@ -209,11 +212,13 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           },
         });
         try {
+          activeOperationId = newOperationId();
           await streamSynthesis({
             provider,
             paper,
             sectionsText: capTotal(sections.join("\n\n")),
             language,
+            operationId: activeOperationId,
             onChunk: (chunk) => buffer.push(chunk),
           });
           if (wtGen !== gen) return;
@@ -271,6 +276,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       });
 
       try {
+        activeOperationId = newOperationId();
         await streamSectionExplanation({
           provider,
           paper,
@@ -278,6 +284,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           totalSections: sections.length,
           sectionText: sections[i],
           language,
+          operationId: activeOperationId,
           onChunk: (chunk) => buffer.push(chunk),
         });
         if (wtGen !== gen) return;
@@ -384,6 +391,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         .map((m) => ({ role: m.role, content: m.text }));
 
       try {
+        activeOperationId = newOperationId();
         await streamAsk({
           provider,
           paper,
@@ -392,6 +400,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           context,
           history,
           language,
+          operationId: activeOperationId,
           onChunk: (chunk) => buffer.push(chunk),
         });
         if (chatGen !== gen) return;
@@ -429,7 +438,8 @@ export const useReaderStore = create<ReaderState>((set, get) => {
 
       if (wtBusy) {
         wtGen += 1;
-        await stopExplanation();
+        await stopExplanation(activeOperationId);
+        activeOperationId = null;
         set((s) => ({
           sectionEntries: s.sectionEntries.map((e) =>
             e.status === "loading" || e.status === "streaming"
@@ -443,7 +453,8 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         }));
       } else if (chatBusy) {
         chatGen += 1;
-        await stopExplanation();
+        await stopExplanation(activeOperationId);
+        activeOperationId = null;
         if (paper) {
           set((s) => {
             const list = s.chat.map((m) =>

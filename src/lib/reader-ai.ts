@@ -45,6 +45,8 @@ export interface ReaderStreamOptions {
   provider: ProviderConfig;
   paper: Paper;
   language: string;
+  /** Operation id shared with the Rust registry; Stop targets exactly this. */
+  operationId: string;
   onChunk: (chunk: string) => void;
 }
 
@@ -56,11 +58,21 @@ export interface SectionStreamOptions extends ReaderStreamOptions {
 
 /** Streams the mentor walkthrough of one paper section. */
 export async function streamSectionExplanation(opts: SectionStreamOptions): Promise<void> {
-  const { provider, paper, language, onChunk, sectionIndex, totalSections, sectionText } = opts;
+  const {
+    provider,
+    paper,
+    language,
+    operationId,
+    onChunk,
+    sectionIndex,
+    totalSections,
+    sectionText,
+  } = opts;
   if (isTauri()) {
     const channel = new Channel<string>();
     channel.onmessage = (msg) => onChunk(msg);
     await invoke("explain_section", {
+      operationId,
       provider,
       paper,
       sectionIndex,
@@ -78,6 +90,7 @@ export async function streamSectionExplanation(opts: SectionStreamOptions): Prom
       { role: "user", content: buildSectionUser(paper, sectionIndex, totalSections, sectionText) },
     ],
     onChunk,
+    operationId,
   );
 }
 
@@ -87,11 +100,12 @@ export interface SynthesisStreamOptions extends ReaderStreamOptions {
 
 /** Streams the end-of-paper synthesis. */
 export async function streamSynthesis(opts: SynthesisStreamOptions): Promise<void> {
-  const { provider, paper, language, onChunk, sectionsText } = opts;
+  const { provider, paper, language, operationId, onChunk, sectionsText } = opts;
   if (isTauri()) {
     const channel = new Channel<string>();
     channel.onmessage = (msg) => onChunk(msg);
     await invoke("explain_synthesis", {
+      operationId,
       provider,
       paper,
       sectionsText,
@@ -108,6 +122,7 @@ export async function streamSynthesis(opts: SynthesisStreamOptions): Promise<voi
       { role: "user", content: buildSynthesisUser(paper, sectionsText) },
     ],
     onChunk,
+    operationId,
   );
 }
 
@@ -126,11 +141,13 @@ export interface AskStreamOptions extends ReaderStreamOptions {
 
 /** Streams an answer to a question about the paper. */
 export async function streamAsk(opts: AskStreamOptions): Promise<void> {
-  const { provider, paper, language, onChunk, question, selection, context, history } = opts;
+  const { provider, paper, language, operationId, onChunk, question, selection, context, history } =
+    opts;
   if (isTauri()) {
     const channel = new Channel<string>();
     channel.onmessage = (msg) => onChunk(msg);
     await invoke("ask_about_paper", {
+      operationId,
       provider,
       paper,
       question,
@@ -148,5 +165,5 @@ export async function streamAsk(opts: AskStreamOptions): Promise<void> {
     ...history.slice(-8).map((turn) => ({ role: turn.role, content: turn.content })),
     { role: "user", content: buildQaUser(paper, question, selection, context) },
   ];
-  await streamChatBrowser(provider, messages, onChunk);
+  await streamChatBrowser(provider, messages, onChunk, operationId);
 }

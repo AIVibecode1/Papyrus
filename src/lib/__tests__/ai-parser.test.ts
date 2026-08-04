@@ -54,7 +54,13 @@ describe("streamExplanation (browser SSE parser)", () => {
       sseResponse(['data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n', "data: [DONE]\n\n"]),
     );
 
-    await streamExplanation({ providers: [provider], paper, language: "en", onChunk });
+    await streamExplanation({
+      providers: [provider],
+      paper,
+      language: "en",
+      operationId: "test-op",
+      onChunk,
+    });
 
     expect(onChunk).toHaveBeenCalledTimes(1);
     expect(onChunk).toHaveBeenCalledWith("Hello");
@@ -71,7 +77,13 @@ describe("streamExplanation (browser SSE parser)", () => {
       ]),
     );
 
-    await streamExplanation({ providers: [provider], paper, language: "en", onChunk });
+    await streamExplanation({
+      providers: [provider],
+      paper,
+      language: "en",
+      operationId: "test-op",
+      onChunk,
+    });
 
     expect(onChunk).toHaveBeenCalledTimes(1);
     expect(onChunk).toHaveBeenCalledWith("Hello");
@@ -88,7 +100,13 @@ describe("streamExplanation (browser SSE parser)", () => {
       ]),
     );
 
-    await streamExplanation({ providers: [provider], paper, language: "en", onChunk });
+    await streamExplanation({
+      providers: [provider],
+      paper,
+      language: "en",
+      operationId: "test-op",
+      onChunk,
+    });
 
     expect(onChunk).toHaveBeenCalledTimes(1);
     expect(onChunk).toHaveBeenCalledWith("Hi");
@@ -99,7 +117,13 @@ describe("streamExplanation (browser SSE parser)", () => {
     fetchMock.mockResolvedValue(new Response("unauthorized", { status: 401 }));
 
     await expect(
-      streamExplanation({ providers: [provider], paper, language: "en", onChunk }),
+      streamExplanation({
+        providers: [provider],
+        paper,
+        language: "en",
+        operationId: "test-op",
+        onChunk,
+      }),
     ).rejects.toThrow("HTTP 401: unauthorized");
     expect(onChunk).not.toHaveBeenCalled();
   });
@@ -113,7 +137,13 @@ describe("streamExplanation (browser SSE parser)", () => {
     // Current behavior: the loop breaks on done — no throw. (The Rust parser
     // errors here; fixed by plan 001 — the TS side is the reference.)
     await expect(
-      streamExplanation({ providers: [provider], paper, language: "en", onChunk }),
+      streamExplanation({
+        providers: [provider],
+        paper,
+        language: "en",
+        operationId: "test-op",
+        onChunk,
+      }),
     ).resolves.toBe(provider.id);
     expect(onChunk).toHaveBeenCalledWith("Bye");
   });
@@ -149,10 +179,11 @@ describe("stopExplanation (browser abort)", () => {
       providers: [provider],
       paper,
       language: "en",
+      operationId: "test-stop-op",
       onChunk,
     });
     await chunkPromise; // stream is in flight and delivered its first chunk
-    await stopExplanation();
+    await stopExplanation("test-stop-op");
 
     await expect(promise).rejects.toThrow(CANCELLED_MARKER);
     expect(fetchInit?.signal).toBeInstanceOf(AbortSignal);

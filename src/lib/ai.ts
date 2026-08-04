@@ -10,9 +10,19 @@ import prompts from "../../src-tauri/prompts.json";
 // a stop by matching it as a prefix.
 export const CANCELLED_MARKER = prompts.cancelledMarker;
 
-// Registry of the in-flight browser stream so stopExplanation() can abort it.
-// Assumes a single active stream (matches the MVP single-stream design).
-let activeController: AbortController | null = null;
+// Operation registry: each in-flight stream owns its AbortController,
+// keyed by the same operation id the Rust backend registers. Stopping one
+// operation can never abort another (mirror of the Rust registry in
+// src-tauri/src/ai.rs).
+const activeControllers = new Map<string, AbortController>();
+
+/** Fresh unique operation id for one stream command (browser + Tauri). */
+export function newOperationId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `op-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 // ---------------------------------------------------------------------------
 // Dev-only key store for the browser preview (when the app runs outside Tauri
@@ -79,6 +89,8 @@ export interface ExplainOptions {
   providers: ProviderConfig[];
   paper: Paper;
   language: string;
+  /** Operation id shared with the Rust registry; Stop targets exactly this. */
+  operationId: string;
   onChunk: (chunk: string) => void;
 }
 
@@ -87,12 +99,13 @@ export interface ExplainOptions {
  * there); in a plain browser the same loop runs here with the in-memory
  * dev keys. Resolves with the WINNING provider id. */
 export async function streamExplanation(opts: ExplainOptions): Promise<string> {
-  const { providers, paper, language, onChunk } = opts;
+  const { providers, paper, language, operationId, onChunk } = opts;
 
   if (isTauri()) {
     const channel = new Channel<string>();
     channel.onmessage = (msg) => onChunk(msg);
     return await invoke<string>("explain_paper", {
+      operationId,
       providers,
       paper,
       language,
@@ -105,12 +118,14 @@ export async function streamExplanation(opts: ExplainOptions): Promise<string> {
 
 export { streamChatBrowser };
 
-export async function stopExplanation(): Promise<void> {
+export async function stopExplanation(operationId: string | null): Promise<void> {
   if (isTauri()) {
-    await invoke("stop_explaining");
+    await invoke("stop_explaining", { operationId });
     return;
   }
-  activeController?.abort();
+  if (operationId) {
+    activeControllers.get(operationId)?.abort();
+  }
 }
 
 // SSE parser contract (both languages MUST match):
@@ -127,11 +142,12 @@ async function streamChatBrowser(
   provider: ProviderConfig,
   messages: { role: string; content: string }[],
   onChunk: (chunk: string) => void,
+  operationId: string,
 ): Promise<void> {
   const key = getBrowserKey(provider.id);
 
   const controller = new AbortController();
-  activeController = controller;
+  activeControllers.set(operationId, controller);
   try {
     const res = await fetch(normalizeBaseUrl(provider.baseUrl), {
       method: "POST",
@@ -186,24 +202,29 @@ async function streamChatBrowser(
     }
     throw err;
   } finally {
-    activeController = null;
+    activeControllers.delete(operationId);
   }
 }
 
 async function streamExplanationBrowser(opts: ExplainOptions): Promise<string> {
-  const { providers, paper, language, onChunk } = opts;
+  const { providers, paper, language, operationId, onChunk } = opts;
   const messages = buildMessages(paper, language);
   // Browser mirror of the Rust failover loop (same discriminator: only
   // pre-first-chunk failures are retried; the marker is terminal).
   const failures: string[] = [];
   for (const provider of providers) {
-    if (activeController?.signal.aborted) throw new Error(CANCELLED_MARKER);
+    if (activeControllers.get(operationId)?.signal.aborted) throw new Error(CANCELLED_MARKER);
     let delivered = false;
     try {
-      await streamChatBrowser(provider, messages, (chunk) => {
-        delivered = true;
-        onChunk(chunk);
-      });
+      await streamChatBrowser(
+        provider,
+        messages,
+        (chunk) => {
+          delivered = true;
+          onChunk(chunk);
+        },
+        operationId,
+      );
       return provider.id;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

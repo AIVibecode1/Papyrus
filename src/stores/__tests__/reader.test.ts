@@ -32,6 +32,7 @@ vi.mock("@/lib/reader-ai", () => ({
 }));
 vi.mock("@/lib/ai", () => ({
   CANCELLED_MARKER: "🛑PAPYRUS_CANCELLED",
+  newOperationId: () => "test-op-id",
   stopExplanation: vi.fn(),
 }));
 
