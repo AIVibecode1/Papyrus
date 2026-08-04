@@ -113,7 +113,13 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
             <>
               {" · "}
               <span title={t("papers.citedBy", { count: citationCount })}>
-                {t("papers.citedBy", { count: citationCount })}
+                {/* The count is exact metadata: keep it in its own LTR span
+                    so Arabic punctuation can never reorder it. */}
+                {t("papers.citedByPrefix")}{" "}
+                <span dir="ltr" className="font-mono">
+                  {citationCount}
+                </span>{" "}
+                {t("papers.citedBySuffix")}
               </span>
             </>
           )}

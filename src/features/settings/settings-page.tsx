@@ -115,106 +115,124 @@ export function SettingsPage() {
         {t("settings.securityNote")}
       </div>
 
-      <div className="mt-6 flex items-center justify-between">
-        <h2 className="text-base font-semibold">{t("settings.appearance")}</h2>
-        <Select
-          value={theme}
-          onValueChange={(v) => setThemeTo(v as Theme)}
-          aria-label={t("settings.appearance")}
-        >
-          <SelectTrigger className="h-8 w-40 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="light">{t("settings.themeLight")}</SelectItem>
-            <SelectItem value="sepia">{t("settings.themeSepia")}</SelectItem>
-            <SelectItem value="dark">{t("settings.themeDark")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="mt-6 flex items-center justify-between border-t pt-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold">{t("settings.paperSource")}</h2>
+      <section aria-labelledby="appearance-heading" className="mt-6">
+        <div className="flex items-center justify-between">
+          <h2 id="appearance-heading" className="text-base font-semibold">
+            {t("settings.appearance")}
+          </h2>
           <Select
-            value={source}
-            onValueChange={(v) => setSource(v as PaperSource)}
-            aria-label={t("settings.paperSource")}
+            value={theme}
+            onValueChange={(v) => setThemeTo(v as Theme)}
+            aria-label={t("settings.appearance")}
           >
-            <SelectTrigger className="h-8 w-52 text-xs">
+            <SelectTrigger className="h-8 w-40 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="arxiv">{t("settings.sourceArxiv")}</SelectItem>
-              <SelectItem value="semanticscholar">{t("settings.sourceSemanticScholar")}</SelectItem>
+              <SelectItem value="light">{t("settings.themeLight")}</SelectItem>
+              <SelectItem value="sepia">{t("settings.themeSepia")}</SelectItem>
+              <SelectItem value="dark">{t("settings.themeDark")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
-      </div>
+      </section>
 
-      <div className="mt-6 flex items-center justify-between border-t pt-4">
-        <h2 className="text-base font-semibold">{t("settings.export")}</h2>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => void handleExport()}
-          disabled={exporting}
-        >
-          {exporting ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Download className="size-4" />
-          )}
-          {t("settings.exportData")}
-        </Button>
-      </div>
-      {exportMessage && <p className="mt-2 text-xs text-muted-foreground">{exportMessage}</p>}
+      <section aria-labelledby="source-heading" className="mt-6 border-t pt-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 id="source-heading" className="text-base font-semibold">
+              {t("settings.paperSource")}
+            </h2>
+            <Select
+              value={source}
+              onValueChange={(v) => setSource(v as PaperSource)}
+              aria-label={t("settings.paperSource")}
+            >
+              <SelectTrigger className="h-8 w-52 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="arxiv">{t("settings.sourceArxiv")}</SelectItem>
+                <SelectItem value="semanticscholar">
+                  {t("settings.sourceSemanticScholar")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </section>
 
-      <div className="mt-6 flex items-center justify-between">
-        <h2 className="text-base font-semibold">{t("settings.providers")}</h2>
-        <Button size="sm" onClick={openNewForm}>
-          <Plus className="size-4" />
-          {t("settings.addProvider")}
-        </Button>
-      </div>
+      <section aria-labelledby="data-heading" className="mt-6 border-t pt-4">
+        <div className="flex items-center justify-between">
+          <h2 id="data-heading" className="text-base font-semibold">
+            {t("settings.data")}
+          </h2>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void handleExport()}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+            {t("settings.exportData")}
+          </Button>
+        </div>
+        {exportMessage && <p className="mt-2 text-xs text-muted-foreground">{exportMessage}</p>}
+      </section>
 
-      {providers.length === 0 && !formOpen && (
-        <p className="mt-4 text-sm text-muted-foreground">{t("settings.noProviders")}</p>
-      )}
+      <section aria-labelledby="providers-heading" className="mt-6 border-t pt-4">
+        <div className="flex items-center justify-between">
+          <h2 id="providers-heading" className="text-base font-semibold">
+            {t("settings.providers")}
+          </h2>
+          <Button size="sm" onClick={openNewForm}>
+            <Plus className="size-4" />
+            {t("settings.addProvider")}
+          </Button>
+        </div>
 
-      {deleteError && (
-        <p className="mt-4 text-xs text-destructive">
-          {t("settings.deleteKeyFailed", { error: deleteError })}
-        </p>
-      )}
+        {providers.length === 0 && !formOpen && (
+          <p className="mt-4 text-sm text-muted-foreground">{t("settings.noProviders")}</p>
+        )}
 
-      <div className="mt-3 flex flex-col gap-3">
-        {providers.map((p) => (
-          <ProviderCard
-            key={p.id}
-            provider={p}
-            isActive={activeProviderId === p.id}
-            hasKey={keyStates[p.id] ?? false}
-            onSetActive={() => setActiveProvider(p.id)}
-            onEdit={() => openEditForm(p)}
-            onDelete={() => handleDeleteProvider(p.id)}
+        {deleteError && (
+          <p className="mt-4 text-xs text-destructive">
+            {t("settings.deleteKeyFailed", { error: deleteError })}
+          </p>
+        )}
+
+        <div className="mt-3 flex flex-col gap-3">
+          {providers.map((p) => (
+            <ProviderCard
+              key={p.id}
+              provider={p}
+              isActive={activeProviderId === p.id}
+              hasKey={keyStates[p.id] ?? false}
+              onSetActive={() => setActiveProvider(p.id)}
+              onEdit={() => openEditForm(p)}
+              onDelete={() => handleDeleteProvider(p.id)}
+            />
+          ))}
+        </div>
+
+        {formOpen && (
+          <ProviderForm
+            key={formKey}
+            editingId={editingId}
+            initial={editingProvider ?? emptyForm}
+            onCancel={() => setFormOpen(false)}
+            onSaved={() => {
+              setFormOpen(false);
+              setEditingId(null);
+            }}
+            onKeySaved={(id) => setKeyStates((s) => ({ ...s, [id]: true }))}
           />
-        ))}
-      </div>
-
-      {formOpen && (
-        <ProviderForm
-          key={formKey}
-          editingId={editingId}
-          initial={editingProvider ?? emptyForm}
-          onCancel={() => setFormOpen(false)}
-          onSaved={() => {
-            setFormOpen(false);
-            setEditingId(null);
-          }}
-          onKeySaved={(id) => setKeyStates((s) => ({ ...s, [id]: true }))}
-        />
-      )}
+        )}
+      </section>
 
       <p className="mt-8 text-center text-xs text-muted-foreground">
         {t("settings.version", { version: pkg.version })}

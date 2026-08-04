@@ -122,4 +122,65 @@ describe("ProviderForm", () => {
     expect(screen.getByLabelText("Model")).toHaveValue("gpt-4o-mini");
     expect(updateProvider).not.toHaveBeenCalled();
   });
+
+  it("shows inline errors for missing URL and model and does not save", () => {
+    renderForm();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByText("Base URL is required.")).toBeInTheDocument();
+    expect(screen.getByText("Model is required.")).toBeInTheDocument();
+    expect(addProvider).not.toHaveBeenCalled();
+    // Errors are wired to their fields for assistive tech.
+    expect(screen.getByLabelText("Base URL")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Base URL")).toHaveAttribute(
+      "aria-describedby",
+      "provider-url-error",
+    );
+    expect(screen.getByLabelText("Model")).toHaveAttribute(
+      "aria-describedby",
+      "provider-model-error",
+    );
+  });
+
+  it("rejects a custom URL that is not http(s)", () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText("Base URL"), { target: { value: "not-a-url" } });
+    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "m" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByText(/valid URL/)).toBeInTheDocument();
+    expect(addProvider).not.toHaveBeenCalled();
+  });
+
+  it("clears the URL error as soon as the user types a valid value", () => {
+    renderForm();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByText("Base URL is required.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Base URL"), {
+      target: { value: "https://api.example.com/v1" },
+    });
+    expect(screen.queryByText("Base URL is required.")).not.toBeInTheDocument();
+  });
+
+  it("surfaces a keychain save failure in the live region", async () => {
+    saveKey.mockRejectedValueOnce(new Error("keychain locked"));
+    renderForm();
+    fireEvent.change(screen.getByLabelText("Base URL"), {
+      target: { value: "https://api.example.com/v1" },
+    });
+    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "m" } });
+    fireEvent.change(screen.getByLabelText("API key"), { target: { value: "sk-test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/keychain locked/)).toBeInTheDocument();
+    expect(screen.getByText(/keychain locked/).closest("[aria-live]")).not.toBeNull();
+    expect(addProvider).toHaveBeenCalledTimes(1); // config is still saved
+  });
+
+  it("shows validation messages in Arabic", async () => {
+    const { default: i18n } = await import("@/i18n");
+    await i18n.changeLanguage("ar");
+    renderForm();
+    fireEvent.click(screen.getByRole("button", { name: "حفظ" }));
+    expect(screen.getByText("رابط الأساس مطلوب.")).toBeInTheDocument();
+    expect(screen.getByText("النموذج مطلوب.")).toBeInTheDocument();
+    await i18n.changeLanguage("en");
+  });
 });

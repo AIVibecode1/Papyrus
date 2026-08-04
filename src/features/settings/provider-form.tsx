@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PROVIDER_PRESETS, type ProviderConfig } from "@/lib/types";
+import { redactSecrets, truncateError } from "@/lib/provider-errors";
 import { useSettingsStore } from "@/stores/settings";
 
 interface ProviderFormProps {
@@ -21,6 +22,11 @@ interface ProviderFormProps {
   onCancel: () => void;
   onSaved: () => void;
   onKeySaved: (id: string) => void;
+}
+
+interface FieldErrors {
+  baseUrl?: string;
+  model?: string;
 }
 
 export function ProviderForm({
@@ -41,6 +47,8 @@ export function ProviderForm({
   const [preset, setPreset] = useState<string>("custom");
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Preset base URLs are fixed; only Custom lets the user type one.
   const urlLocked = !editingId && preset !== "custom";
@@ -49,12 +57,28 @@ export function ProviderForm({
 
   const applyPreset = (key: string) => {
     setPreset(key);
+    setFieldErrors((e) => ({ ...e, baseUrl: undefined }));
     const p = PROVIDER_PRESETS[key];
     if (p) setForm((f) => ({ ...f, baseUrl: p.baseUrl, model: p.model }));
   };
 
+  const validate = (): boolean => {
+    const errors: FieldErrors = {};
+    const url = form.baseUrl.trim();
+    const model = form.model.trim();
+    if (!url) {
+      errors.baseUrl = t("settings.urlRequired");
+    } else if (preset === "custom" && !/^https?:\/\//i.test(url)) {
+      errors.baseUrl = t("settings.urlInvalid");
+    }
+    if (!model) errors.model = t("settings.modelRequired");
+    setFieldErrors(errors);
+    return errors.baseUrl === undefined && errors.model === undefined;
+  };
+
   const handleSave = async () => {
-    if (!form.baseUrl.trim() || !form.model.trim()) return;
+    setSaveError(null);
+    if (!validate()) return;
     setSaving(true);
     try {
       const id = editingId ?? crypto.randomUUID();
@@ -74,6 +98,8 @@ export function ProviderForm({
         onKeySaved(id);
       }
       onSaved();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
@@ -112,11 +138,21 @@ export function ProviderForm({
             id="provider-url"
             dir="ltr"
             value={form.baseUrl}
-            onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
+            onChange={(e) => {
+              setForm((f) => ({ ...f, baseUrl: e.target.value }));
+              if (fieldErrors.baseUrl) setFieldErrors((f) => ({ ...f, baseUrl: undefined }));
+            }}
             placeholder="https://api.example.com/v1"
             disabled={urlLocked}
+            aria-invalid={fieldErrors.baseUrl ? true : undefined}
+            aria-describedby={fieldErrors.baseUrl ? "provider-url-error" : undefined}
           />
           {urlLocked && <p className="text-xs text-muted-foreground">{t("settings.urlLocked")}</p>}
+          {fieldErrors.baseUrl && (
+            <p id="provider-url-error" className="text-xs text-destructive">
+              {fieldErrors.baseUrl}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -139,9 +175,19 @@ export function ProviderForm({
               id="provider-model"
               dir="ltr"
               value={form.model}
-              onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, model: e.target.value }));
+                if (fieldErrors.model) setFieldErrors((f) => ({ ...f, model: undefined }));
+              }}
               placeholder="gpt-4o-mini"
+              aria-invalid={fieldErrors.model ? true : undefined}
+              aria-describedby={fieldErrors.model ? "provider-model-error" : undefined}
             />
+          )}
+          {fieldErrors.model && (
+            <p id="provider-model-error" className="text-xs text-destructive">
+              {fieldErrors.model}
+            </p>
           )}
         </div>
 
@@ -172,6 +218,16 @@ export function ProviderForm({
             <KeyRound className="size-3" />
             {t("settings.keyHint")}
           </p>
+        </div>
+
+        <div aria-live="polite">
+          {saveError && (
+            <p className="text-xs text-destructive">
+              {t("settings.saveFailed", {
+                error: truncateError(redactSecrets(saveError)),
+              })}
+            </p>
+          )}
         </div>
 
         <div className="flex gap-2">

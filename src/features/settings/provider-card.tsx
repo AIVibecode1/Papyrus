@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ProviderConfig } from "@/lib/types";
+import { categorizeTestError, redactSecrets, truncateError } from "@/lib/provider-errors";
 import { useSettingsStore } from "@/stores/settings";
 import { cn } from "@/lib/utils";
 
@@ -49,13 +50,11 @@ export function ProviderCard({
   };
 
   const handleDelete = async () => {
-    if (!confirming) {
-      setConfirming(true);
-      return;
-    }
     setConfirming(false);
     await onDelete();
   };
+
+  const category = testResult && !testResult.ok ? categorizeTestError(testResult.msg) : null;
 
   return (
     <Card>
@@ -89,25 +88,54 @@ export function ProviderCard({
               )}
               {testing ? t("settings.testing") : t("settings.test")}
             </Button>
-            <Button size="sm" variant="ghost" onClick={onSetActive}>
+            <Button size="sm" variant="ghost" onClick={onSetActive} aria-pressed={isActive}>
               {t("settings.setActive")}
             </Button>
             <Button size="sm" variant="ghost" onClick={onEdit}>
               <Pencil className="size-3.5" />
             </Button>
-            <Button
-              size="sm"
-              variant={confirming ? "destructive" : "ghost"}
-              onClick={() => void handleDelete()}
-            >
-              <Trash2 className="size-3.5" />
-              {confirming ? t("settings.confirmDelete") : ""}
-            </Button>
+            {confirming ? (
+              <div
+                role="group"
+                aria-label={t("settings.confirmDeletePrompt")}
+                className="flex items-center gap-1.5"
+              >
+                <span className="text-xs text-destructive">
+                  {t("settings.confirmDeletePrompt")}
+                </span>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  autoFocus
+                  onClick={() => void handleDelete()}
+                >
+                  {t("settings.delete")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+                  {t("settings.cancel")}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setConfirming(true)}
+                aria-label={t("settings.delete")}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            )}
           </div>
         </div>
 
-        <p className="break-all font-mono text-xs text-muted-foreground">
-          {provider.baseUrl} · {provider.model}
+        <p className="text-xs text-muted-foreground">
+          <span dir="ltr" className="break-all font-mono">
+            {provider.baseUrl}
+          </span>
+          <span className="mx-1 text-muted-foreground/60">·</span>
+          <span dir="ltr" className="font-mono">
+            {provider.model}
+          </span>
         </p>
 
         {testResult && (
@@ -117,9 +145,21 @@ export function ProviderCard({
               testResult.ok ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
             )}
           >
-            {testResult.ok
-              ? t("settings.testOk", { reply: testResult.msg })
-              : `${t("settings.testFailed")}: ${testResult.msg}`}
+            {testResult.ok ? (
+              <span dir="ltr">
+                {t("settings.testOk", { reply: truncateError(testResult.msg) })}
+              </span>
+            ) : (
+              <>
+                <span>{t(`settings.testError.${category}`)}</span>
+                {category === "unknown" && testResult.msg && (
+                  <span dir="ltr" className="break-all">
+                    {" "}
+                    — {truncateError(redactSecrets(testResult.msg))}
+                  </span>
+                )}
+              </>
+            )}
           </p>
         )}
       </CardContent>
