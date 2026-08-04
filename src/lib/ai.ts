@@ -64,7 +64,14 @@ export function normalizeBaseUrl(base: string): string {
 // they surface in the UI, so a gateway that echoes the submitted key back
 // in a 401/400 body cannot leak it into the explanation panel.
 export function redactTokens(text: string): string {
-  return text.replace(/(sk-|sk_|key-|key_|ghp_|xai-|Bearer\s|bearer\s)[A-Za-z0-9_-]{6,}/g, "$1***");
+  const prefixed = text.replace(
+    /(sk-|sk_|key-|key_|ghp_|xai-|Bearer\s|bearer\s)[A-Za-z0-9_-]{6,}/g,
+    "$1***",
+  );
+  // Generic fallback: long opaque runs (>= 32 token-ish chars) with no
+  // recognizable prefix, e.g. raw keys echoed by custom gateways. Same
+  // rule as the Rust side. Runs this long are never normal words.
+  return prefixed.replace(/[A-Za-z0-9_.-]{32,}/g, "***");
 }
 
 function buildMessages(paper: Paper, language: string) {

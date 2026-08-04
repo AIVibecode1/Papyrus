@@ -158,10 +158,24 @@ fn build_messages(paper: &Paper, language: &str) -> Vec<Value> {
     ]
 }
 
+/// Extracts the host portion of a base URL ("https://localhost:11434/v1"
+/// -> "localhost:11434"). Used by checks that decide whether a provider
+/// is local, so a remote host named `localhost.evil.com` can never be
+/// mistaken for loopback.
+fn base_url_host(base_url: &str) -> &str {
+    let after_scheme = base_url
+        .strip_prefix("https://")
+        .or_else(|| base_url.strip_prefix("http://"))
+        .unwrap_or(base_url);
+    after_scheme.split('/').next().unwrap_or(after_scheme)
+}
+
 /// Reports whether a base URL points at a local server (Ollama etc.),
-/// where an API key may be omitted.
+/// where an API key may be omitted. Strict host check: only genuine
+/// loopback hosts qualify, never hosts whose NAME merely contains
+/// "localhost" (e.g. `https://localhost.evil.com`).
 fn is_local_base_url(base_url: &str) -> bool {
-    base_url.contains("localhost") || base_url.contains("127.0.0.1")
+    is_loopback_host(base_url_host(base_url))
 }
 
 /// Reads a secret from the OS keychain (Windows Credential Manager / macOS
@@ -380,7 +394,37 @@ fn redact_tokens(text: &str) -> String {
             }
         }
     }
-    out
+    // Generic fallback: long opaque runs (>= 32 token-ish characters) with
+    // no recognizable prefix. Custom OpenAI-compatible gateways often echo
+    // the submitted key back in error bodies without any standard prefix;
+    // a run this long is never a normal word. Same rule as the TS mirror.
+    let mut final_out = String::with_capacity(out.len());
+    let mut run_start: Option<usize> = None;
+    let flush_run = |final_out: &mut String, start: usize, end: usize| {
+        let run = &out[start..end];
+        if run.chars().count() >= 32 {
+            final_out.push_str("***");
+        } else {
+            final_out.push_str(run);
+        }
+    };
+    for (i, c) in out.char_indices() {
+        let is_token_char = c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.');
+        match (is_token_char, run_start) {
+            (true, None) => run_start = Some(i),
+            (false, Some(start)) => {
+                flush_run(&mut final_out, start, i);
+                final_out.push(c);
+                run_start = None;
+            }
+            (false, None) => final_out.push(c),
+            (true, Some(_)) => {}
+        }
+    }
+    if let Some(start) = run_start {
+        flush_run(&mut final_out, start, out.len());
+    }
+    final_out
 }
 
 fn validate_provider(provider: &ProviderConfig) -> Result<(), String> {
@@ -1348,6 +1392,38 @@ mod tests {
     fn redact_tokens_ignores_short_prefixes() {
         // "sk-8" is not a token; masking it would mangle legitimate text.
         assert_eq!(redact_tokens("The sk-8 model"), "The sk-8 model");
+    }
+
+    #[test]
+    fn redact_tokens_masks_prefixless_long_keys() {
+        // Custom gateways echo raw keys with no recognizable prefix; a
+        // long opaque run must be masked even without sk-/key-/ghp_.
+        let body = "401 invalid api_key: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f";
+        let out = redact_tokens(body);
+        assert!(
+            !out.contains("a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f"),
+            "got: {out}"
+        );
+        assert!(out.contains("***"), "got: {out}");
+    }
+
+    #[test]
+    fn redact_tokens_keeps_urls_and_short_hashes() {
+        // URLs and short identifiers must survive the generic pass: a
+        // slash breaks the run, and short runs are never masked.
+        let body = "check https://example.com/status/abc123 for details (id 42)";
+        assert_eq!(redact_tokens(body), body);
+    }
+
+    #[test]
+    fn local_base_url_requires_a_real_loopback_host() {
+        assert!(is_local_base_url("http://localhost:11434/v1"));
+        assert!(is_local_base_url("https://127.0.0.1:8080"));
+        // A remote host whose NAME merely contains "localhost" is not
+        // local and must not skip the API-key requirement.
+        assert!(!is_local_base_url("https://localhost.evil.com/v1"));
+        assert!(!is_local_base_url("https://attacker.com/127.0.0.1/v1"));
+        assert!(!is_local_base_url("https://api.example.com/v1"));
     }
 
     #[test]
