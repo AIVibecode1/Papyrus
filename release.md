@@ -19,6 +19,56 @@ Rules:
 
 ---
 
+## v1.0.9 - 2026-08-04
+
+Status: installers built, not yet published on GitHub.
+Built from: (filled after the release commit)
+Quality gates: 236 frontend tests, 95 Rust tests, clippy, rustfmt, ESLint,
+Prettier, strict typecheck, release-integrity checker, CI on Windows and
+macOS.
+
+Deep audit round 2 (7 plans, commits 720ca6f..7d5ea90): the PDF reader's
+black-page bug was traced to five interacting render races and fixed at
+the root; three correctness bugs (rate limiter, stale load-more,
+cancellation clobber) and two security gaps (loopback check, key
+redaction) were closed; the design system got a palette/ARIA/sizing
+cleanup; ai.rs was split into five submodules; and the app gained
+walkthrough persistence plus data import.
+
+- PDF pages can no longer turn black on resize: renders are gated by
+  cancellation checks (a stale run never touches a canvas), the wait
+  for a previous render is bounded so a dead task cannot wedge a page,
+  retries use a real backoff and failed pages are repainted on the next
+  frame, and cancelled tasks are dropped from the queue instead of
+  blocking future runs. Three regression tests cover the failure modes.
+- arXiv politeness is enforced under concurrency: the per-source rate
+  limiter serializes callers across the sleep and stamps the time after
+  firing; a stale "load more" response can no longer be appended to a
+  newer list; and stopping a stream can no longer break cancellation of
+  a newer stream started during the stop.
+- Security: the local-server check now parses the actual host, so
+  https://localhost.evil.com can never skip the API-key requirement;
+  key redaction gained a generic fallback for prefixless long keys
+  (custom gateways), mirrored in Rust and TypeScript.
+- The warm monochrome design system is now consistent: raw amber and
+  emerald alert colors were replaced with theme tokens, plain buttons
+  gained visible focus rings, the top bar aligns with the content
+  width, reader tabs expose the proper tablist semantics, dark-mode
+  borders are stronger, cards are crisper, and markdown headings have
+  real hierarchy.
+- ai.rs (1880 lines) was split into ai/registry, keychain, prompts,
+  stream and commands modules: prompt edits now touch only prompts.rs.
+- Reopening a paper restores its section walkthrough and synthesis from
+  local storage instead of re-streaming ~10 provider calls.
+- New "Import data" action in Settings: pick a Papyrus export file and
+  it validates it, merges the saved papers (existing entries win) and
+  appends the chat transcripts. Providers and keys are never exported.
+- Redundant citation batch lookups are skipped for Scholar results that
+  already carry counts (fewer API calls); the browser failover loop and
+  the SSRF redirect re-validation chain gained regression tests.
+
+---
+
 ## v1.0.8 - 2026-08-04
 
 Status: installers built, not yet published on GitHub.
