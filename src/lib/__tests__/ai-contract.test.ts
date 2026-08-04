@@ -33,7 +33,7 @@ describe("shared AI resource (src-tauri/prompts.json)", () => {
   it("loads both system prompts", () => {
     // Mirrors the Rust messages_follow_ui_language assertions.
     expect(prompts.systemPromptEn).toContain("English");
-    expect(prompts.systemPromptAr).toContain("اللغة العربية");
+    expect(prompts.systemPromptAr).toContain("بالعربية");
     expect(prompts.systemPromptEn.length).toBeGreaterThan(0);
     expect(prompts.systemPromptAr.length).toBeGreaterThan(0);
   });
@@ -51,17 +51,17 @@ describe("shared AI resource (src-tauri/prompts.json)", () => {
     expect(en).toContain("research mentor");
     expect(en).toContain("delve");
     expect(en).toContain("250");
-    expect(en).toContain("markdown tables");
+    expect(en).toContain("table only if it genuinely saves");
     expect(ar).toContain("مرشد بحثي");
     expect(ar).toContain("حشو");
     expect(ar).toContain("٢٥٠");
-    expect(ar).toContain("جداول ماركداون");
+    expect(ar).toContain("جدولاً فقط");
   });
 
   it("provides the full-paper mentor structure for the reader feature", () => {
     // Saved now as the single source for the upcoming whole-PDF reader.
     expect(prompts.fullPaperStructureEn).toContain("research mentor");
-    expect(prompts.fullPaperStructureEn).toContain("Equations");
+    expect(prompts.fullPaperStructureEn).toContain("equations");
     expect(prompts.fullPaperStructureAr).toContain("المعادلات");
     expect(prompts.fullPaperStructureAr).toContain("مرشدي البحثي");
   });

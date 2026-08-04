@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ArrowUpDown,
   Bookmark,
   BookOpenText,
   CalendarDays,
@@ -10,7 +11,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { pickPapers } from "@/lib/picks";
+import { sortPapers, type PaperSortMode } from "@/lib/paper-sort";
 import { useFavoritesStore } from "@/stores/favorites";
 import { usePapersStore, SCHOLAR_SEARCH_REQUIRED } from "@/stores/papers";
 import { useDigestStore, addDays, todayStr } from "@/stores/digest";
@@ -96,6 +98,17 @@ export function PaperList() {
     sessionStorage.setItem(picksKey, "1");
     setPicksDismissed(true);
   };
+
+  const sortMode = usePapersStore((s) => s.sortMode);
+  const setSortMode = usePapersStore((s) => s.setSortMode);
+  const citations = usePapersStore((s) => s.citations);
+  // "Most cited" reorders the loaded list by the citation counts already
+  // fetched (they arrive a moment after the list, and the list re-sorts
+  // live as they land). Papers without a known count sort last.
+  const visiblePapers = useMemo(
+    () => sortPapers(papers, citations, sortMode),
+    [papers, citations, sortMode],
+  );
 
   // Auto-aggregator: backfill recent days for the current field so the
   // day list is populated. ensureHistory is concurrency-guarded.
@@ -210,6 +223,18 @@ export function PaperList() {
             {t("papers.today")}
           </Button>
         )}
+        {!loading && papers.length > 0 && (
+          <Select value={sortMode} onValueChange={(v) => setSortMode(v as PaperSortMode)}>
+            <SelectTrigger className="h-8 w-auto gap-2 text-xs" aria-label={t("papers.sortBy")}>
+              <ArrowUpDown className="size-3.5" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">{t("papers.sortNewest")}</SelectItem>
+              <SelectItem value="cited">{t("papers.sortCited")}</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         {backfillActive && (
           <span className="text-xs text-muted-foreground">
             {t("papers.historyLoading", {
@@ -315,7 +340,7 @@ export function PaperList() {
 
       {!loading && !error && !savedOnly && papers.length > 0 && (
         <div className="flex flex-col gap-4">
-          {papers.map((paper, i) => (
+          {visiblePapers.map((paper, i) => (
             <PaperCard key={paper.id} paper={paper} index={i} />
           ))}
           {papers.length >= 20 && (

@@ -879,7 +879,7 @@ mod tests {
         let en = build_messages(&sample_paper(), "en");
         assert!(en[0]["content"].as_str().unwrap().contains("English"));
         let ar = build_messages(&sample_paper(), "ar");
-        assert!(ar[0]["content"].as_str().unwrap().contains("اللغة العربية"));
+        assert!(ar[0]["content"].as_str().unwrap().contains("بالعربية"));
         let user_content = en[1]["content"].as_str().unwrap();
         assert!(user_content.contains("A Test Paper"));
         assert!(user_content.contains("A summary of the test paper."));

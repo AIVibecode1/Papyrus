@@ -19,6 +19,29 @@ Rules:
 
 ---
 
+## v1.0.8 - 2026-08-04
+
+Status: installers built, not yet published on GitHub.
+Built from: (filled after the release commit)
+Quality gates: 216 frontend tests, 84 Rust tests, clippy, rustfmt, ESLint,
+Prettier, strict typecheck, release-integrity checker, CI on Windows and
+macOS.
+
+Bullet points for the GitHub release description:
+
+- All AI prompts updated (English and Arabic): a sharper mentor voice
+  with tone examples to aim for and to avoid, explanations calibrated
+  to a working researcher, strict anti-AI-cliche writing rules, LaTeX
+  equations, and natural Arabic with English terms in parentheses. The
+  prompts live in src-tauri/prompts.json and can be edited without any
+  code changes
+- New Sort control above the paper list: order the results by Most
+  cited or Newest, so searching a topic can surface the original or
+  most influential paper instead of only the newest hits (works for
+  arXiv search, Scholar search and day browsing, in English and Arabic)
+
+---
+
 ## v1.0.7 - 2026-08-04
 
 Status: installers built, not yet published on GitHub.

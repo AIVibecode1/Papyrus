@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { fetchPapers, type PaperSource } from "@/lib/arxiv";
 import { fetchCitations } from "@/lib/citations";
+import type { PaperSortMode } from "@/lib/paper-sort";
 import { useDigestStore } from "@/stores/digest";
 import type { Paper } from "@/lib/types";
 
@@ -33,10 +34,13 @@ interface PapersState {
   lastUpdated: number | null;
   /** citation counts keyed by paper id (Semantic Scholar enrichment). */
   citations: Record<string, number>;
+  /** How the visible list is ordered: feed order or most cited first. */
+  sortMode: PaperSortMode;
   setCategory: (category: string) => void;
   setQuery: (query: string) => void;
   setDate: (date: string | null) => void;
   setSource: (source: PaperSource) => void;
+  setSortMode: (mode: PaperSortMode) => void;
   /** Clears the fallback notice (dismissed by the user). */
   clearFallbackNote: () => void;
   refresh: () => Promise<void>;
@@ -58,6 +62,7 @@ export const usePapersStore = create<PapersState>((set, get) => ({
   fallbackNote: null,
   lastUpdated: null,
   citations: {},
+  sortMode: "newest",
 
   setCategory: (category) => {
     if (category === get().category) return;
@@ -81,6 +86,11 @@ export const usePapersStore = create<PapersState>((set, get) => ({
     if (source === get().source) return;
     set({ source, papers: [], citations: {}, error: null, fallbackNote: null });
     void get().refresh();
+  },
+
+  setSortMode: (sortMode) => {
+    if (sortMode === get().sortMode) return;
+    set({ sortMode });
   },
 
   clearFallbackNote: () => set({ fallbackNote: null }),
