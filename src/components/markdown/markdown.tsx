@@ -71,12 +71,12 @@ export const Markdown = memo(function Markdown({ children, className }: Markdown
       </a>
     ),
     h1: ({ children }) => (
-      <h1 dir={proseDir} className="mb-2 mt-4 text-lg font-bold tracking-tight first:mt-0">
+      <h1 dir={proseDir} className="mb-2 mt-4 text-xl font-bold tracking-tight first:mt-0">
         {children}
       </h1>
     ),
     h2: ({ children }) => (
-      <h2 dir={proseDir} className="mb-2 mt-4 text-base font-bold tracking-tight first:mt-0">
+      <h2 dir={proseDir} className="mb-2 mt-4 text-lg font-bold tracking-tight first:mt-0">
         {children}
       </h2>
     ),

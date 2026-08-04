@@ -22,11 +22,12 @@ export function Sidebar() {
             title={cat.code}
             className={cn(
               "relative flex items-center justify-between rounded-md px-3 py-2 text-sm transition-all duration-200",
+              "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring",
               category === cat.code
                 ? "bg-accent font-medium text-accent-foreground before:absolute before:start-1.5 before:top-1/2 before:size-1 before:-translate-y-1/2 before:rounded-full before:bg-primary"
                 : "text-foreground/80 hover:bg-accent/50 hover:text-foreground",
             )}
-            aria-pressed={category === cat.code}
+            aria-current={category === cat.code ? "true" : undefined}
           >
             <span>{t(cat.key)}</span>
           </button>

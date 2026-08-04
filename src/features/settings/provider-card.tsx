@@ -139,12 +139,7 @@ export function ProviderCard({
         </p>
 
         {testResult && (
-          <p
-            className={cn(
-              "text-xs",
-              testResult.ok ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
-            )}
-          >
+          <p className={cn("text-xs", testResult.ok ? "text-primary" : "text-destructive")}>
             {testResult.ok ? (
               <span dir="ltr">
                 {t("settings.testOk", { reply: truncateError(testResult.msg) })}

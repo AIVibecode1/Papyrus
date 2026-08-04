@@ -52,7 +52,7 @@ export function TodayPicks({ papers, date, onDismiss, onOpen }: TodayPicksProps)
             key={p.id}
             type="button"
             onClick={() => onOpen(p)}
-            className="group flex w-56 shrink-0 flex-col gap-1.5 rounded-md border bg-background p-2.5 text-start transition-colors hover:border-primary/40"
+            className="group flex w-56 shrink-0 flex-col gap-1.5 rounded-md border bg-background p-2.5 text-start transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring"
           >
             <span dir="ltr" className="line-clamp-2 text-xs font-medium leading-snug">
               {p.title}

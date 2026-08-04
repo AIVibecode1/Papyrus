@@ -384,12 +384,17 @@ export function ReaderView() {
                 </Button>
               </div>
             )}
-            <div className="flex shrink-0 items-center gap-1 border-b p-2">
+            <div
+              className="flex shrink-0 items-center gap-1 border-b p-2"
+              role="tablist"
+              aria-label={t("reader.chatTabs")}
+            >
               <Button
                 variant={tab === "walkthrough" ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => setTab("walkthrough")}
-                aria-pressed={tab === "walkthrough"}
+                role="tab"
+                aria-selected={tab === "walkthrough"}
               >
                 <BookOpenText className="size-3.5" />
                 {t("reader.walkthroughTab")}
@@ -398,7 +403,8 @@ export function ReaderView() {
                 variant={tab === "ask" ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => setTab("ask")}
-                aria-pressed={tab === "ask"}
+                role="tab"
+                aria-selected={tab === "ask"}
               >
                 <MessageSquareText className="size-3.5" />
                 {t("reader.askTab")}
@@ -417,11 +423,14 @@ export function ReaderView() {
             </div>
 
             {providers.length === 0 ? (
-              <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-center">
+              <div
+                role="tabpanel"
+                className="flex min-h-0 flex-1 items-center justify-center p-6 text-center"
+              >
                 <p className="text-sm text-muted-foreground">{t("explain.noProvider")}</p>
               </div>
             ) : tab === "walkthrough" ? (
-              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-3">
                 <div className="flex flex-col gap-3">
                   {reader.extractStatus === "error" && reader.sections.length === 0 && (
                     <div className="flex flex-col items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-6 text-center">
@@ -526,7 +535,7 @@ export function ReaderView() {
                 </div>
               </div>
             ) : (
-              <div className="flex min-h-0 flex-1 flex-col">
+              <div role="tabpanel" className="flex min-h-0 flex-1 flex-col">
                 {/* chat history scrolls; the input stays pinned below */}
                 <div className="min-h-0 flex-1 overflow-y-auto p-3">
                   <div

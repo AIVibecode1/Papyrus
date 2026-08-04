@@ -23,6 +23,7 @@
     "matches": "matches",
     "noMatches": "No matches",
     "walkthroughTab": "Walkthrough",
+    "chatTabs": "Reader tabs",
     "askTab": "Ask",
     "explainWhole": "Explain the whole paper",
     "explainWholeHint": "The mentor reads the paper section by section and explains each one before moving on.",

@@ -136,7 +136,7 @@ describe("reader open boundary", () => {
     expect(getDocumentCalls).toHaveBeenCalledTimes(1);
 
     // The walkthrough tab shows the entry hint even before extraction.
-    fireEvent.click(screen.getByRole("button", { name: "Walkthrough" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Walkthrough" }));
     const hint = await screen.findByRole("button", { name: "Explain the whole paper" });
     expect(hint).toBeInTheDocument();
 
@@ -170,7 +170,7 @@ describe("reader open boundary", () => {
     await useReaderStore.getState().open(paper);
     render(<ReaderView />);
     await waitFor(() => expect(screen.getByText("1 / 1")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Walkthrough" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Walkthrough" }));
     fireEvent.click(await screen.findByRole("button", { name: "Explain the whole paper" }));
 
     expect(await screen.findByText(/No readable text could be extracted/)).toBeInTheDocument();

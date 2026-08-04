@@ -116,7 +116,7 @@ describe("ReaderView", () => {
     });
     render(<ReaderView />);
     // The chat lives in the Ask tab.
-    fireEvent.click(screen.getByRole("button", { name: "اسأل" }));
+    fireEvent.click(screen.getByRole("tab", { name: "اسأل" }));
 
     const question = await screen.findByText("ما هو المشفر؟");
     // The Markdown mock wraps the text; the bubble is its parent.
@@ -149,7 +149,7 @@ describe("ReaderView", () => {
     const askSpy = vi.spyOn(useReaderStore.getState(), "ask").mockResolvedValue(undefined);
     render(<ReaderView />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Ask" }));
     const input = screen.getByPlaceholderText("Ask about the paper…");
     fireEvent.change(input, { target: { value: "What is an embedding?" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -181,7 +181,7 @@ describe("ReaderView", () => {
     });
     render(<ReaderView />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Ask" }));
     expect(screen.getByText("provider down")).toBeInTheDocument();
 
     const retry = screen.getByRole("button", { name: "Retry answer" });
@@ -255,11 +255,11 @@ describe("ReaderView", () => {
 
     // No desktop split separator on narrow windows.
     expect(screen.queryByRole("separator")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "الشرح الموجّه" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "اسأل" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "الشرح الموجّه" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "اسأل" })).toBeInTheDocument();
 
     // The Ask input stays reachable in Arabic.
-    fireEvent.click(screen.getByRole("button", { name: "اسأل" }));
+    fireEvent.click(screen.getByRole("tab", { name: "اسأل" }));
     expect(await screen.findByPlaceholderText("اسأل عن الورقة…")).toBeInTheDocument();
 
     await i18n.changeLanguage("en");
