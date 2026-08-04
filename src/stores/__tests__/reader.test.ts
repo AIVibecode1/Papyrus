@@ -85,6 +85,8 @@ beforeEach(() => {
     loadStatus: "idle",
     loadError: null,
     sections: [],
+    extractStatus: "idle",
+    extractError: null,
     sectionIndex: 0,
     sectionEntries: [],
     synthesis: null,
@@ -94,21 +96,39 @@ beforeEach(() => {
 });
 
 describe("reader store", () => {
-  it("open extracts text, splits sections and loads chat", async () => {
+  it("open downloads the PDF and defers text extraction until asked", async () => {
     await useReaderStore.getState().open(paper);
 
     const s = useReaderStore.getState();
     expect(s.loadStatus).toBe("ready");
     expect(s.pdfBytes).not.toBeNull();
-    expect(s.sections).toHaveLength(3);
-    expect(s.sections[0]).toContain("Intro text");
     expect(getPdfBytes).toHaveBeenCalledWith(paper.id, paper.pdfUrl);
+    // The whole-paper parse is lazy: no extraction at open time.
+    expect(extractTextFromPdf).not.toHaveBeenCalled();
+    expect(s.sections).toHaveLength(0);
+    expect(s.extractStatus).toBe("idle");
+
+    // First use extracts once and caches the sections.
+    expect(await useReaderStore.getState().ensureExtracted()).toBe(true);
+    const extracted = useReaderStore.getState();
+    expect(extracted.sections).toHaveLength(3);
+    expect(extracted.sections[0]).toContain("Intro text");
+    expect(extracted.extractStatus).toBe("done");
+
+    await useReaderStore.getState().ensureExtracted();
+    expect(extractTextFromPdf).toHaveBeenCalledTimes(1);
   });
 
-  it("open reports an error when no text can be extracted", async () => {
+  it("extraction failure is reported by ensureExtracted, not by open", async () => {
     vi.mocked(extractTextFromPdf).mockResolvedValue("");
     await useReaderStore.getState().open(paper);
-    expect(useReaderStore.getState().loadStatus).toBe("error");
+    // The PDF itself is readable: the reader opens normally.
+    expect(useReaderStore.getState().loadStatus).toBe("ready");
+
+    expect(await useReaderStore.getState().ensureExtracted()).toBe(false);
+    const s = useReaderStore.getState();
+    expect(s.extractStatus).toBe("error");
+    expect(s.extractError).toContain("No readable text");
   });
 
   it("open reports the underlying error", async () => {
@@ -117,6 +137,22 @@ describe("reader store", () => {
     const s = useReaderStore.getState();
     expect(s.loadStatus).toBe("error");
     expect(s.loadError).toBe("network down");
+  });
+
+  it("a stale extraction cannot leak into a newer paper", async () => {
+    // Extraction for paper A is slow; paper B opens in the meantime.
+    let resolveExtract!: (v: string) => void;
+    vi.mocked(extractTextFromPdf).mockReturnValue(new Promise((r) => (resolveExtract = r)));
+    await useReaderStore.getState().open(paper);
+    const ensureA = useReaderStore.getState().ensureExtracted();
+    // Paper B opens while A's extraction is still in flight.
+    const paperB = { ...paper, id: "2607.00002" };
+    await useReaderStore.getState().open(paperB);
+    resolveExtract("Text from paper A");
+    expect(await ensureA).toBe(false);
+    // Paper B's state must not contain paper A's sections.
+    expect(useReaderStore.getState().sections).toHaveLength(0);
+    expect(useReaderStore.getState().extractStatus).toBe("idle");
   });
 
   it("walks through sections then synthesis on continue", async () => {

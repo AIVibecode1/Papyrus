@@ -8,7 +8,10 @@
   },
   "reader": {
     "back": "Back to papers",
-    "loadingPdf": "Loading PDF and extracting text…",
+    "loadingPdf": "Loading the PDF…",
+    "preparingPaper": "Preparing the paper…",
+    "retryExtraction": "Try again",
+    "noText": "No readable text could be extracted from this PDF.",
     "pdfError": "Could not load the PDF.",
     "prevPage": "Previous page",
     "nextPage": "Next page",

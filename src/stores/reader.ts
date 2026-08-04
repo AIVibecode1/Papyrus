@@ -10,6 +10,8 @@ import type { Paper, ProviderConfig } from "@/lib/types";
 
 export type ReaderStatus = "idle" | "loading" | "ready" | "error";
 export type StreamStatus = "idle" | "loading" | "streaming" | "done" | "error" | "stopped";
+/** Whole-paper text extraction lifecycle (deferred until Walkthrough/Ask). */
+export type ExtractStatus = "idle" | "loading" | "done" | "error";
 
 export interface SectionEntry {
   text: string;
@@ -34,6 +36,8 @@ interface ReaderState {
   loadStatus: ReaderStatus;
   loadError: string | null;
   sections: string[];
+  extractStatus: ExtractStatus;
+  extractError: string | null;
   /** Index of the next section to explain (0-based). */
   sectionIndex: number;
   /** Explanations for the sections completed so far. */
@@ -43,6 +47,13 @@ interface ReaderState {
   selection: string | null;
   open: (paper: Paper) => Promise<void>;
   close: () => void;
+  /**
+   * Extracts the whole-paper text once (lazy): the reader downloads and
+   * shows the PDF immediately, and only pays for pdf.js text extraction
+   * when Walkthrough or Ask actually needs it. Returns false when the
+   * text is unavailable.
+   */
+  ensureExtracted: () => Promise<boolean>;
   setSelection: (text: string | null) => void;
   clearSelection: () => void;
   startWalkthrough: (provider: ProviderConfig, language: string) => Promise<void>;
@@ -100,6 +111,9 @@ export const useReaderStore = create<ReaderState>((set, get) => {
   // its async PDF/text results, so a slow open for paper A can never
   // overwrite paper B opened right after it.
   let openGen = 0;
+  // Extraction token: only the newest extraction (or open/close) may
+  // apply its results, mirroring openGen for the lazy text pass.
+  let extractGen = 0;
   // Operation id of the most recent stream (section, synthesis or ask);
   // stop() targets exactly it, so a stop can never hit unrelated work.
   let activeOperationId: string | null = null;
@@ -110,6 +124,8 @@ export const useReaderStore = create<ReaderState>((set, get) => {
     loadStatus: "idle",
     loadError: null,
     sections: [],
+    extractStatus: "idle",
+    extractError: null,
     sectionIndex: 0,
     sectionEntries: [],
     synthesis: null,
@@ -118,25 +134,18 @@ export const useReaderStore = create<ReaderState>((set, get) => {
 
     open: async (paper) => {
       const gen = ++openGen;
+      // A new paper invalidates any in-flight extraction of the old one.
+      extractGen += 1;
       set({ paper, pdfBytes: null, loadStatus: "loading", loadError: null });
       try {
         const bytes = await getPdfBytes(paper.id, paper.pdfUrl);
-        const text = await extractTextFromPdf(bytes);
         // A newer open (or close) superseded this one: drop the results.
-        if (openGen !== gen) return;
-        const sections = splitIntoSections(text);
-        if (sections.length === 0) {
-          if (openGen !== gen) return;
-          set({
-            loadStatus: "error",
-            loadError: "No readable text could be extracted from this PDF.",
-          });
-          return;
-        }
         if (openGen !== gen) return;
         set({
           pdfBytes: bytes,
-          sections,
+          sections: [],
+          extractStatus: "idle",
+          extractError: null,
           sectionIndex: 0,
           sectionEntries: [],
           synthesis: null,
@@ -153,15 +162,52 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       }
     },
 
+    // Lazy whole-paper text extraction: the viewer needs only the bytes,
+    // so the pdf.js parse for Walkthrough/Ask happens on first use and is
+    // cached. A newer open/close invalidates an in-flight extraction.
+    ensureExtracted: async () => {
+      const { sections, extractStatus, pdfBytes } = get();
+      if (sections.length > 0) return true;
+      if (extractStatus === "loading") return false;
+      if (!pdfBytes) return false;
+      const gen = ++extractGen;
+      set({ extractStatus: "loading", extractError: null });
+      try {
+        const text = await extractTextFromPdf(pdfBytes);
+        if (extractGen !== gen) return false;
+        const sections = splitIntoSections(text);
+        if (sections.length === 0) {
+          set({
+            extractStatus: "error",
+            extractError: "No readable text could be extracted from this PDF.",
+          });
+          return false;
+        }
+        set({ sections, extractStatus: "done" });
+        return true;
+      } catch (err) {
+        if (extractGen !== gen) return false;
+        set({
+          extractStatus: "error",
+          extractError: err instanceof Error ? err.message : String(err),
+        });
+        return false;
+      }
+    },
+
     close: () => {
-      // Invalidate any in-flight open: closing the reader must win.
+      // Invalidate any in-flight open or extraction: closing the reader
+      // must win.
       openGen += 1;
+      extractGen += 1;
       set({
         paper: null,
         pdfBytes: null,
         loadStatus: "idle",
         loadError: null,
         sections: [],
+        extractStatus: "idle",
+        extractError: null,
         sectionIndex: 0,
         sectionEntries: [],
         synthesis: null,
@@ -174,6 +220,10 @@ export const useReaderStore = create<ReaderState>((set, get) => {
     clearSelection: () => set({ selection: null }),
 
     startWalkthrough: async (provider, language) => {
+      // The walkthrough needs the whole-paper text: extract it lazily on
+      // first use (open() only downloads the PDF bytes).
+      const ok = await get().ensureExtracted();
+      if (!ok) return;
       const { sections } = get();
       if (sections.length === 0) return;
       set({ sectionEntries: [], synthesis: null, sectionIndex: 0 });
@@ -329,8 +379,11 @@ export const useReaderStore = create<ReaderState>((set, get) => {
     },
 
     ask: async (question, provider, language) => {
-      const { paper, sections, selection } = get();
+      const { paper, selection } = get();
       if (!paper || !question.trim()) return;
+      // Ask is grounded in the whole-paper text: extract it lazily.
+      await get().ensureExtracted();
+      const { sections, extractError } = get();
       const gen = ++chatGen;
       // Both messages get real counter ids: deriving the assistant id as
       // id + 1 would collide with the next question's id.
@@ -378,6 +431,23 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       // first section when there is no selection), so the model never
       // answers without paper context.
       const context = findContextSection(sections, selectionSnapshot ?? "");
+
+      // No paper text to ground on: surface the extraction problem on the
+      // assistant message instead of streaming an ungrounded answer.
+      if (sections.length === 0) {
+        set((s) => ({
+          chat: s.chat.map((m) =>
+            m.id === assistantId
+              ? {
+                  ...m,
+                  status: "error",
+                  error: extractError ?? "Could not read the paper text.",
+                }
+              : m,
+          ),
+        }));
+        return;
+      }
 
       // Real conversation context: the last few completed turns (oldest
       // first), so follow-up questions are answered in context. Only

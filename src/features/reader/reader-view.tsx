@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   BookOpenText,
   Check,
+  CircleAlert,
   Copy,
   Loader2,
   MessageSquareText,
@@ -395,20 +396,42 @@ export function ReaderView() {
             ) : tab === "walkthrough" ? (
               <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 <div className="flex flex-col gap-3">
-                  {reader.sections.length > 0 &&
+                  {reader.extractStatus === "error" && reader.sections.length === 0 && (
+                    <div className="flex flex-col items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-6 text-center">
+                      <CircleAlert className="size-10 text-destructive/70" />
+                      <p className="max-w-60 text-sm text-muted-foreground">
+                        {reader.extractError ?? t("reader.noText")}
+                      </p>
+                      <Button
+                        variant="outline"
+                        onClick={() => void reader.startWalkthrough(provider, i18n.language)}
+                      >
+                        {t("reader.retryExtraction")}
+                      </Button>
+                    </div>
+                  )}
+
+                  {reader.extractStatus !== "error" &&
                     reader.sectionEntries.length === 0 &&
                     !reader.synthesis && (
                       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed bg-muted/20 p-6 text-center">
-                        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
-                          <BookOpenText className="size-5 text-primary" />
-                        </div>
+                        {reader.extractStatus === "loading" ? (
+                          <Loader2 className="size-10 animate-spin text-primary" />
+                        ) : (
+                          <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
+                            <BookOpenText className="size-5 text-primary" />
+                          </div>
+                        )}
                         <p className="max-w-60 text-sm text-muted-foreground">
                           {t("reader.explainWholeHint")}
                         </p>
                         <Button
+                          disabled={reader.extractStatus === "loading"}
                           onClick={() => void reader.startWalkthrough(provider, i18n.language)}
                         >
-                          {t("reader.explainWhole")}
+                          {reader.extractStatus === "loading"
+                            ? t("reader.preparingPaper")
+                            : t("reader.explainWhole")}
                         </Button>
                       </div>
                     )}
