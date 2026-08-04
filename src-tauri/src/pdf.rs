@@ -9,7 +9,7 @@ use crate::papers::USER_AGENT;
 
 const MAX_PDF_BYTES: u64 = 30 * 1024 * 1024; // 30 MB safety cap
 const MAX_PDF_REDIRECTS: usize = 5;
-const PDF_CACHE_DIR: &str = "pdfs";
+pub(crate) const PDF_CACHE_DIR: &str = "pdfs";
 
 /// HTTP client for PDF downloads: same UA as paper fetching, but
 /// redirects are NEVER followed automatically. A redirect is a fresh

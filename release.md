@@ -39,7 +39,13 @@ Bullet points for the GitHub release description:
   from a dropdown at the end of the search field, so searching a topic
   can surface the original or most influential paper instead of only
   the newest hits (works for arXiv search, Scholar search and day
-  browsing, in English and Arabic)
+  browsing, in English and Arabic). Scholar results reorder instantly
+  with the counts they already carry; arXiv results reorder as the
+  counts arrive, with a "loading" hint so the sort never looks broken
+- Settings gained a "Clear cache and saved data" action: it wipes the
+  downloaded PDFs, the daily digest, saved papers, chat history and
+  reading positions with a confirmation step, and always keeps your
+  providers and API keys
 
 ---
 

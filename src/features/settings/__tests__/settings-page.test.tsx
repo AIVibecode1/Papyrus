@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import "@/i18n";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsPage } from "@/features/settings/settings-page";
@@ -16,9 +16,12 @@ const mocks = vi.hoisted(() => ({
   deleteKey: vi.fn(async () => {}),
   hasKey: vi.fn(async () => true),
   exportSavedData: vi.fn(async () => "/tmp/papyrus-export.json"),
+  invoke: vi.fn(async () => {}),
   providers: [] as ProviderConfig[],
   activeProviderId: null as string | null,
 }));
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
 
 vi.mock("@/stores/ui", () => ({ useUiStore: () => ({ setView: mocks.setView }) }));
 vi.mock("@/hooks/use-theme", () => ({
@@ -85,6 +88,41 @@ describe("settings page", () => {
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole("button", { name: "Export my data" }));
     expect(await screen.findByText(/papyrus-export\.json/)).toBeInTheDocument();
+  });
+
+  it("clears caches and saved data after a confirmation, keeping providers", async () => {
+    localStorage.setItem("papyrus-digest-v2", "{}");
+    localStorage.setItem("papyrus-favorites", "{}");
+    localStorage.setItem("papyrus-reader-chat-v1", "{}");
+    localStorage.setItem("papyrus-providers", "[{}]");
+    const reload = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { reload },
+    });
+
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Clear cache and saved data" }));
+    // The destructive action requires an explicit confirmation.
+    expect(screen.getByText(/Continue\?/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear everything" }));
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("clear_app_cache"));
+    expect(localStorage.getItem("papyrus-digest-v2")).toBeNull();
+    expect(localStorage.getItem("papyrus-favorites")).toBeNull();
+    expect(localStorage.getItem("papyrus-reader-chat-v1")).toBeNull();
+    // Providers are explicitly kept.
+    expect(localStorage.getItem("papyrus-providers")).not.toBeNull();
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it("cancelling the clear confirmation keeps the data", () => {
+    localStorage.setItem("papyrus-favorites", "{}");
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Clear cache and saved data" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(localStorage.getItem("papyrus-favorites")).not.toBeNull();
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
   it("opens the provider form from the Add button", () => {

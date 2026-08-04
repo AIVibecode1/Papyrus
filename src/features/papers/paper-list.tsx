@@ -101,6 +101,7 @@ export function PaperList() {
   const sortMode = usePapersStore((s) => s.sortMode);
   const setSortMode = usePapersStore((s) => s.setSortMode);
   const citations = usePapersStore((s) => s.citations);
+  const loadCitations = usePapersStore((s) => s.loadCitations);
   // "Most cited" reorders the loaded list by the citation counts already
   // fetched (they arrive a moment after the list, and the list re-sorts
   // live as they land). Papers without a known count sort last.
@@ -108,6 +109,17 @@ export function PaperList() {
     () => sortPapers(papers, citations, sortMode),
     [papers, citations, sortMode],
   );
+  // While in cited mode with no counts yet, tell the user the counts are
+  // on their way instead of looking like the sort did nothing.
+  const countsPending =
+    sortMode === "cited" && papers.length > 0 && !papers.some((p) => (citations[p.id] ?? 0) > 0);
+
+  const handleSortChange = (v: string) => {
+    setSortMode(v as PaperSortMode);
+    // The batch lookup runs after every fetch; re-kick it when the user
+    // asks for the most-cited order so slow counts do not look broken.
+    if (v === "cited") loadCitations(papers.map((p) => p.id));
+  };
 
   // Auto-aggregator: backfill recent days for the current field so the
   // day list is populated. ensureHistory is concurrency-guarded.
@@ -173,9 +185,9 @@ export function PaperList() {
           {papers.length > 0 && (
             <>
               <div className="h-4 w-px shrink-0 bg-border" />
-              <Select value={sortMode} onValueChange={(v) => setSortMode(v as PaperSortMode)}>
+              <Select value={sortMode} onValueChange={handleSortChange}>
                 <SelectTrigger
-                  className="h-7 w-auto gap-1 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0"
+                  className="h-7 w-auto shrink-0 gap-1 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0"
                   aria-label={t("papers.sortBy")}
                 >
                   <SelectValue />
@@ -188,6 +200,9 @@ export function PaperList() {
             </>
           )}
         </div>
+        {countsPending && (
+          <span className="text-[11px] text-muted-foreground">{t("papers.citationsLoading")}</span>
+        )}
         <div className="flex items-center gap-2">
           <Button
             variant={savedOnly ? "secondary" : "ghost"}

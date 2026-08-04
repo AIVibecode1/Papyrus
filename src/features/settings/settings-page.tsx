@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Download, Loader2, Plus, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -38,6 +39,34 @@ export function SettingsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearMessage, setClearMessage] = useState<string | null>(null);
+
+  const handleClear = async () => {
+    setClearing(true);
+    setClearMessage(null);
+    try {
+      await invoke("clear_app_cache");
+      // Wipe the app's saved data (keep in sync with the stores'
+      // STORAGE_KEY constants). Providers, the active provider, the
+      // language and the theme are NOT touched. A reload re-initialises
+      // every store from the now-empty storage.
+      for (const key of [
+        "papyrus-digest-v2",
+        "papyrus-favorites",
+        "papyrus-reader-chat-v1",
+        "papyrus-reader-pos",
+      ]) {
+        localStorage.removeItem(key);
+      }
+      window.location.reload();
+    } catch (err) {
+      setClearing(false);
+      setConfirmClear(false);
+      setClearMessage(t("settings.clearDataFailed", { error: String(err) }));
+    }
+  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -182,6 +211,55 @@ export function SettingsPage() {
           </Button>
         </div>
         {exportMessage && <p className="mt-2 text-xs text-muted-foreground">{exportMessage}</p>}
+
+        <div className="mt-4 rounded-md border p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">{t("settings.clearDataHint")}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 text-destructive"
+              onClick={() => setConfirmClear(true)}
+            >
+              <Trash2 className="size-4" />
+              {t("settings.clearData")}
+            </Button>
+          </div>
+          {confirmClear && (
+            <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+              <p className="text-xs text-destructive">{t("settings.clearDataPrompt")}</p>
+              <div className="mt-2 flex gap-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  autoFocus
+                  onClick={() => void handleClear()}
+                  disabled={clearing}
+                >
+                  {clearing ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-4" />
+                  )}
+                  {clearing ? t("settings.clearing") : t("settings.clearConfirm")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmClear(false)}
+                  disabled={clearing}
+                >
+                  {t("settings.cancel")}
+                </Button>
+              </div>
+            </div>
+          )}
+          {clearMessage && (
+            <p role="alert" className="mt-2 text-xs text-destructive">
+              {clearMessage}
+            </p>
+          )}
+        </div>
       </section>
 
       <section aria-labelledby="providers-heading" className="mt-6 border-t pt-4">

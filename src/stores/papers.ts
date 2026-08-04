@@ -165,6 +165,15 @@ export const usePapersStore = create<PapersState>((set, get) => ({
 
   loadCitations: (ids) => {
     if (ids.length === 0) return;
+    // Scholar search results already carry citation counts in the
+    // payload: seed them instantly instead of waiting for the batch
+    // lookup, so "Most cited" sorting works right after a search.
+    const seeded = get()
+      .papers.filter((p) => p.citationCount != null)
+      .map((p) => [p.id, p.citationCount as number]);
+    if (seeded.length > 0) {
+      set((s) => ({ citations: { ...s.citations, ...Object.fromEntries(seeded) } }));
+    }
     void fetchCitations(ids).then((counts) => {
       const entries = Object.entries(counts);
       if (entries.length === 0) return;

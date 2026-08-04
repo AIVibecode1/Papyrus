@@ -32,7 +32,7 @@ fn s2_url() -> String {
 
 /// Where the disk cache lives. Test hook: PAPYRUS_CACHE_DIR overrides the
 /// app data directory (tests cannot construct an AppHandle).
-fn cache_path(app: Option<&tauri::AppHandle>) -> PathBuf {
+pub(crate) fn cache_path(app: Option<&tauri::AppHandle>) -> PathBuf {
     if let Ok(dir) = std::env::var("PAPYRUS_CACHE_DIR") {
         return PathBuf::from(dir).join(CACHE_FILE_NAME);
     }

@@ -1,4 +1,5 @@
 mod ai;
+mod cache;
 mod citations;
 mod export;
 mod papers;
@@ -21,6 +22,7 @@ pub fn run() {
             ai::delete_api_key,
             ai::has_api_key,
             pdf::fetch_pdf,
+            cache::clear_app_cache,
             export::export_data,
         ])
         .run(tauri::generate_context!())
