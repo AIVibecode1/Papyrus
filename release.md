@@ -19,6 +19,52 @@ Rules:
 
 ---
 
+## v1.0.10 - 2026-08-04
+
+Status: installers built, not yet published on GitHub.
+Built from: (filled after the release commit)
+Quality gates: 244 frontend tests, 96 Rust tests, clippy, rustfmt, ESLint,
+Prettier, strict typecheck, release-integrity checker, CI on Windows and
+macOS.
+
+Provider IPC and UI hardening round (5 commits): the provider object sent
+over Tauri IPC never matched what Rust expected, so every explain/test
+call crashed in the built app; the PDF canvas gained HiDPI support and a
+per-page surface state; Settings gained guided setup and test memory.
+
+- Fixed a crash that broke ALL AI features in the desktop app:
+  ProviderConfig was serialized by the frontend as camelCase (baseUrl)
+  but Rust parsed snake_case (base_url), so explain_paper,
+  explain_section, explain_synthesis, ask_about_paper and test_provider
+  all failed with "missing field base_url". The struct now uses
+  serde rename_all = "camelCase" (matching the Paper struct) with a
+  wire-contract test, and the frontend passes every provider through an
+  explicit toIpcProvider() at each invoke site.
+- PDF pages render sharp on HiDPI displays: the canvas backing store is
+  scaled by devicePixelRatio while the CSS size stays the pdf.js
+  viewport, with the matching render transform. Pages also carry a
+  surface lifecycle (pending/painting/ready/failed): a page that can
+  never paint shows a Retry button on a paper-white surface instead of
+  a silent blank rectangle, and the page wrapper is always
+  paper-white so dark/sepia themes never show a black hole.
+- Settings shows a persistent "Last test: OK / Failed (auth|network|...)"
+  chip per provider, restored across sessions (papyrus-provider-test-v1,
+  truncated and redacted, no secrets), and the empty providers state
+  offers one-click quick-add CTAs (Add DeepSeek / OpenRouter / OpenAI)
+  that open the add form with the preset prefilled.
+- The reader's no-provider panel now has an Open Settings button inside
+  it; the PDF/AI split panes have a 280px minimum width so the divider
+  can never crush them; the papers filter row is sticky under the
+  scrolling list and no longer reflows when loading ends.
+- Stream errors in the reader UI are redacted as defense in depth
+  (truncateError + redactSecrets) so secret-shaped text can never reach
+  the screen even if an upstream path regresses.
+- The three correctness fixes from v1.0.9 (rate limiter serialization,
+  load-more generation guard, stop compare-and-swap) were re-verified
+  against the acceptance checklist with their test suites.
+
+---
+
 ## v1.0.9 - 2026-08-04
 
 Status: installers built, not yet published on GitHub.
