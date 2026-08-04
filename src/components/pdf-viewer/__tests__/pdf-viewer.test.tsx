@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import "@/i18n";
@@ -28,16 +28,36 @@ vi.mock("pdfjs-dist", () => {
 
 import * as pdfjsLib from "pdfjs-dist";
 
-function mockDocument(numPages: number) {
-  vi.mocked(pdfjsLib.getDocument).mockReturnValue(mockLoadingTask(numPages) as never);
+function mockDocument(numPages: number, behavior: PageBehavior = {}) {
+  vi.mocked(pdfjsLib.getDocument).mockReturnValue(mockLoadingTask(numPages, behavior) as never);
+}
+
+interface PageBehavior {
+  /** Per-index render behavior; default resolves. */
+  render?: (index: number) => { promise: Promise<void> };
+  /** Per-index viewport size; default is 100x150 at scale 1. */
+  viewport?: (index: number, scale: number) => { width: number; height: number };
 }
 
 /** Builds a loading task for `numPages` (usable with mockReturnValueOnce). */
-function mockLoadingTask(numPages: number) {
+function mockLoadingTask(numPages: number, behavior: PageBehavior = {}) {
+  const render = behavior.render ?? (() => ({ promise: Promise.resolve() }));
+  const viewport =
+    behavior.viewport ??
+    ((_i: number, scale: number) => ({
+      width: 100 * scale,
+      height: 150 * scale,
+    }));
   return {
     promise: Promise.resolve({
       numPages,
-      getPage: async () => fakePage,
+      getPage: async (index: number) => ({
+        ...fakePage,
+        pageNumber: index, // used as the React key, like real pdf.js pages
+        render: () => render(index),
+        // pdf.js signature: getViewport({ scale }); the mock extracts it.
+        getViewport: (opts: { scale: number }) => viewport(index, opts.scale),
+      }),
       getOutline: async () => null,
       destroy: async () => {},
     }),
@@ -50,11 +70,29 @@ const onSelect = vi.fn();
 // render would re-trigger the load effect on every state update).
 const BYTES = new Uint8Array([1, 2, 3]);
 
+// Captures the ResizeObserver wiring so tests can drive container resizes
+// deterministically (jsdom has no layout engine).
+let roCallback: ResizeObserverCallback | null = null;
+let roElement: Element | null = null;
+class MockResizeObserver {
+  constructor(cb: ResizeObserverCallback) {
+    roCallback = cb;
+  }
+  observe(el: Element) {
+    roElement = el;
+  }
+  disconnect() {}
+  unobserve() {}
+}
+
 beforeEach(() => {
   localStorage.clear();
   vi.mocked(pdfjsLib.getDocument).mockReset();
   // jsdom does not implement scrolling.
   Element.prototype.scrollIntoView = vi.fn();
+  roCallback = null;
+  roElement = null;
+  vi.stubGlobal("ResizeObserver", MockResizeObserver);
 });
 
 describe("PdfViewer", () => {
@@ -171,5 +209,99 @@ describe("renderInQueue", () => {
     // Only the first concurrency window may start before the cancel flag
     // lands; pages beyond it must never render.
     expect(Math.max(...calls)).toBeLessThanOrEqual(3);
+  });
+
+  it("isolates a rejecting page from the rest of the queue", async () => {
+    const calls: number[] = [];
+    const views = [0, 1, 2, 3].map(() => ({
+      page: {} as never,
+      viewport: {} as never,
+    }));
+
+    await renderInQueue(
+      views,
+      async (_view, i) => {
+        if (i === 1) throw new Error("boom");
+        calls.push(i);
+      },
+      () => false,
+    );
+
+    expect([...calls].sort()).toEqual([0, 2, 3]);
+  });
+});
+
+describe("render state transitions", () => {
+  it("attaches the resize observer only after pages exist", async () => {
+    mockDocument(2);
+    render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+    await waitFor(() => expect(screen.getByText("1 / 2")).toBeInTheDocument());
+    expect(roElement).not.toBeNull();
+  });
+
+  it("re-fits the zoom to the container width after a resize", async () => {
+    mockDocument(3);
+    render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+    // jsdom has no layout: the load-time fit falls back to 800px (2.5).
+    await waitFor(() => expect(screen.getByText("250%")).toBeInTheDocument());
+    // Container shrinks to 150px: fit = (150-48)/100 = 1.02.
+    Object.defineProperty(roElement!, "clientWidth", { value: 150, configurable: true });
+    act(() => roCallback!([], {} as ResizeObserver));
+    await waitFor(() => expect(screen.getByText("102%")).toBeInTheDocument());
+  });
+
+  it("keeps a manual zoom across a container resize", async () => {
+    mockDocument(3);
+    render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+    await waitFor(() => expect(screen.getByText("250%")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
+    await waitFor(() => expect(screen.getByText("230%")).toBeInTheDocument());
+
+    // A resize whose auto-fit (102%) differs must not reset the zoom.
+    Object.defineProperty(roElement!, "clientWidth", { value: 150, configurable: true });
+    act(() => roCallback!([], {} as ResizeObserver));
+    await new Promise((r) => setTimeout(r, 400)); // let the debounce land
+    expect(screen.getByText("230%")).toBeInTheDocument();
+  });
+
+  it("cancels the loading task on unmount", async () => {
+    const destroy = vi.fn(async () => {});
+    vi.mocked(pdfjsLib.getDocument).mockReturnValue({
+      promise: new Promise(() => {}), // load stays in flight
+      destroy,
+    } as never);
+    const { unmount } = render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+    unmount();
+    expect(destroy).toHaveBeenCalled();
+  });
+
+  it("keeps painting the other pages when one page render rejects", async () => {
+    mockDocument(3, {
+      render: (i) =>
+        i === 2
+          ? { promise: Promise.reject(new Error("canvas busy")) }
+          : { promise: Promise.resolve() },
+    });
+    render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+    await waitFor(() => expect(screen.getByText("1 / 3")).toBeInTheDocument());
+    // The failing page did not take the viewer down: pages 1 and 3 still
+    // produced canvases, and the toolbar still reports the page position.
+    const canvases = document.querySelectorAll("canvas");
+    expect(canvases.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("tolerates a zero-size page viewport", async () => {
+    mockDocument(3, {
+      viewport: (i, scale) =>
+        i === 2 ? { width: 0, height: 0 } : { width: 100 * scale, height: 150 * scale },
+    });
+    render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+    await waitFor(() => expect(screen.getByText("1 / 3")).toBeInTheDocument());
+    const canvases = Array.from(document.querySelectorAll("canvas"));
+    expect(canvases[1]?.width).toBe(0);
+    // The zero-size page must not black out its neighbours.
+    expect(canvases[0]?.width).toBeGreaterThan(0);
+    expect(canvases[2]?.width).toBeGreaterThan(0);
   });
 });

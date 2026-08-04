@@ -162,4 +162,64 @@ describe("ReaderView", () => {
     render(<ReaderView />);
     expect(screen.getByTestId("pdf-viewer")).toBeInTheDocument();
   });
+
+  it("keeps the desktop split ratio while streaming a long unbreakable token", () => {
+    // Desktop layout: matchMedia reports a wide viewport.
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true,
+      media: "(min-width: 1024px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      onchange: null,
+      dispatchEvent: vi.fn(),
+    }) as never;
+
+    const longToken = "SuperLongUnbreakableToken".repeat(60);
+    useReaderStore.setState({
+      sectionEntries: [{ text: longToken, status: "streaming", error: null }],
+    });
+    render(<ReaderView />);
+
+    const aside = document.querySelector("aside");
+    expect(aside).not.toBeNull();
+    // The AI pane keeps its exact share of the split (0.62 PDF / 0.38 AI)
+    // no matter how wide the streamed token is.
+    expect(parseFloat(aside?.style.flexBasis ?? "0")).toBeCloseTo(38, 5);
+    expect(aside?.className).toContain("min-w-0");
+    expect(screen.getByRole("separator")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
+    expect(aside?.textContent).toContain("SuperLongUnbreakableToken");
+    expect(parseFloat(aside?.style.flexBasis ?? "0")).toBeCloseTo(38, 5);
+  });
+
+  it("renders Arabic labels and the pinned Ask input in the narrow layout", async () => {
+    // Narrow layout: matchMedia reports a small viewport.
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: false,
+      media: "(min-width: 1024px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      onchange: null,
+      dispatchEvent: vi.fn(),
+    }) as never;
+
+    const { default: i18n } = await import("@/i18n");
+    await i18n.changeLanguage("ar");
+    render(<ReaderView />);
+
+    // No desktop split separator on narrow windows.
+    expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "الشرح الموجّه" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "اسأل" })).toBeInTheDocument();
+
+    // The Ask input stays reachable in Arabic.
+    fireEvent.click(screen.getByRole("button", { name: "اسأل" }));
+    expect(await screen.findByPlaceholderText("اسأل عن الورقة…")).toBeInTheDocument();
+
+    await i18n.changeLanguage("en");
+  });
 });

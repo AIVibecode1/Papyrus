@@ -32,8 +32,12 @@ export function clampSplit(value: number): number {
 }
 
 function initialSplit(): number {
+  // No saved split means first launch: use the design default (0.62).
+  // Number(null) is 0, so a missing key must not clamp to the 0.3 floor.
+  const raw = localStorage.getItem(SPLIT_KEY);
+  if (raw === null) return 0.62;
   try {
-    return clampSplit(Number(localStorage.getItem(SPLIT_KEY)));
+    return clampSplit(Number(raw));
   } catch {
     return 0.62;
   }
