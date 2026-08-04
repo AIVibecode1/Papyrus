@@ -92,6 +92,16 @@ describe("ReaderView", () => {
     expect(useUiStore.getState().view).toBe("papers");
   });
 
+  it("offers a settings shortcut when no AI provider is configured", () => {
+    useSettingsStore.setState({ providers: [], activeProviderId: null });
+    render(<ReaderView />);
+    // The panel explains the gap and the button navigates to Settings
+    // instead of leaving the user staring at a raw invoke error.
+    expect(screen.getByText("No AI provider configured")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    expect(useUiStore.getState().view).toBe("settings");
+  });
+
   it("keeps the user's question on the right in Arabic like the answer", async () => {
     await i18n.changeLanguage("ar");
     useReaderStore.setState({
@@ -227,9 +237,10 @@ describe("ReaderView", () => {
     const aside = document.querySelector("aside");
     expect(aside).not.toBeNull();
     // The AI pane keeps its exact share of the split (0.62 PDF / 0.38 AI)
-    // no matter how wide the streamed token is.
+    // no matter how wide the streamed token is, with a 280px floor so
+    // the divider can never crush the pane on narrow windows.
     expect(parseFloat(aside?.style.flexBasis ?? "0")).toBeCloseTo(38, 5);
-    expect(aside?.className).toContain("min-w-0");
+    expect(aside?.style.minWidth).toBe("280px");
     expect(screen.getByRole("separator")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
     expect(aside?.textContent).toContain("SuperLongUnbreakableToken");

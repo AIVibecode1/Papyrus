@@ -8,6 +8,7 @@ import {
   MessageSquareText,
   RotateCcw,
   Send,
+  Settings,
   Square,
   X,
 } from "lucide-react";
@@ -315,10 +316,17 @@ export function ReaderView() {
           {/* PDF viewer: grows with the row on narrow windows, exact
               share of the split on desktop (inline-start side). */}
           <div
-            className="min-h-0 min-w-0"
+            className="min-h-0"
             style={
               isRow
-                ? { flexBasis: `${split * 100}%`, flexGrow: 0, flexShrink: 0 }
+                ? {
+                    flexBasis: `${split * 100}%`,
+                    flexGrow: 0,
+                    flexShrink: 0,
+                    // The divider must never crush a pane below a usable
+                    // reading width, whatever the window size.
+                    minWidth: 280,
+                  }
                 : { flex: "3 1 0%" }
             }
           >
@@ -346,10 +354,15 @@ export function ReaderView() {
           {/* AI panel: tabs on top, then per-tab content. The Ask tab keeps
               its input pinned at the bottom, always visible. */}
           <aside
-            className="flex min-h-0 min-w-0 flex-col border-t bg-background lg:border-s lg:border-t-0"
+            className="flex min-h-0 flex-col border-t bg-background lg:border-s lg:border-t-0"
             style={
               isRow
-                ? { flexBasis: `${(1 - split) * 100}%`, flexGrow: 0, flexShrink: 0 }
+                ? {
+                    flexBasis: `${(1 - split) * 100}%`,
+                    flexGrow: 0,
+                    flexShrink: 0,
+                    minWidth: 280,
+                  }
                 : { flex: "2 1 0%" }
             }
           >
@@ -410,24 +423,18 @@ export function ReaderView() {
                 {t("reader.askTab")}
               </Button>
               <div className="flex-1" />
-              {providers.length === 0 && (
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="h-auto p-0 text-xs"
-                  onClick={() => setView("settings")}
-                >
-                  {t("explain.goToSettings")}
-                </Button>
-              )}
             </div>
 
             {providers.length === 0 ? (
               <div
                 role="tabpanel"
-                className="flex min-h-0 flex-1 items-center justify-center p-6 text-center"
+                className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
               >
-                <p className="text-sm text-muted-foreground">{t("explain.noProvider")}</p>
+                <p className="max-w-60 text-sm text-muted-foreground">{t("explain.noProvider")}</p>
+                <Button size="sm" variant="outline" onClick={() => setView("settings")}>
+                  <Settings className="size-3.5" />
+                  {t("explain.goToSettings")}
+                </Button>
               </div>
             ) : tab === "walkthrough" ? (
               <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-3">
