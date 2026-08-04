@@ -9,7 +9,7 @@ export function Sidebar() {
   const setCategory = usePapersStore((s) => s.setCategory);
 
   return (
-    <aside className="w-56 shrink-0 border-e bg-muted/30 p-4">
+    <aside className="min-h-0 w-56 shrink-0 overflow-y-auto border-e bg-muted/30 p-4">
       <h2 className="px-2 font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
         {t("categories.title")}
       </h2>

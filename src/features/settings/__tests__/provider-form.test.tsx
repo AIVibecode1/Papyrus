@@ -34,7 +34,9 @@ function renderForm(editingId: string | null = null, initial = EMPTY) {
 
 async function pickPreset(name: string) {
   fireEvent.click(screen.getByRole("combobox", { name: "Preset" }));
-  fireEvent.click(await screen.findByRole("option", { name }));
+  // Radix Select mounts its option list in a portal; under parallel test
+  // load the open animation can take more than the default 1s wait.
+  fireEvent.click(await screen.findByRole("option", { name }, { timeout: 4000 }));
 }
 
 beforeEach(() => {
@@ -78,7 +80,9 @@ describe("ProviderForm", () => {
 
     // Switch the model in the preset's picker.
     fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
-    fireEvent.click(await screen.findByRole("option", { name: "DeepSeek Reasoner" }));
+    fireEvent.click(
+      await screen.findByRole("option", { name: "DeepSeek Reasoner" }, { timeout: 4000 }),
+    );
 
     fireEvent.change(screen.getByLabelText("API key"), { target: { value: "sk-test" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -183,4 +187,4 @@ describe("ProviderForm", () => {
     expect(screen.getByText("النموذج مطلوب.")).toBeInTheDocument();
     await i18n.changeLanguage("en");
   });
-});
+}, 20000);

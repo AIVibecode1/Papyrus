@@ -26,7 +26,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="flex min-h-dvh flex-col bg-background">
+      <div className="flex h-dvh flex-col overflow-hidden bg-background">
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:text-primary-foreground"
@@ -36,9 +36,11 @@ export default function App() {
         {view === "papers" ? (
           <>
             <TopBar />
-            <div className="mx-auto flex w-full max-w-6xl flex-1">
+            <div className="mx-auto flex w-full max-w-6xl min-h-0 flex-1">
               <Sidebar />
-              <main id="main-content" className="flex-1 p-4 lg:p-6">
+              {/* Only the content column scrolls; the window, the top bar
+                  and the sidebar stay fixed. */}
+              <main id="main-content" className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
                 <PaperList />
               </main>
             </div>

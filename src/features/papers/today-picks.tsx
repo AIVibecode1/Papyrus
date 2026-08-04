@@ -19,7 +19,10 @@ interface TodayPicksProps {
 export function TodayPicks({ papers, date, onDismiss, onOpen }: TodayPicksProps) {
   const { t } = useTranslation();
   return (
-    <section aria-labelledby="today-picks-heading" className="rounded-md border bg-card/60 p-3">
+    <section
+      aria-labelledby="today-picks-heading"
+      className="max-w-full overflow-hidden rounded-md border bg-card/60 p-3"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2">
           <Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" />
@@ -41,7 +44,9 @@ export function TodayPicks({ papers, date, onDismiss, onOpen }: TodayPicksProps)
           <X className="size-3.5" />
         </Button>
       </div>
-      <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+      {/* The tiles row is the only scrollable part of the strip: it scrolls
+          horizontally on its own and never makes the page or window scroll. */}
+      <div className="mt-2 flex gap-2 overflow-x-auto overscroll-x-contain pb-1">
         {papers.map((p) => (
           <button
             key={p.id}

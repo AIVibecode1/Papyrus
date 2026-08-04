@@ -19,6 +19,25 @@ Rules:
 
 ---
 
+## v1.0.6 - 2026-08-04
+
+Status: installers built, not yet published on GitHub.
+Built from: (filled after the release commit)
+Quality gates: 208 frontend tests, 84 Rust tests, clippy, rustfmt, ESLint,
+Prettier, strict typecheck, release-integrity checker, CI on Windows and
+macOS.
+
+Bullet points for the GitHub release description:
+
+- The app window no longer scrolls as a whole: the top bar and the field
+  list stay fixed, and only the papers column scrolls, so the "Today's
+  picks" strip (and its own horizontal scrolling) no longer drags the
+  entire interface
+- Test hardening: the provider preset tests now tolerate slow Radix
+  menu opens under machine load, so the full suite is stable
+
+---
+
 ## v1.0.5 - 2026-08-04
 
 Status: published on GitHub (release v1.0.5, installers attached).

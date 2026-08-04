@@ -96,7 +96,7 @@ export function SettingsPage() {
   const editingProvider = editingId ? providers.find((p) => p.id === editingId) : undefined;
 
   return (
-    <div className="mx-auto w-full max-w-3xl flex-1 p-6">
+    <div className="mx-auto min-h-0 w-full max-w-3xl flex-1 overflow-y-auto p-6">
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
