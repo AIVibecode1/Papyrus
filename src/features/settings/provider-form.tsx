@@ -19,6 +19,8 @@ import { useSettingsStore } from "@/stores/settings";
 interface ProviderFormProps {
   editingId: string | null;
   initial: { baseUrl: string; model: string };
+  /** Preset to start from (quick-add from the empty state). */
+  initialPreset?: string;
   onCancel: () => void;
   onSaved: () => void;
   onKeySaved: (id: string) => void;
@@ -32,6 +34,7 @@ interface FieldErrors {
 export function ProviderForm({
   editingId,
   initial,
+  initialPreset,
   onCancel,
   onSaved,
   onKeySaved,
@@ -39,12 +42,15 @@ export function ProviderForm({
   const { t } = useTranslation();
   const { addProvider, updateProvider, saveKey } = useSettingsStore();
 
-  const [form, setForm] = useState(() => ({
-    baseUrl: initial.baseUrl,
-    model: initial.model,
-    key: "",
-  }));
-  const [preset, setPreset] = useState<string>("custom");
+  const [form, setForm] = useState(() => {
+    const preset = initialPreset ? PROVIDER_PRESETS[initialPreset] : undefined;
+    return {
+      baseUrl: initial.baseUrl || preset?.baseUrl || "",
+      model: initial.model || preset?.model || "",
+      key: "",
+    };
+  });
+  const [preset, setPreset] = useState<string>(initialPreset ?? "custom");
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});

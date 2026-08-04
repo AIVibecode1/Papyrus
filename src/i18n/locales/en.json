@@ -132,6 +132,18 @@
     "addProvider": "Add provider",
     "editProvider": "Edit provider",
     "noProviders": "No providers yet. Add one to start explaining papers.",
+    "addDeepSeek": "Add DeepSeek",
+    "addOpenRouter": "Add OpenRouter",
+    "addOpenAI": "Add OpenAI",
+    "lastTestOk": "Last test: OK",
+    "lastTestFailed": "Last test: Failed ({{category}})",
+    "testErrorShort": {
+      "url": "bad URL",
+      "auth": "auth",
+      "network": "network",
+      "model": "model",
+      "unknown": "unknown"
+    },
     "active": "Active",
     "keySaved": "Key saved",
     "keyMissing": "No key",

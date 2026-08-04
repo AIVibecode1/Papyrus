@@ -35,6 +35,8 @@ export function SettingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
+  /** Preset to prefill in the add form (quick-add from the empty state). */
+  const [initialPreset, setInitialPreset] = useState<string | undefined>(undefined);
   const [keyStates, setKeyStates] = useState<Record<string, boolean>>({});
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -116,8 +118,9 @@ export function SettingsPage() {
     refreshKeyStates();
   }, [providerIds]);
 
-  const openNewForm = () => {
+  const openNewForm = (preset?: string) => {
     setEditingId(null);
+    setInitialPreset(preset);
     setDeleteError(null);
     setFormKey((k) => k + 1);
     setFormOpen(true);
@@ -125,6 +128,7 @@ export function SettingsPage() {
 
   const openEditForm = (p: ProviderConfig) => {
     setEditingId(p.id);
+    setInitialPreset(undefined);
     setDeleteError(null);
     setFormKey((k) => k + 1);
     setFormOpen(true);
@@ -313,14 +317,27 @@ export function SettingsPage() {
           <h2 id="providers-heading" className="text-base font-semibold">
             {t("settings.providers")}
           </h2>
-          <Button size="sm" onClick={openNewForm}>
+          <Button size="sm" onClick={() => openNewForm()}>
             <Plus className="size-4" />
             {t("settings.addProvider")}
           </Button>
         </div>
 
         {providers.length === 0 && !formOpen && (
-          <p className="mt-4 text-sm text-muted-foreground">{t("settings.noProviders")}</p>
+          <div className="mt-4 rounded-md border p-4">
+            <p className="text-sm text-muted-foreground">{t("settings.noProviders")}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => openNewForm("deepseek")}>
+                {t("settings.addDeepSeek")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openNewForm("openrouter")}>
+                {t("settings.addOpenRouter")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openNewForm("openai")}>
+                {t("settings.addOpenAI")}
+              </Button>
+            </div>
+          </div>
         )}
 
         {deleteError && (
@@ -348,6 +365,7 @@ export function SettingsPage() {
             key={formKey}
             editingId={editingId}
             initial={editingProvider ?? emptyForm}
+            initialPreset={initialPreset}
             onCancel={() => setFormOpen(false)}
             onSaved={() => {
               setFormOpen(false);

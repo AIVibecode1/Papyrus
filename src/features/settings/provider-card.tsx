@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckCircle2, CircleAlert, Loader2, Pencil, Trash2, Zap } from "lucide-react";
+import { CheckCircle2, CircleAlert, History, Loader2, Pencil, Trash2, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,31 @@ interface ProviderCardProps {
   onDelete: () => Promise<void>;
 }
 
+/**
+ * Last test result per provider, persisted so the card can show "last
+ * test: OK / failed (category)" across sessions. No secrets are ever
+ * stored: the detail is truncated and redacted before saving.
+ */
+type TestMemory = Record<string, { ok: boolean; category?: string; at: string; detail?: string }>;
+const TEST_MEMORY_KEY = "papyrus-provider-test-v1";
+
+function loadTestMemory(): TestMemory {
+  try {
+    const raw = JSON.parse(localStorage.getItem(TEST_MEMORY_KEY) ?? "{}") as TestMemory;
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveTestMemory(memory: TestMemory) {
+  try {
+    localStorage.setItem(TEST_MEMORY_KEY, JSON.stringify(memory));
+  } catch {
+    // best-effort, like every other localStorage write in the app
+  }
+}
+
 export function ProviderCard({
   provider,
   isActive,
@@ -31,7 +56,13 @@ export function ProviderCard({
 
   const [confirming, setConfirming] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  // The last test result for this provider: the persisted memory on
+  // mount, then whatever a fresh test reports.
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(() => {
+    const remembered = loadTestMemory()[provider.id];
+    if (!remembered) return null;
+    return { ok: remembered.ok, msg: remembered.detail ?? "" };
+  });
 
   const handleTest = async () => {
     setTesting(true);
@@ -39,11 +70,27 @@ export function ProviderCard({
     try {
       const reply = await testProvider(provider);
       setTestResult({ ok: true, msg: reply });
+      // Persist the outcome (no secrets: the OK reply is provider text,
+      // truncated to a chip-friendly size).
+      const memory = loadTestMemory();
+      memory[provider.id] = {
+        ok: true,
+        at: new Date().toISOString(),
+        detail: truncateError(reply),
+      };
+      saveTestMemory(memory);
     } catch (err) {
-      setTestResult({
+      const message = err instanceof Error ? err.message : String(err);
+      setTestResult({ ok: false, msg: message });
+      const category = categorizeTestError(message);
+      const memory = loadTestMemory();
+      memory[provider.id] = {
         ok: false,
-        msg: err instanceof Error ? err.message : String(err),
-      });
+        category,
+        at: new Date().toISOString(),
+        detail: truncateError(redactSecrets(message)),
+      };
+      saveTestMemory(memory);
     } finally {
       setTesting(false);
     }
@@ -76,6 +123,19 @@ export function ProviderCard({
               <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">
                 <CircleAlert className="size-3" />
                 {t("settings.keyMissing")}
+              </Badge>
+            )}
+            {testResult && (
+              <Badge
+                variant="outline"
+                className={cn("gap-1 text-xs", testResult.ok ? "text-primary" : "text-destructive")}
+              >
+                <History className="size-3" />
+                {testResult.ok
+                  ? t("settings.lastTestOk")
+                  : t("settings.lastTestFailed", {
+                      category: category ? t(`settings.testErrorShort.${category}`) : "",
+                    })}
               </Badge>
             )}
           </div>

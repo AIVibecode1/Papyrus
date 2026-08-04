@@ -154,6 +154,18 @@ describe("settings page", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
   });
 
+  it("empty state offers quick-add CTAs that prefill the preset", () => {
+    render(<SettingsPage />);
+    expect(
+      screen.getByText("No providers yet. Add one to start explaining papers."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add DeepSeek" }));
+    // The form opens with the DeepSeek preset's URL prefilled and the
+    // model picker showing the preset's default model label.
+    expect(screen.getByDisplayValue("https://api.deepseek.com/v1")).toBeInTheDocument();
+    expect(screen.getByText("DeepSeek Chat")).toBeInTheDocument();
+  });
+
   it("shows the version line", () => {
     render(<SettingsPage />);
     expect(screen.getByText(/Papyrus/)).toBeInTheDocument();

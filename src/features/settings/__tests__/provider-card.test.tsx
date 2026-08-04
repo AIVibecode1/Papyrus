@@ -39,6 +39,7 @@ function renderCard(overrides: Partial<Parameters<typeof ProviderCard>[0]> = {})
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 describe("provider card", () => {
@@ -94,7 +95,9 @@ describe("provider card", () => {
     testProvider.mockRejectedValueOnce(new Error("error sending request for url"));
     renderCard();
     fireEvent.click(screen.getByRole("button", { name: "Test" }));
-    expect(await screen.findByText(/Network error\./)).toBeInTheDocument();
+    // The full guidance sentence, not the short category that also
+    // appears in the "Last test" chip.
+    expect(await screen.findByText(/Network error\. Check your connection/)).toBeInTheDocument();
   });
 
   it("shows truncated, redacted detail only for unknown failures", async () => {
@@ -105,5 +108,46 @@ describe("provider card", () => {
     expect(msg).toHaveAttribute("dir", "ltr");
     expect(msg.textContent).not.toContain("sk-abc12345XYZ__more9");
     expect(msg.textContent).toContain("[redacted]");
+  });
+
+  it("persists a failed test result with its category", async () => {
+    testProvider.mockRejectedValueOnce(new Error("HTTP 401: unauthorized key"));
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Test" }));
+    await screen.findByText(/Authentication failed\. Check the API key/);
+    const memory = JSON.parse(localStorage.getItem("papyrus-provider-test-v1") ?? "{}") as Record<
+      string,
+      { ok: boolean; category?: string; detail?: string }
+    >;
+    expect(memory.p1.ok).toBe(false);
+    expect(memory.p1.category).toBe("auth");
+    // The stored detail must be redacted: no secret-shaped text survives.
+    expect(memory.p1.detail).not.toContain("sk-");
+  });
+
+  it("shows the remembered last test result across sessions", async () => {
+    // A previous session stored a failed auth test for this provider.
+    localStorage.setItem(
+      "papyrus-provider-test-v1",
+      JSON.stringify({
+        p1: { ok: false, category: "auth", at: "2026-08-04T00:00:00Z", detail: "HTTP 401" },
+      }),
+    );
+    renderCard();
+    // The chip appears without any new test run.
+    expect(screen.getByText(/Last test: Failed/)).toBeInTheDocument();
+    expect(testProvider).not.toHaveBeenCalled();
+  });
+
+  it("remembers a successful test", async () => {
+    testProvider.mockResolvedValueOnce("Hello from the model");
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Test" }));
+    await screen.findByText(/Last test: OK/);
+    const memory = JSON.parse(localStorage.getItem("papyrus-provider-test-v1") ?? "{}") as Record<
+      string,
+      { ok: boolean }
+    >;
+    expect(memory.p1.ok).toBe(true);
   });
 });

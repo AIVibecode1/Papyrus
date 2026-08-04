@@ -132,6 +132,18 @@
     "addProvider": "إضافة مزوّد",
     "editProvider": "تعديل المزوّد",
     "noProviders": "لا يوجد مزوّدون بعد. أضف واحدًا لتبدأ شرح الأوراق.",
+    "addDeepSeek": "إضافة DeepSeek",
+    "addOpenRouter": "إضافة OpenRouter",
+    "addOpenAI": "إضافة OpenAI",
+    "lastTestOk": "آخر اختبار: ناجح",
+    "lastTestFailed": "آخر اختبار: فشل ({{category}})",
+    "testErrorShort": {
+      "url": "الرابط",
+      "auth": "المصادقة",
+      "network": "الشبكة",
+      "model": "النموذج",
+      "unknown": "غير معروف"
+    },
     "active": "نشط",
     "keySaved": "تم حفظ المفتاح",
     "keyMissing": "لا يوجد مفتاح",
