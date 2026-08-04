@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   deleteKey: vi.fn(async () => {}),
   hasKey: vi.fn(async () => true),
   exportSavedData: vi.fn(async () => "/tmp/papyrus-export.json"),
+  importSavedData: vi.fn(async () => ({ app: "papyrus", favorites: 2, chats: 1 })),
   invoke: vi.fn(async () => {}),
   providers: [] as ProviderConfig[],
   activeProviderId: null as string | null,
@@ -40,7 +41,10 @@ vi.mock("@/stores/settings", () => ({
     hasKey: mocks.hasKey,
   }),
 }));
-vi.mock("@/lib/export", () => ({ exportSavedData: mocks.exportSavedData }));
+vi.mock("@/lib/export", () => ({
+  exportSavedData: mocks.exportSavedData,
+  importSavedData: mocks.importSavedData,
+}));
 
 const provider: ProviderConfig = {
   id: "p1",
@@ -88,6 +92,24 @@ describe("settings page", () => {
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole("button", { name: "Export my data" }));
     expect(await screen.findByText(/papyrus-export\.json/)).toBeInTheDocument();
+  });
+
+  it("runs the import flow from a chosen file and shows the summary", async () => {
+    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Import data" }));
+    const input = document.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+    const file = new File(['{"app":"papyrus","favorites":[],"chat":{}}'], "export.json", {
+      type: "application/json",
+    });
+    fireEvent.change(input!, { target: { files: [file] } });
+
+    expect(
+      await screen.findByText(/Imported 2 saved papers and 1 chat transcripts/),
+    ).toBeInTheDocument();
+    expect(mocks.importSavedData).toHaveBeenCalledWith(
+      '{"app":"papyrus","favorites":[],"chat":{}}',
+    );
   });
 
   it("clears caches and saved data after a confirmation, keeping providers", async () => {

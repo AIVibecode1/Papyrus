@@ -19,6 +19,8 @@ interface FavoritesState {
   load: () => void;
   toggle: (paper: Paper) => void;
   isFavorite: (id: string) => boolean;
+  /** Merges imported papers; existing entries win (dedup by id). */
+  importPapers: (papers: Paper[]) => void;
 }
 
 export const useFavoritesStore = create<FavoritesState>((set, get) => ({
@@ -58,4 +60,18 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
       return { ids, byId };
     }),
   isFavorite: (id) => get().ids.includes(id),
+  importPapers: (papers) =>
+    set((s) => {
+      const byId = { ...s.byId };
+      for (const p of papers) {
+        if (isPaper(p) && p.id && !byId[p.id]) byId[p.id] = p;
+      }
+      const ids = Object.keys(byId);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(byId));
+      } catch {
+        // Storage full or unavailable: the import still applies in memory.
+      }
+      return { byId, ids };
+    }),
 }));

@@ -316,6 +316,60 @@ describe("reader store", () => {
     expect(useReaderStore.getState().chat[1].status).toBe("stopped");
   });
 
+  it("restores a persisted walkthrough on reopen instead of re-streaming", async () => {
+    // Simulate a previous session: paper 2607.00001 has a completed
+    // walkthrough stored under the walkthrough key.
+    localStorage.setItem(
+      "papyrus-reader-walkthrough-v1",
+      JSON.stringify({
+        "2607.00001": {
+          sectionEntries: [
+            { text: "Intro explained.", status: "done", error: null },
+            { text: "Method explained.", status: "done", error: null },
+          ],
+          synthesis: { text: "Whole-paper synthesis.", status: "done", error: null },
+        },
+      }),
+    );
+
+    await useReaderStore.getState().open(paper);
+    const s = useReaderStore.getState();
+    expect(s.sectionEntries.map((e) => e.text)).toEqual(["Intro explained.", "Method explained."]);
+    expect(s.synthesis?.text).toBe("Whole-paper synthesis.");
+    // The walkthrough continues after the restored entries.
+    expect(s.sectionIndex).toBe(2);
+    // No re-stream happened for the restored content.
+    expect(streamSectionExplanation).not.toHaveBeenCalled();
+  });
+
+  it("persists the walkthrough after a section completes", async () => {
+    await useReaderStore.getState().open(paper);
+    vi.mocked(streamSectionExplanation).mockImplementation(chunkStream(["hello section"]));
+
+    await useReaderStore.getState().startWalkthrough(provider, "en");
+
+    const raw = JSON.parse(localStorage.getItem("papyrus-reader-walkthrough-v1") ?? "{}");
+    expect(raw["2607.00001"].sectionEntries[0].text).toBe("hello section");
+  });
+
+  it("never restores a busy-looking walkthrough entry", async () => {
+    // A crashed session could leave status "streaming" in storage; the
+    // restore must normalize it so the UI never sees a stuck spinner.
+    localStorage.setItem(
+      "papyrus-reader-walkthrough-v1",
+      JSON.stringify({
+        "2607.00001": {
+          sectionEntries: [{ text: "half", status: "streaming", error: null }],
+          synthesis: null,
+        },
+      }),
+    );
+
+    await useReaderStore.getState().open(paper);
+    const s = useReaderStore.getState();
+    expect(s.sectionEntries[0].status).toBe("stopped");
+  });
+
   it("keeps appending chunks across multiple flushes", async () => {
     // Regression test: the first flush flips the entry to "streaming" and
     // later flushes must keep appending. Streaming slowly (20ms per chunk,

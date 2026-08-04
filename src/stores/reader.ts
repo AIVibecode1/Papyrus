@@ -102,6 +102,71 @@ function persistChat(paperId: string, messages: ChatMessage[]) {
   }
 }
 
+// --- walkthrough persistence -------------------------------------------------
+// The section-by-section walkthrough and the final synthesis are persisted
+// per paper so reopening a paper (or restarting the app) restores them
+// instead of re-streaming ~10 provider calls. Chat already persists; this
+// mirrors that pattern with the same best-effort semantics.
+
+const WALKTHROUGH_STORAGE_KEY = "papyrus-reader-walkthrough-v1";
+/** Papers whose walkthroughs are kept (oldest evicted first). */
+const WALKTHROUGH_PERSIST_LIMIT = 5;
+
+interface WalkthroughSnapshot {
+  sectionEntries: SectionEntry[];
+  synthesis: SectionEntry | null;
+}
+
+function loadWalkthrough(paperId: string): WalkthroughSnapshot {
+  try {
+    const raw = JSON.parse(localStorage.getItem(WALKTHROUGH_STORAGE_KEY) ?? "{}") as Record<
+      string,
+      WalkthroughSnapshot
+    >;
+    const snap = raw[paperId];
+    if (!snap || !Array.isArray(snap.sectionEntries))
+      return { sectionEntries: [], synthesis: null };
+    // A restored entry must never look busy: it belongs to a finished
+    // stream, and a "streaming" status would wedge the walkthrough UI.
+    const entries = snap.sectionEntries
+      .filter((e) => e && typeof e.text === "string")
+      .map((e) => ({
+        text: e.text,
+        status: (e.status === "error" ? "error" : "stopped") as SectionEntry["status"],
+        error: e.status === "error" ? e.error : null,
+      }));
+    const synthesis =
+      snap.synthesis && typeof snap.synthesis.text === "string"
+        ? { ...snap.synthesis, status: "stopped" as const, error: null }
+        : null;
+    return { sectionEntries: entries, synthesis };
+  } catch {
+    return { sectionEntries: [], synthesis: null };
+  }
+}
+
+function persistWalkthrough(
+  paperId: string,
+  sectionEntries: SectionEntry[],
+  synthesis: SectionEntry | null,
+) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(WALKTHROUGH_STORAGE_KEY) ?? "{}") as Record<
+      string,
+      WalkthroughSnapshot
+    >;
+    // Keep the newest papers: drop oldest entries beyond the cap.
+    raw[paperId] = { sectionEntries, synthesis };
+    const ids = Object.keys(raw);
+    if (ids.length > WALKTHROUGH_PERSIST_LIMIT) {
+      for (const old of ids.slice(0, ids.length - WALKTHROUGH_PERSIST_LIMIT)) delete raw[old];
+    }
+    localStorage.setItem(WALKTHROUGH_STORAGE_KEY, JSON.stringify(raw));
+  } catch {
+    // Storage full or unavailable: walkthrough persistence is best-effort.
+  }
+}
+
 export const useReaderStore = create<ReaderState>((set, get) => {
   // Generation counters: bumping one invalidates in-flight chunks from
   // a superseded run (same pattern as the explanation store).
@@ -117,6 +182,13 @@ export const useReaderStore = create<ReaderState>((set, get) => {
   // Operation id of the most recent stream (section, synthesis or ask);
   // stop() targets exactly it, so a stop can never hit unrelated work.
   let activeOperationId: string | null = null;
+
+  // Persists the current paper's walkthrough after any completion or stop,
+  // so reopening the paper restores it without re-streaming.
+  const persistCurrentWalkthrough = () => {
+    const { paper, sectionEntries, synthesis } = get();
+    if (paper) persistWalkthrough(paper.id, sectionEntries, synthesis);
+  };
 
   return {
     paper: null,
@@ -153,6 +225,17 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           selection: null,
           loadStatus: "ready",
         });
+        // Restore a previous walkthrough of this paper (best-effort):
+        // reopening a favorited paper must not re-stream ~10 sections.
+        const { sectionEntries, synthesis } = loadWalkthrough(paper.id);
+        if (sectionEntries.length > 0 || synthesis) {
+          if (openGen !== gen) return;
+          set({
+            sectionEntries,
+            synthesis,
+            sectionIndex: sectionEntries.length,
+          });
+        }
       } catch (err) {
         if (openGen !== gen) return;
         set({
@@ -274,6 +357,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           if (wtGen !== gen) return;
           buffer.flushNow();
           set((s) => (s.synthesis ? { synthesis: { ...s.synthesis, status: "done" } } : {}));
+          persistCurrentWalkthrough();
         } catch (err) {
           if (wtGen !== gen) return;
           buffer.dispose();
@@ -290,6 +374,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
                 }
               : {},
           );
+          persistCurrentWalkthrough();
         }
       }
     },
@@ -345,6 +430,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           if (entry) entries[i] = { ...entry, status: "done" };
           return { sectionEntries: entries };
         });
+        persistCurrentWalkthrough();
       } catch (err) {
         if (wtGen !== gen) return;
         buffer.dispose();
@@ -362,6 +448,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           }
           return { sectionEntries: entries };
         });
+        persistCurrentWalkthrough();
       }
     },
 

@@ -24,6 +24,7 @@ pub fn run() {
             pdf::fetch_pdf,
             cache::clear_app_cache,
             export::export_data,
+            export::import_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

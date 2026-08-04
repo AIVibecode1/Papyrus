@@ -41,6 +41,44 @@ pub fn export_data(payload: String) -> Result<String, String> {
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// What the import validated and how much data it carries, so the UI can
+/// report "imported N papers and M chats".
+#[derive(serde::Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportSummary {
+    pub app: String,
+    pub favorites: usize,
+    pub chats: usize,
+}
+
+/// Validates a Papyrus export payload and reports its contents. The
+/// payload is parsed as data only — never executed — and must carry the
+/// `app: "papyrus"` marker. Keys are never part of an export, so there
+/// is nothing secret to restore here.
+#[tauri::command]
+pub fn import_data(payload: String) -> Result<ImportSummary, String> {
+    let value: serde_json::Value =
+        serde_json::from_str(&payload).map_err(|e| format!("Invalid import payload: {e}"))?;
+    if value.get("app").and_then(|v| v.as_str()) != Some("papyrus") {
+        return Err("Not a Papyrus export file".into());
+    }
+    let favorites = value
+        .get("favorites")
+        .and_then(|v| v.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+    let chats = value
+        .get("chat")
+        .and_then(|v| v.as_object())
+        .map(|o| o.len())
+        .unwrap_or(0);
+    Ok(ImportSummary {
+        app: "papyrus".into(),
+        favorites,
+        chats,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,5 +109,23 @@ mod tests {
     fn export_rejects_invalid_json() {
         let err = export_data("not json {{".into()).expect_err("invalid payload");
         assert!(err.contains("Invalid export payload"), "got: {err}");
+    }
+
+    #[test]
+    fn import_validates_the_payload_and_reports_counts() {
+        let payload = r#"{"app":"papyrus","exportedAt":"2026-08-04T00:00:00Z","favorites":[{"id":"a1"},{"id":"a2"}],"chat":{"p1":[]}}"#;
+        let summary = import_data(payload.into()).expect("valid payload imports");
+        assert_eq!(summary.app, "papyrus");
+        assert_eq!(summary.favorites, 2);
+        assert_eq!(summary.chats, 1);
+    }
+
+    #[test]
+    fn import_rejects_non_papyrus_and_invalid_json() {
+        let err = import_data(r#"{"app":"other"}"#.into()).expect_err("wrong app marker");
+        assert!(err.contains("Not a Papyrus export"), "got: {err}");
+
+        let err = import_data("garbage {{".into()).expect_err("invalid json");
+        assert!(err.contains("Invalid import payload"), "got: {err}");
     }
 }

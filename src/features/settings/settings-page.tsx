@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ArrowLeft, Download, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, Download, Loader2, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { PaperSource } from "@/lib/arxiv";
-import { exportSavedData } from "@/lib/export";
+import { exportSavedData, importSavedData } from "@/lib/export";
 import type { ProviderConfig } from "@/lib/types";
 import { useTheme, type Theme } from "@/hooks/use-theme";
 import { usePapersStore } from "@/stores/papers";
@@ -39,9 +39,28 @@ export function SettingsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearMessage, setClearMessage] = useState<string | null>(null);
+
+  const handleImportFile = async (file: File | undefined) => {
+    if (!file) return;
+    setImporting(true);
+    setImportMessage(null);
+    try {
+      const content = await file.text();
+      const summary = await importSavedData(content);
+      setImportMessage(t("settings.importedCount", { ...summary }));
+    } catch (err) {
+      setImportMessage(t("settings.importFailed", { error: String(err) }));
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  };
 
   const handleClear = async () => {
     setClearing(true);
@@ -192,10 +211,10 @@ export function SettingsPage() {
       </section>
 
       <section aria-labelledby="data-heading" className="mt-6 border-t pt-4">
-        <div className="flex items-center justify-between">
-          <h2 id="data-heading" className="text-base font-semibold">
-            {t("settings.data")}
-          </h2>
+        <h2 id="data-heading" className="text-base font-semibold">
+          {t("settings.data")}
+        </h2>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button
             size="sm"
             variant="outline"
@@ -209,8 +228,35 @@ export function SettingsPage() {
             )}
             {t("settings.exportData")}
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+          >
+            {importing ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Upload className="size-4" />
+            )}
+            {t("settings.importData")}
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            aria-hidden="true"
+            tabIndex={-1}
+            onChange={(e) => void handleImportFile(e.target.files?.[0])}
+          />
         </div>
         {exportMessage && <p className="mt-2 text-xs text-muted-foreground">{exportMessage}</p>}
+        {importMessage && (
+          <p role="status" className="mt-2 text-xs text-muted-foreground">
+            {importMessage}
+          </p>
+        )}
 
         <div className="mt-4 rounded-md border p-3">
           <div className="flex items-center justify-between gap-3">
