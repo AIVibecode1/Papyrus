@@ -78,3 +78,13 @@ export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
     models: [{ id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" }],
   },
 };
+
+/**
+ * All provider presets in insertion order: the single source of truth
+ * for Settings quick-add and the preset picker. Keeps the registry easy
+ * to extend (043 adds Codex here) without callers poking at the record
+ * ad hoc.
+ */
+export function listProviderPresets(): Array<{ id: string; preset: ProviderPreset }> {
+  return Object.entries(PROVIDER_PRESETS).map(([id, preset]) => ({ id, preset }));
+}

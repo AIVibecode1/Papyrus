@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PROVIDER_PRESETS, type ProviderConfig } from "@/lib/types";
+import { listProviderPresets, PROVIDER_PRESETS, type ProviderConfig } from "@/lib/types";
 import { redactSecrets, truncateError } from "@/lib/provider-errors";
 import { useSettingsStore } from "@/stores/settings";
 
@@ -128,9 +128,9 @@ export function ProviderForm({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="custom">{t("settings.custom")}</SelectItem>
-                {Object.entries(PROVIDER_PRESETS).map(([key, p]) => (
-                  <SelectItem key={key} value={key}>
-                    {t(p.key)}
+                {listProviderPresets().map(({ id, preset }) => (
+                  <SelectItem key={id} value={id}>
+                    {t(preset.key)}
                   </SelectItem>
                 ))}
               </SelectContent>
