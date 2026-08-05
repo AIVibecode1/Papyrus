@@ -1,42 +1,86 @@
-# Papyrus audit plans
+# Papyrus audit plans — Round 4
 
 Round-based audit log. Every round replaces the previous round's DONE
 set with fresh numbering. Old plans stay in this directory as audit
-history. Current round: **3** (plans 032-037).
+history.
+
+**Current round: 4** (plans 040–047).  
+**Previous round: 3** (plans 032–037 — still TODO unless shipped).
+
+## Goal of this round
+
+Turn Papyrus from “latest arXiv digest + AI explainer” into a durable
+**research assistant** closer to alphaXiv: search any era of papers,
+take notes, connect a coding model (Codex) safely, and keep a polished
+bilingual RTL/LTR experience on a maintainable architecture.
+
+This round does **not** replace Round 3 work. If 032–036 are still open,
+finish or deliberately defer them before 047 (release). Prefer:
+
+1. Ship any already-green Round-3 fixes first.
+2. Run Round-4 plans in the order below.
+3. Use 047 as the release vehicle.
 
 ## Execution order and status
 
-| Plan | Title                                                | Priority | Effort | Depends on | Status |
-| ---- | ---------------------------------------------------- | -------- | ------ | ---------- | ------ |
-| 032  | PDF viewer virtualization (kill the heavy feel)      | P1       | M      | 025, 028   | TODO   |
-| 033  | Citation disk cache (7d TTL) + stale-serve           | P1       | S      | 030, 031   | TODO   |
-| 034  | Design fine-tune pass                                | P2       | M      | 028        | TODO   |
-| 035  | Search UX completion + CDP live suite                | P2       | S      | 030, 031   | TODO   |
-| 036  | Deep code-logic review (digest/reader/settings/i18n) | P1       | L      | 029, 030   | TODO   |
-| 037  | Release v1.0.11 + macOS delivery docs                | P1       | M      | 032-036    | TODO   |
+| Plan | Title                                                         | Priority | Effort | Depends on      | Status |
+| ---- | ------------------------------------------------------------- | -------- | ------ | --------------- | ------ |
+| 040  | Architecture foundations (shell, modules, design tokens)      | P0       | L      | —               | TODO   |
+| 041  | Advanced search (old papers + search modes + filters)         | P0       | L      | 040             | TODO   |
+| 042  | Note-taking system (paper notes, highlights, free notes)      | P0       | L      | 040             | TODO   |
+| 043  | Codex safe auth + provider hardening                          | P1       | M      | 040             | TODO   |
+| 044  | RTL / LTR experience + UI/UX fine-tune                        | P1       | M      | 040, 041, 042   | TODO   |
+| 045  | Research-assistant depth (alphaXiv-style mentor features)     | P1       | M      | 041, 042, 043   | TODO   |
+| 046  | Deep logic review of new modules + i18n parity                | P1       | M      | 041–045         | TODO   |
+| 047  | Release vehicle (version bump + docs + gates)                 | P1       | M      | 040–046 subset  | TODO   |
 
-## Already shipped in this round (live-verified, committed)
+## How an LLM agent must use these plans
 
-These fixes came out of round-3 evidence (CDP probes against the dev
-preview and the built exe) and are already on `main`:
+Each plan file is written as an **implementation brief for an agent**:
 
-| Commit    | Fix                                                          | Evidence                                                           |
-| --------- | ------------------------------------------------------------ | ------------------------------------------------------------------ |
-| `7ef2056` | Black PDF pages: fresh canvas elements per render run        | 73/73 pages painted after load/resize/zoom on a real 74-page paper |
-| `8467667` | Floating filter bar: opaque extended bar, no transparent gap | sticky delta 0 + elementFromPoint resolves to the bar              |
-| `b614dbe` | Most-cited spinner forever: honest completed/failed states   | built app: hint now clears when the S2 batch fails                 |
+1. Read the **Non-negotiables** and **Out of scope** first.
+2. Follow **File map** and **Data models** exactly unless a plan revision is written.
+3. Implement in the **Work units** order; each unit ends with a commit when green.
+4. Run the **Verification gates** before moving to the next plan.
+5. Never invent API keys, OAuth client secrets, or network endpoints that are not documented in the plan.
+6. Preserve existing security contracts: OS keychain only, no key in webview, HTTPS for remote providers, markdown HTML escape, SSRF guards on PDF/fetch.
 
-## Rounds 1-2 (DONE)
+## Cross-cutting rules (apply to every plan)
 
-Plans 001-024 shipped across v1.0.4-v1.0.8; plans 025-031 shipped in
-v1.0.9-v1.0.10. Files remain as history.
+- **Token-only UI**: no raw Tailwind color utilities for theme surfaces; use CSS variables / design tokens from `src/index.css`.
+- **i18n**: every new user-visible string lands in `en.json` **and** `ar.json` in the same commit.
+- **RTL**: use logical properties (`ms`/`me`/`ps`/`pe`/`start`/`end`), not `left`/`right`. Paper titles and math stay `dir="ltr"`.
+- **Tests**: every new store/action and pure function gets unit tests; UI flows that can break RTL get component tests with `dir="rtl"`.
+- **Commits**: one logical concern per commit; message format matches repo history (`feat(search): …`, `fix(rtl): …`, `perf(pdf): …`).
+- **No scope creep**: if a nice idea is not in the plan, open a spike note under `docs/spikes/` instead of implementing it mid-plan.
 
-## Dependency notes
+## Dependency graph (simplified)
 
-- 032 must keep the fresh-canvas generation key (028) and the bounded
-  settlement wait — those are what make the black-page fix hold.
-- 033 extends the `known`-set skip in loadCitations (030) with the disk
-  cache; it does not touch the `citationsLoading` flag semantics (031).
-- 037 is the release vehicle: it must not land before 032-036 (or a
-  documented subset) is green, and the macOS artifact + tag-workflow
-  notes are part of its scope, not separate docs.
+```
+040 Architecture
+ ├── 041 Search
+ ├── 042 Notes
+ └── 043 Codex auth
+        │
+        ├── 044 RTL/UX (needs shell + search chrome + notes surfaces)
+        └── 045 Research depth (needs search + notes + auth)
+                │
+                └── 046 Logic review → 047 Release
+```
+
+## Already shipped context (do not re-do)
+
+From Round 3 evidence (see `plans/README.md` history and commits on `main`):
+
+- Black PDF pages fixed (fresh canvas per render run).
+- Floating filter bar opacity/sticky fixed.
+- Most-cited spinner honest completed/failed states.
+- Version files already show `1.0.11` in some snapshots — confirm on disk before any bump in 047.
+
+## Primary user outcomes after Round 4
+
+1. User can search **historical** papers with clear modes (keyword, author, title, category+range, Semantic Scholar relevance).
+2. User can attach **notes and highlights** to a paper and find them later.
+3. User can connect **Codex / OpenAI coding models** via the existing provider system with the same keychain safety model (optional OAuth only if implemented as documented in 043).
+4. Arabic and English both feel first-class; no layout breakage when switching direction.
+5. Codebase has clearer feature boundaries so future LLM agents touch fewer files per change.
