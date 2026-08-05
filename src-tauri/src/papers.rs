@@ -140,6 +140,104 @@ fn build_fetch_url(
     max: usize,
     start: usize,
 ) -> Result<String, String> {
+    let category = validate_category(category)?;
+
+    let mut term = if let Some(query) = query {
+        format!("all:{}", validate_query(query)?)
+    } else {
+        format!("cat:{category}")
+    };
+
+    if let Some(date) = date {
+        append_day_range(&mut term, date)?;
+    }
+
+    finish_arxiv_url(&term, max, start)
+}
+
+/// Year bounds for fielded search (plan 041). Both endpoints are
+/// inclusive calendar years; a range like 2017–2017 covers that year.
+fn validate_year(year: u32) -> Result<(), String> {
+    if !(1900..=2100).contains(&year) {
+        return Err("Invalid year".into());
+    }
+    Ok(())
+}
+
+/// Fielded search options (plan 041): the arXiv field prefix, inclusive
+/// year bounds, and whether the current category is ANDed onto the query.
+#[derive(Clone, Copy, Default)]
+struct SearchOptions<'a> {
+    field: &'a str,
+    year_from: Option<u32>,
+    year_to: Option<u32>,
+    limit_to_category: bool,
+}
+
+/// Builds the arXiv query URL for a fielded search (plan 041): maps the
+/// field to its arXiv prefix (`all`/`ti`/`au`/`abs`/`id`), sanitizes the
+/// term, appends the optional year range as a `submittedDate` range, and
+/// optionally ANDs the current category. A day `date` takes precedence
+/// over the year range (a single day is stricter).
+fn build_search_url(
+    category: &str,
+    query: &str,
+    opts: SearchOptions<'_>,
+    date: Option<&str>,
+    max: usize,
+    start: usize,
+) -> Result<String, String> {
+    let category = validate_category(category)?;
+    let prefix = field_prefix(opts.field)?;
+
+    let query = query.trim();
+    let mut term = if prefix == "id" {
+        // Id queries are exact: normalize (strip `arXiv:` prefix, keep
+        // the safe id charset) and never AND a category onto them.
+        format!("id:{}", normalize_id_query(query)?)
+    } else {
+        format!("{prefix}:{}", validate_query(query)?)
+    };
+
+    if let Some(date) = date {
+        append_day_range(&mut term, date)?;
+    } else if prefix != "id" {
+        // submittedDate range: lower bound is Jan 1 of year_from; the
+        // upper bound is Jan 1 of year_to + 1 (exclusive, mirroring the
+        // day range) so Dec 31 of year_to is included.
+        match (opts.year_from, opts.year_to) {
+            (Some(from), Some(to)) => {
+                validate_year(from)?;
+                validate_year(to)?;
+                if from > to {
+                    return Err("Year range is reversed".into());
+                }
+                term.push_str(&format!(
+                    " AND submittedDate:[{from}0101 TO {}0101]",
+                    to + 1
+                ));
+            }
+            (Some(from), None) => {
+                validate_year(from)?;
+                term.push_str(&format!(" AND submittedDate:[{from}0101 TO 21000101]"));
+            }
+            (None, Some(to)) => {
+                validate_year(to)?;
+                term.push_str(&format!(" AND submittedDate:[19000101 TO {}0101]", to + 1));
+            }
+            (None, None) => {}
+        }
+    }
+
+    if opts.limit_to_category && prefix != "id" {
+        term.push_str(&format!(" AND cat:{category}"));
+    }
+
+    finish_arxiv_url(&term, max, start)
+}
+
+/// Validates a category code (must look like a `cat:` code).
+fn validate_category(category: &str) -> Result<String, String> {
     let category = category.trim();
     let valid_category = !category.is_empty()
         && category.len() <= 32
@@ -149,43 +247,114 @@ fn build_fetch_url(
     if !valid_category {
         return Err("Invalid category".into());
     }
+    Ok(category.to_string())
+}
 
-    let mut term = if let Some(query) = query {
-        let query = query.trim();
-        let valid_query = !query.is_empty()
-            && query.len() <= 200
-            && !query
-                .chars()
-                .any(|c| matches!(c, '"' | '(' | ')' | ':' | '&'));
-        if !valid_query {
-            return Err("Invalid search query".into());
-        }
-        format!("all:{query}")
-    } else {
-        format!("cat:{category}")
-    };
-
-    if let Some(date) = date {
-        let (y, m, d) = parse_date(date)?;
-        let (ny, nm, nd) = next_day(y, m, d);
-        // arXiv's range syntax wants compact YYYYMMDD bounds. The upper
-        // bound is the following day so the whole day is included. The
-        // term is joined with spaces (not "+") so the fully encoded URL
-        // matches what the API demonstrably accepts: "cat:cs.AI AND
-        // submittedDate:[20260725 TO 20260726]" with %20 spaces returns
-        // entries, while raw or "%2B"-encoded operators and raw range
-        // brackets silently return zero.
-        term.push_str(&format!(
-            " AND submittedDate:[{y:04}{m:02}{d:02} TO {ny:04}{nm:02}{nd:02}]"
-        ));
+/// Validates a free-text search term: non-empty, capped length, and no
+/// characters arXiv's query parser treats as operators.
+fn validate_query(query: &str) -> Result<String, String> {
+    let query = query.trim();
+    let valid_query = !query.is_empty()
+        && query.len() <= 200
+        && !query
+            .chars()
+            .any(|c| matches!(c, '"' | '(' | ')' | ':' | '&'));
+    if !valid_query {
+        return Err("Invalid search query".into());
     }
+    Ok(query.to_string())
+}
 
+/// Maps the UI search field to its arXiv prefix.
+fn field_prefix(field: &str) -> Result<&'static str, String> {
+    match field {
+        "" | "all" => Ok("all"),
+        "title" => Ok("ti"),
+        "author" => Ok("au"),
+        "abstract" => Ok("abs"),
+        "id" => Ok("id"),
+        _ => Err(format!("Unknown search field: {field}")),
+    }
+}
+
+/// Test helper: fielded search URL with the common (date=None, start=0)
+/// tail, keeping the assertions readable.
+#[cfg(test)]
+fn search_url(
+    category: &str,
+    query: &str,
+    field: &str,
+    year_from: Option<u32>,
+    year_to: Option<u32>,
+    limit: bool,
+    max: usize,
+) -> Result<String, String> {
+    build_search_url(
+        category,
+        query,
+        SearchOptions {
+            field,
+            year_from,
+            year_to,
+            limit_to_category: limit,
+        },
+        None,
+        max,
+        0,
+    )
+}
+
+/// Normalizes an arXiv id query: strips a leading `arXiv:` (any case) or
+/// `/abs/` path, keeps the trailing version suffix optional, and allows
+/// only the safe id charset (digits, letters, dot, dash, underscore,
+/// comma for id lists). Anything else is rejected before it reaches the
+/// API.
+fn normalize_id_query(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    let q = if let Some(rest) = trimmed.to_ascii_lowercase().strip_prefix("arxiv:") {
+        // `rest` is a byte-identical prefix of `trimmed` (ASCII lowering
+        // preserves length), so slicing by its byte length is safe.
+        &trimmed[trimmed.len() - rest.len()..]
+    } else {
+        trimmed
+    };
+    let q = q.strip_suffix('/').unwrap_or(q);
+    if q.is_empty()
+        || q.len() > 200
+        || !q
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ','))
+    {
+        return Err("Invalid arXiv id".into());
+    }
+    Ok(q.to_string())
+}
+
+/// Appends the day-browse `submittedDate:[YYYYMMDD TO next_day]` clause.
+fn append_day_range(term: &mut String, date: &str) -> Result<(), String> {
+    let (y, m, d) = parse_date(date)?;
+    let (ny, nm, nd) = next_day(y, m, d);
+    // arXiv's range syntax wants compact YYYYMMDD bounds. The upper
+    // bound is the following day so the whole day is included. The
+    // term is joined with spaces (not "+") so the fully encoded URL
+    // matches what the API demonstrably accepts: "cat:cs.AI AND
+    // submittedDate:[20260725 TO 20260726]" with %20 spaces returns
+    // entries, while raw or "%2B"-encoded operators and raw range
+    // brackets silently return zero.
+    term.push_str(&format!(
+        " AND submittedDate:[{y:04}{m:02}{d:02} TO {ny:04}{nm:02}{nd:02}]"
+    ));
+    Ok(())
+}
+
+/// The common URL tail for every arXiv query.
+fn finish_arxiv_url(term: &str, max: usize, start: usize) -> Result<String, String> {
     let mut url = format!(
         "{ARXIV_API}?search_query={}&sortBy=submittedDate&sortOrder=descending&max_results={max}",
         // Percent-encode the term: arXiv's range grammar (`[` `]` `:`) and
         // any query text must arrive encoded, or the API silently returns
         // zero entries for date ranges.
-        urlencode(&term),
+        urlencode(term),
     );
     if start > 0 {
         // Pagination: arXiv returns results ordered newest first, so the
@@ -251,6 +420,10 @@ fn next_day(y: u32, m: u32, d: u32) -> (u32, u32, u32) {
 /// the UI can show a fallback notice (spike §5 — the notice is the honesty
 /// mechanism; the list itself is indistinguishable from a plain fetch).
 #[tauri::command]
+// The command mirrors the IPC contract: one arg per field, all Option
+// so older frontends keep working. Clippy's arity limit does not apply
+// to a command boundary.
+#[allow(clippy::too_many_arguments)]
 pub async fn fetch_papers(
     category: String,
     max_results: Option<usize>,
@@ -258,11 +431,25 @@ pub async fn fetch_papers(
     date: Option<String>,
     start: Option<usize>,
     source: Option<String>,
+    field: Option<String>,
+    year_from: Option<u32>,
+    year_to: Option<u32>,
+    limit_to_category: Option<bool>,
 ) -> Result<(Vec<Paper>, Option<String>), String> {
     let max = max_results.unwrap_or(20).clamp(1, MAX_RESULTS_LIMIT);
     let start = start.unwrap_or(0);
     let source = source.unwrap_or_else(|| "arxiv".into());
     let source = source.trim().to_lowercase();
+    let field = field.unwrap_or_else(|| "all".into());
+    let field = field.trim().to_lowercase();
+    let limit_to_category = limit_to_category.unwrap_or(true);
+    // Years without a search term are a user error, never a silent browse
+    // mode: day navigation already covers browsing by date.
+    if query.as_deref().is_none_or(|q| q.trim().is_empty())
+        && (year_from.is_some() || year_to.is_some())
+    {
+        return Err("Enter a search term to filter by year range".into());
+    }
 
     if source != "arxiv" {
         if source != "semanticscholar" {
@@ -274,32 +461,87 @@ pub async fn fetch_papers(
         let Some(query) = query.filter(|q| !q.trim().is_empty()) else {
             return Err("Search query is required for Semantic Scholar".into());
         };
-        match fetch_from_semanticscholar(&query, max, start).await {
+        // Id queries are arXiv-native (S2 has no id field syntax):
+        // route them straight to the arXiv path.
+        if field == "id" {
+            let papers = fetch_from_arxiv(
+                &category,
+                Some(&query),
+                None,
+                max,
+                start,
+                SearchOptions {
+                    field: &field,
+                    year_from,
+                    year_to,
+                    limit_to_category,
+                },
+            )
+            .await?;
+            return Ok((papers, None));
+        }
+        match fetch_from_semanticscholar(&query, max, start, year_from, year_to).await {
             Ok(papers) => return Ok((papers, None)),
             Err(source_error) => {
                 // Fallback to arXiv, surfacing the source error. If arXiv
                 // also fails, that error propagates (never masked).
-                let papers = fetch_from_arxiv(&category, Some(&query), None, max, start).await?;
+                let papers = fetch_from_arxiv(
+                    &category,
+                    Some(&query),
+                    None,
+                    max,
+                    start,
+                    SearchOptions {
+                        field: &field,
+                        year_from,
+                        year_to,
+                        limit_to_category,
+                    },
+                )
+                .await?;
                 return Ok((papers, Some(source_error)));
             }
         }
     }
 
-    fetch_from_arxiv(&category, query.as_deref(), date.as_deref(), max, start)
-        .await
-        .map(|papers| (papers, None))
+    fetch_from_arxiv(
+        &category,
+        query.as_deref(),
+        date.as_deref(),
+        max,
+        start,
+        SearchOptions {
+            field: &field,
+            year_from,
+            year_to,
+            limit_to_category,
+        },
+    )
+    .await
+    .map(|papers| (papers, None))
 }
 
 /// The arXiv path: validates input, enforces the arXiv rate limit, fetches
-/// and parses the Atom feed.
+/// and parses the Atom feed. Fielded search (plan 041) applies when a
+/// query is present; plain category/date browsing keeps the legacy URL
+/// builder.
 async fn fetch_from_arxiv(
     category: &str,
     query: Option<&str>,
     date: Option<&str>,
     max: usize,
     start: usize,
+    opts: SearchOptions<'_>,
 ) -> Result<Vec<Paper>, String> {
-    let url = build_fetch_url(category, query, date, max, start)?;
+    let url = match query {
+        Some(q) => build_search_url(category, q, opts, date, max, start)?,
+        None => {
+            if opts.year_from.is_some() || opts.year_to.is_some() {
+                return Err("Enter a search term to filter by year range".into());
+            }
+            build_fetch_url(category, None, date, max, start)?
+        }
+    };
     // Test hook: swap the base URL (PAPYRUS_ARXIV_URL) while keeping the
     // validated query string from build_fetch_url.
     let url = url.replacen(ARXIV_API, &arxiv_url(), 1);
@@ -334,10 +576,16 @@ const S2_RETRY_DELAY_MS: u64 = 1500;
 
 /// Fetches papers from the Semantic Scholar search API. Requires a
 /// non-empty query; `start` maps to the API's `offset` for pagination.
+/// Year bounds go in the `year` query param when both are present (S2's
+/// documented range syntax); one-sided bounds cannot be expressed there,
+/// so they are enforced client-side on the returned page (current-page
+/// limitation, documented in plan 041).
 async fn fetch_from_semanticscholar(
     query: &str,
     max: usize,
     start: usize,
+    year_from: Option<u32>,
+    year_to: Option<u32>,
 ) -> Result<Vec<Paper>, String> {
     let query = query.trim();
     if query.is_empty() {
@@ -351,6 +599,14 @@ async fn fetch_from_semanticscholar(
         s2_search_url(),
         urlencode(query),
     );
+    if let (Some(from), Some(to)) = (year_from, year_to) {
+        validate_year(from)?;
+        validate_year(to)?;
+        if from > to {
+            return Err("Year range is reversed".into());
+        }
+        url.push_str(&format!("&year={from}-{to}"));
+    }
     if start > 0 {
         url.push_str(&format!("&offset={start}"));
     }
@@ -388,7 +644,20 @@ async fn fetch_from_semanticscholar(
             });
         }
 
-        return parse_s2_search(&body);
+        let mut papers = parse_s2_search(&body)?;
+        // Client-side year enforcement (one-sided bounds, and belt for
+        // two-sided ones): a paper whose year is unknown cannot be proven
+        // in range, so it is dropped from the current page.
+        if year_from.is_some() || year_to.is_some() {
+            papers.retain(|p| {
+                let year = p.published.get(..4).and_then(|s| s.parse::<u32>().ok());
+                match year {
+                    Some(y) => year_from.is_none_or(|f| y >= f) && year_to.is_none_or(|t| y <= t),
+                    None => false,
+                }
+            });
+        }
+        return Ok(papers);
     }
 }
 
@@ -788,6 +1057,283 @@ mod tests {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Plan 041: fielded search URL building
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn search_url_maps_each_field_to_arxiv_prefix() {
+        let cases = [
+            ("all", "search_query=all%3Atransformer"),
+            ("title", "search_query=ti%3Atransformer"),
+            ("author", "search_query=au%3Atransformer"),
+            ("abstract", "search_query=abs%3Atransformer"),
+            ("id", "search_query=id%3A1706.03762"),
+        ];
+        for (field, expected) in cases {
+            let query = if field == "id" {
+                "1706.03762"
+            } else {
+                "transformer"
+            };
+            let url =
+                search_url("cs.AI", query, field, None, None, false, 20).expect("url should build");
+            assert!(
+                url.contains(expected),
+                "field {field} must produce {expected}, got: {url}"
+            );
+        }
+    }
+
+    #[test]
+    fn search_url_normalizes_id_input() {
+        // The arXiv: prefix and trailing slash are stripped; the version
+        // suffix is kept (arXiv accepts it).
+        let url = search_url("cs.AI", "arXiv:1706.03762v2", "id", None, None, false, 20)
+            .expect("id url should build");
+        assert!(url.contains("search_query=id%3A1706.03762v2"), "got: {url}");
+
+        // Operator-ish characters are rejected before they reach the API.
+        assert_eq!(
+            search_url("cs.AI", "1706.03762; DROP", "id", None, None, false, 20),
+            Err("Invalid arXiv id".into())
+        );
+    }
+
+    #[test]
+    fn search_url_appends_year_range_as_yyyymmdd() {
+        // The upper bound is Jan 1 of year_to + 1 (exclusive) so Dec 31
+        // of year_to is included, mirroring the day-range semantics.
+        let url = search_url(
+            "cs.AI",
+            "transformer",
+            "all",
+            Some(2017),
+            Some(2017),
+            false,
+            20,
+        )
+        .expect("url should build");
+        assert!(
+            url.contains("submittedDate%3A%5B20170101%20TO%2020180101%5D"),
+            "got: {url}"
+        );
+    }
+
+    #[test]
+    fn search_url_one_sided_year_bounds() {
+        let from = search_url("cs.AI", "transformer", "all", Some(2017), None, false, 20)
+            .expect("from-only url should build");
+        assert!(
+            from.contains("submittedDate%3A%5B20170101%20TO%2021000101%5D"),
+            "got: {from}"
+        );
+        let to = search_url("cs.AI", "transformer", "all", None, Some(2009), false, 20)
+            .expect("to-only url should build");
+        assert!(
+            to.contains("submittedDate%3A%5B19000101%20TO%2020100101%5D"),
+            "got: {to}"
+        );
+    }
+
+    #[test]
+    fn search_url_rejects_bad_year_bounds() {
+        assert_eq!(
+            search_url(
+                "cs.AI",
+                "transformer",
+                "all",
+                Some(2020),
+                Some(2017),
+                false,
+                20
+            ),
+            Err("Year range is reversed".into())
+        );
+        assert_eq!(
+            search_url("cs.AI", "transformer", "all", Some(1800), None, false, 20),
+            Err("Invalid year".into())
+        );
+    }
+
+    #[test]
+    fn search_url_limit_to_category_appends_cat_clause() {
+        let limited = search_url("cs.AI", "transformer", "all", None, None, true, 20)
+            .expect("limited url should build");
+        assert!(limited.contains("%20AND%20cat%3Acs.AI"), "got: {limited}");
+
+        let global = search_url("cs.AI", "transformer", "all", None, None, false, 20)
+            .expect("global url should build");
+        assert!(!global.contains("cat%3A"), "got: {global}");
+
+        // Id queries are exact matches: never AND a category onto them.
+        let id_url = search_url("cs.AI", "1706.03762", "id", None, None, true, 20)
+            .expect("id url should build");
+        assert!(!id_url.contains("cat%3A"), "got: {id_url}");
+    }
+
+    #[test]
+    fn search_url_rejects_operator_injection() {
+        for bad in ['"', '(', ')', ':', '&'] {
+            let url = search_url(
+                "cs.AI",
+                &format!("transformer{bad}"),
+                "title",
+                None,
+                None,
+                false,
+                20,
+            );
+            assert_eq!(
+                url,
+                Err("Invalid search query".into()),
+                "charset must reject {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_field_is_rejected() {
+        assert_eq!(
+            search_url("cs.AI", "transformer", "bogus", None, None, false, 20),
+            Err("Unknown search field: bogus".into())
+        );
+    }
+
+    #[test]
+    fn years_without_query_are_rejected() {
+        // A pure year filter is a user error, never a silent browse mode.
+        let err = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_papers(
+                "cs.AI".into(),
+                Some(5),
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(2017),
+                None,
+                None,
+            ))
+            .expect_err("years need a search term");
+        assert!(err.contains("Enter a search term"), "got: {err}");
+    }
+
+    #[test]
+    fn id_queries_route_to_arxiv_even_for_s2_source() {
+        // S2 has no id field syntax: an id query must use the arXiv path
+        // only. Both test endpoints are dead; the error must come from
+        // arXiv (proving S2 was never contacted).
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        unsafe {
+            std::env::set_var("PAPYRUS_S2_SEARCH_URL", "http://127.0.0.1:1");
+            std::env::set_var("PAPYRUS_ARXIV_URL", "http://127.0.0.1:2/api/query");
+        }
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_papers(
+                "cs.AI".into(),
+                Some(5),
+                Some("1706.03762".into()),
+                None,
+                None,
+                Some("semanticscholar".into()),
+                Some("id".into()),
+                None,
+                None,
+                Some(true),
+            ));
+        unsafe {
+            std::env::remove_var("PAPYRUS_S2_SEARCH_URL");
+            std::env::remove_var("PAPYRUS_ARXIV_URL");
+        }
+        let err = result.expect_err("the arXiv path is dead in this test");
+        assert!(err.contains("arXiv"), "got: {err}");
+    }
+
+    #[test]
+    fn semanticscholar_sends_year_param_and_filters_page() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let body = r#"{"data":[
+            {"paperId":"old1","title":"Too Old","authors":[],"publicationDate":"2016-05-01","year":2016,"abstract":"a"},
+            {"paperId":"hit1","title":"In Range","authors":[],"publicationDate":"2017-06-01","year":2017,"abstract":"b"},
+            {"paperId":"new1","title":"Too New","authors":[],"publicationDate":"2018-07-01","year":2018,"abstract":"c"}
+        ]}"#;
+        let request_line = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let captured = request_line.clone();
+        thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 8192];
+                let mut req = Vec::new();
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            req.extend_from_slice(&buf[..n]);
+                            if req.windows(4).any(|w| w == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                let head_end = req.windows(4).position(|w| w == b"\r\n\r\n").unwrap_or(0);
+                let first_line = String::from_utf8_lossy(&req[..head_end])
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+                *captured.lock().unwrap() = first_line;
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(body.as_bytes());
+            }
+        });
+
+        unsafe {
+            std::env::set_var(
+                "PAPYRUS_S2_SEARCH_URL",
+                &format!("http://{addr}/graph/v1/paper/search"),
+            );
+        }
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_papers(
+                "cs.AI".into(),
+                Some(5),
+                Some("transformer".into()),
+                None,
+                None,
+                Some("semanticscholar".into()),
+                Some("all".into()),
+                Some(2017),
+                Some(2017),
+                Some(false),
+            ));
+        unsafe {
+            std::env::remove_var("PAPYRUS_S2_SEARCH_URL");
+        }
+
+        let (papers, note) = result.expect("S2 fetch should succeed");
+        assert!(note.is_none(), "unexpected fallback note: {note:?}");
+        assert_eq!(
+            papers.len(),
+            1,
+            "client filter must drop out-of-range papers"
+        );
+        assert_eq!(papers[0].title, "In Range");
+        let req = request_line.lock().unwrap().clone();
+        assert!(req.contains("year=2017-2017"), "got request: {req}");
+    }
+
     #[test]
     fn next_day_rolls_over_months_and_years() {
         assert_eq!(next_day(2026, 8, 1), (2026, 8, 2));
@@ -827,6 +1373,10 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
+                None,
+                None,
             ))
             .expect("live fetch should succeed");
         assert!(note.is_none());
@@ -850,6 +1400,10 @@ mod tests {
                 None,
                 None,
                 Some("semanticscholar".into()),
+                None,
+                None,
+                None,
+                None,
             ))
             .expect("live s2 search should succeed");
         assert!(!papers.is_empty(), "expected at least one paper");
@@ -935,6 +1489,10 @@ mod tests {
                 None,
                 None,
                 Some("semanticscholar".into()),
+                None,
+                None,
+                None,
+                None,
             ))
             .expect_err("a query is required");
         assert!(err.contains("Search query is required"), "got: {err}");
@@ -951,6 +1509,10 @@ mod tests {
                 Some("2026-08-01".into()),
                 None,
                 Some("semanticscholar".into()),
+                None,
+                None,
+                None,
+                None,
             ))
             .expect_err("date browsing is arXiv-only");
         assert!(err.contains("Date browsing is not supported"), "got: {err}");
@@ -967,6 +1529,10 @@ mod tests {
                 None,
                 None,
                 Some("openalex".into()),
+                None,
+                None,
+                None,
+                None,
             ))
             .expect_err("unknown source");
         assert!(err.contains("Unknown paper source"), "got: {err}");
@@ -1009,6 +1575,10 @@ mod tests {
                 None,
                 None,
                 Some("semanticscholar".into()),
+                None,
+                None,
+                None,
+                None,
             ));
         unsafe {
             std::env::remove_var("PAPYRUS_S2_SEARCH_URL");
@@ -1044,6 +1614,10 @@ mod tests {
                 None,
                 None,
                 Some("semanticscholar".into()),
+                None,
+                None,
+                None,
+                None,
             ));
         unsafe {
             std::env::remove_var("PAPYRUS_S2_SEARCH_URL");
@@ -1110,6 +1684,10 @@ mod tests {
                 None,
                 None,
                 Some("semanticscholar".into()),
+                None,
+                None,
+                None,
+                None,
             ));
         unsafe {
             std::env::remove_var("PAPYRUS_S2_SEARCH_URL");
@@ -1180,6 +1758,10 @@ mod tests {
                 None,
                 None,
                 Some("semanticscholar".into()),
+                None,
+                None,
+                None,
+                None,
             ));
         unsafe {
             std::env::remove_var("PAPYRUS_S2_SEARCH_URL");
