@@ -360,7 +360,7 @@ export function ReaderView() {
           {/* PDF viewer: grows with the row on narrow windows, exact
               share of the split on desktop (inline-start side). */}
           <div
-            className="min-h-0"
+            className="min-h-0 dark:bg-[oklch(0.145_0.008_60)]"
             style={
               isRow
                 ? {
@@ -456,7 +456,7 @@ export function ReaderView() {
           {/* AI panel: tabs on top, then per-tab content. The Ask tab keeps
               its input pinned at the bottom, always visible. */}
           <aside
-            className="flex min-h-0 flex-col border-t bg-background lg:border-s lg:border-t-0"
+            className="flex min-h-0 flex-col border-t bg-card/40 lg:border-s lg:border-t-0"
             style={
               isRow
                 ? {

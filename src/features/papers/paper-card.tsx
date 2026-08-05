@@ -78,7 +78,7 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
   return (
     <Card
       className={cn(
-        "animate-[card-in_0.6s_cubic-bezier(0.16,1,0.3,1)_both] transition-all duration-200 hover:-translate-y-px hover:border-foreground/20 hover:shadow-sm",
+        "animate-[card-in_0.6s_cubic-bezier(0.16,1,0.3,1)_both] transition-all duration-200 hover:-translate-y-px hover:border-primary/30 hover:shadow-sm",
         expanded && "border-primary/50",
       )}
       style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
