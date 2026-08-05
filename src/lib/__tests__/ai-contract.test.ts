@@ -55,7 +55,7 @@ describe("shared AI resource (src-tauri/prompts.json)", () => {
     expect(en).toContain("250");
     expect(en).toContain("exclamation marks");
     expect(ar).toContain("مرشد بحثي");
-    expect(ar).toContain("حشو");
+    expect(ar).toContain("مقدمات إنشائية");
     expect(ar).toContain("250");
     expect(ar).toContain("لاتكس");
   });
