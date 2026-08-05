@@ -58,6 +58,14 @@
   "markdown": {
     "diagramError": "Diagram could not be rendered"
   },
+  "history": {
+    "title": "History",
+    "empty": "Papers you open will show up here.",
+    "opened": "Opened {{rel}}",
+    "open": "Open paper",
+    "save": "Save to favorites",
+    "remove": "Remove from history"
+  },
   "notes": {
     "title": "Notes",
     "empty": "No notes yet. Notes and highlights you save while reading a paper will show up here.",

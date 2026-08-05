@@ -1,4 +1,4 @@
-import { Bookmark, CalendarDays, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { Bookmark, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +40,9 @@ interface PapersToolbarProps {
   onRetryCitations: () => void;
   savedOnly: boolean;
   onToggleSavedOnly: () => void;
+  /** Plan 060: History mode shows the automatic reading-history list. */
+  historyMode: boolean;
+  onToggleHistory: () => void;
   onRefresh: () => void;
   loading: boolean;
   /** YYYY-MM-DD of the browsed day, or null for the latest papers. */
@@ -98,6 +101,8 @@ export function PapersToolbar({
   onRetryCitations,
   savedOnly,
   onToggleSavedOnly,
+  historyMode,
+  onToggleHistory,
   onRefresh,
   loading,
   date,
@@ -202,6 +207,15 @@ export function PapersToolbar({
             <Bookmark className="size-4" />
             {t("papers.savedOnly")}
           </Button>
+          <Button
+            variant={historyMode ? "secondary" : "ghost"}
+            size="sm"
+            onClick={onToggleHistory}
+            aria-pressed={historyMode}
+          >
+            <Clock className="size-4" />
+            {t("history.title")}
+          </Button>
           <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
             <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
             {t("papers.refresh")}
@@ -209,7 +223,11 @@ export function PapersToolbar({
         </div>
       </div>
 
-      {searchActive ? (
+      {historyMode ? (
+        <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+          {t("history.title")}
+        </span>
+      ) : searchActive ? (
         /* Search chrome: year chips + category scoping. Day navigation is
            hidden while a query is active (searches ignore dates). */
         <div className="flex flex-wrap items-center gap-2">

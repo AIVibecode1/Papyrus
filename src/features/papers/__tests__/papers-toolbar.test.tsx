@@ -20,6 +20,8 @@ const baseProps = {
   onYearRange: vi.fn(),
   limitToCategory: false,
   onLimitToCategory: vi.fn(),
+  historyMode: false,
+  onToggleHistory: vi.fn(),
   source: "arxiv" as const,
   sortVisible: false,
   sortMode: "newest" as const,

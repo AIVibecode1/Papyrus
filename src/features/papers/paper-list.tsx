@@ -14,6 +14,7 @@ import { useReaderStore } from "@/stores/reader";
 import { useUiStore } from "@/stores/ui";
 import { PaperCard } from "@/features/papers/paper-card";
 import { PapersToolbar } from "@/features/papers/papers-toolbar";
+import { HistoryList } from "@/features/papers/history-list";
 import { TodayPicks } from "@/features/papers/today-picks";
 
 function PaperSkeleton() {
@@ -68,6 +69,9 @@ export function PaperList() {
     .reverse();
   const dayCount = (d: string) => byCategory[category]?.[d]?.length ?? 0;
   const [savedOnly, setSavedOnly] = useState(false);
+  // Plan 060: History mode swaps the list for the automatic reading
+  // history (independent of the Saved toggle; both are list filters).
+  const [historyMode, setHistoryMode] = useState(false);
   // Seed the input from the store so external prefills (e.g. the reader's
   // "Search this title" action) are visible in the box; the effect below
   // keeps them in sync without fighting the debounce.
@@ -196,6 +200,8 @@ export function PaperList() {
         onRetryCitations={() => loadCitations(papers.map((p) => p.id))}
         savedOnly={savedOnly}
         onToggleSavedOnly={() => setSavedOnly((v) => !v)}
+        historyMode={historyMode}
+        onToggleHistory={() => setHistoryMode((v) => !v)}
         onRefresh={() => void refresh()}
         loading={loading}
         date={date}
@@ -241,6 +247,7 @@ export function PaperList() {
           {!loading &&
             !error &&
             !savedOnly &&
+            !historyMode &&
             !date &&
             picks.papers.length > 0 &&
             !picksDismissed && (
@@ -255,7 +262,10 @@ export function PaperList() {
               />
             )}
 
-          {loading && (
+          {/* Plan 060: History mode replaces the feed entirely. */}
+          {historyMode && <HistoryList />}
+
+          {!historyMode && loading && (
             <div className="flex flex-col gap-4" aria-label={t("papers.loading")}>
               {Array.from({ length: 5 }).map((_, i) => (
                 <PaperSkeleton key={i} />
@@ -263,7 +273,7 @@ export function PaperList() {
             </div>
           )}
 
-          {!loading && error === SCHOLAR_SEARCH_REQUIRED && (
+          {!historyMode && !loading && error === SCHOLAR_SEARCH_REQUIRED && (
             <StatePanel
               icon={<Search className="size-8" />}
               title={t("papers.scholarNeedsQuery")}
@@ -271,7 +281,7 @@ export function PaperList() {
             />
           )}
 
-          {!loading && error && error !== SCHOLAR_SEARCH_REQUIRED && (
+          {!historyMode && !loading && error && error !== SCHOLAR_SEARCH_REQUIRED && (
             <StatePanel
               icon={<AlertCircle className="size-8 text-destructive" />}
               title={t("papers.error")}
@@ -285,7 +295,8 @@ export function PaperList() {
             />
           )}
 
-          {!loading &&
+          {!historyMode &&
+            !loading &&
             !error &&
             savedOnly &&
             (savedIds.length === 0 ? (
@@ -302,7 +313,7 @@ export function PaperList() {
               </div>
             ))}
 
-          {!loading && !error && !savedOnly && papers.length === 0 && (
+          {!historyMode && !loading && !error && !savedOnly && papers.length === 0 && (
             <StatePanel
               icon={
                 query.trim() ? <Search className="size-8" /> : <BookOpenText className="size-8" />
@@ -332,7 +343,7 @@ export function PaperList() {
             />
           )}
 
-          {!loading && !error && !savedOnly && papers.length > 0 && (
+          {!historyMode && !loading && !error && !savedOnly && papers.length > 0 && (
             <div className="flex flex-col gap-4">
               {visiblePapers.map((paper, i) => (
                 <PaperCard key={paper.id} paper={paper} index={i} />
