@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const LOCALES = join(import.meta.dirname, "..", "i18n", "locales");
+const LOCALES = join(import.meta.dirname, "..", "..", "i18n", "locales");
 
 function flatten(
   value: Record<string, unknown>,
