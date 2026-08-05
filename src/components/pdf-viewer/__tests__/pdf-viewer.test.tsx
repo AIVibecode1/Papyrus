@@ -80,7 +80,10 @@ class MockResizeObserver {
     roCallback = cb;
   }
   observe(el: Element) {
-    roElement = el;
+    // Only the live, connected container is meaningful for resize tests;
+    // a detached element from an earlier render would drive the wrong
+    // box (full-suite flake: Object.defineProperty on a dead element).
+    if (el.isConnected) roElement = el;
   }
   disconnect() {}
   unobserve() {}
@@ -245,6 +248,10 @@ describe("render state transitions", () => {
     render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
     // jsdom has no layout: the load-time fit falls back to 800px (2.5).
     await waitFor(() => expect(screen.getByText("250%")).toBeInTheDocument());
+    // The observer attaches to the CURRENT container; under full-suite
+    // load the previous test's element can still be the captured one, so
+    // wait for the live element before driving the resize.
+    await waitFor(() => expect(roElement).not.toBeNull());
     // Container shrinks to 150px: fit = (150-48)/100 = 1.02.
     Object.defineProperty(roElement!, "clientWidth", { value: 150, configurable: true });
     act(() => roCallback!([], {} as ResizeObserver));
