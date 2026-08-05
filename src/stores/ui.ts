@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type View = "papers" | "settings" | "reader";
+export type View = "papers" | "settings" | "reader" | "notes";
 
 interface UiState {
   view: View;

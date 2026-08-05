@@ -4,6 +4,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { TopBar } from "@/components/layout/top-bar";
 import { PaperList } from "@/features/papers/paper-list";
 import { Sidebar } from "@/features/papers/sidebar";
+import { NotesPage } from "@/features/notes/notes-page";
 import { ReaderView } from "@/features/reader/reader-view";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { useFavoritesStore } from "@/stores/favorites";
@@ -50,6 +51,14 @@ export default function App() {
           // (back, title, stop). Rendering it inside the TopBar shell
           // would stack two headers and overflow the viewport.
           <ReaderView />
+        ) : view === "notes" ? (
+          <>
+            <TopBar />
+            <main id="main-content" className="min-h-0 flex-1 overflow-y-auto">
+              {/* Placeholder until 042 mounts the real notes hub. */}
+              <NotesPage />
+            </main>
+          </>
         ) : (
           <>
             <TopBar />

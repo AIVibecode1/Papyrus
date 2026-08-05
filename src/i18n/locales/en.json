@@ -52,12 +52,17 @@
   "markdown": {
     "diagramError": "Diagram could not be rendered"
   },
+  "notes": {
+    "title": "Notes",
+    "empty": "No notes yet. Notes and highlights you save while reading a paper will show up here."
+  },
   "errors": {
     "title": "Something went wrong",
     "reload": "Reload the app"
   },
   "nav": {
-    "settings": "Settings"
+    "settings": "Settings",
+    "notes": "Notes"
   },
   "topbar": {
     "language": "Language",

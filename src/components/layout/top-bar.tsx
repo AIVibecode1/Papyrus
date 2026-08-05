@@ -1,4 +1,4 @@
-import { Lamp, Moon, ScrollText, Settings, Sun } from "lucide-react";
+import { Lamp, Moon, NotebookPen, ScrollText, Settings, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/use-theme";
@@ -47,6 +47,15 @@ export function TopBar() {
               </button>
             ))}
           </div>
+          <Button
+            variant={view === "notes" ? "secondary" : "outline"}
+            size="icon"
+            onClick={() => setView(view === "notes" ? "papers" : "notes")}
+            aria-label={t("nav.notes")}
+            title={t("nav.notes")}
+          >
+            <NotebookPen className="size-4" />
+          </Button>
           <Button
             variant={view === "settings" ? "secondary" : "outline"}
             size="icon"
