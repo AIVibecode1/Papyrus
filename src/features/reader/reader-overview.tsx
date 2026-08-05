@@ -1,5 +1,6 @@
 import { BookOpenText, ExternalLink, Lightbulb } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatUiDate } from "@/lib/dates";
@@ -103,6 +104,24 @@ export function ReaderOverview({
           <Button size="sm" variant="outline" onClick={onSearchScholar}>
             <ExternalLink className="size-3.5" />
             {t("reader.overviewSearchScholar")}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              // Plan 053: the safe browser-continue path. arxiv ids open
+              // the abstract page; Scholar-only papers open their https
+              // PDF when one exists. Never a ChatGPT login surface.
+              const url = paper.id.startsWith("s2:")
+                ? paper.pdfUrl.startsWith("https://")
+                  ? paper.pdfUrl
+                  : null
+                : `https://arxiv.org/abs/${paper.id}`;
+              if (url) void openUrl(url).catch(() => window.open(url, "_blank", "noreferrer"));
+            }}
+          >
+            <ExternalLink className="size-3.5" />
+            {t("reader.openPaperPage")}
           </Button>
         </div>
 
