@@ -264,7 +264,7 @@ describe("papers store", () => {
   });
 
   it("loadCitations stores the returned counts", async () => {
-    vi.mocked(fetchCitations).mockResolvedValue({ ai1: 42 });
+    vi.mocked(fetchCitations).mockResolvedValue({ counts: { ai1: 42 }, reachable: true });
     usePapersStore.getState().loadCitations(["ai1", "unknown"]);
     await Promise.resolve();
 
@@ -285,35 +285,51 @@ describe("papers store", () => {
     // Semantic Scholar's keyless pool 429s: the batch resolves with an
     // empty map. The UI must stop saying "loading…" and show the honest
     // no-data state — the flag has to be cleared on completion.
-    vi.mocked(fetchCitations).mockResolvedValue({});
+    vi.mocked(fetchCitations).mockResolvedValue({ counts: {}, reachable: true });
     usePapersStore.setState({ papers: [aiPaper] });
     usePapersStore.getState().loadCitations(["ai1"]);
     expect(usePapersStore.getState().citationsLoading).toBe(true);
     await new Promise((r) => setTimeout(r, 0));
     expect(usePapersStore.getState().citationsLoading).toBe(false);
     expect(usePapersStore.getState().citations).toEqual({});
+    expect(usePapersStore.getState().citationsReachable).toBe(true);
   });
 
   it("drops a stale citation batch's flag update", async () => {
     // A slow first batch must not clear the flag a newer batch set.
-    let resolveFirst: ((v: Record<string, number>) => void) | null = null;
+    let resolveFirst: ((v: { counts: Record<string, number>; reachable: boolean }) => void) | null =
+      null;
     vi.mocked(fetchCitations)
-      .mockReturnValueOnce(new Promise((r) => (resolveFirst = r)))
-      .mockResolvedValueOnce({ ai2: 7 });
+      .mockReturnValueOnce(
+        new Promise((r) => {
+          resolveFirst = r;
+        }),
+      )
+      .mockResolvedValueOnce({ counts: { ai2: 7 }, reachable: true });
     usePapersStore.setState({ papers: [aiPaper] });
     usePapersStore.getState().loadCitations(["ai1"]);
     usePapersStore.getState().loadCitations(["ai2"]);
     await new Promise((r) => setTimeout(r, 0));
-    resolveFirst!({ ai1: 3 });
+    resolveFirst!({ counts: { ai1: 3 }, reachable: true });
     await new Promise((r) => setTimeout(r, 0));
     // The newer batch completed: flag false, only its counts applied.
     expect(usePapersStore.getState().citationsLoading).toBe(false);
     expect(usePapersStore.getState().citations).toEqual({ ai2: 7 });
   });
 
+  it("marks citations unreachable when no source answered", async () => {
+    // Both sources down: the UI must offer a retry instead of claiming
+    // the papers have no data.
+    vi.mocked(fetchCitations).mockResolvedValue({ counts: {}, reachable: false });
+    usePapersStore.setState({ papers: [aiPaper] });
+    usePapersStore.getState().loadCitations(["ai1"]);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(usePapersStore.getState().citationsReachable).toBe(false);
+  });
+
   it("refresh enriches the list with citation counts", async () => {
     vi.mocked(fetchPapers).mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
-    vi.mocked(fetchCitations).mockResolvedValue({ ai1: 7 });
+    vi.mocked(fetchCitations).mockResolvedValue({ counts: { ai1: 7 }, reachable: true });
 
     usePapersStore.setState({ category: "cs.AI" });
     await usePapersStore.getState().refresh();

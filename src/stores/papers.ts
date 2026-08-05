@@ -39,6 +39,8 @@ interface PapersState {
   citations: Record<string, number>;
   /** True while a citation batch lookup is in flight. */
   citationsLoading: boolean;
+  /** False when no citation source answered the last batch (retryable). */
+  citationsReachable: boolean;
   /** How the visible list is ordered: feed order or most cited first. */
   sortMode: PaperSortMode;
   setCategory: (category: string) => void;
@@ -68,6 +70,7 @@ export const usePapersStore = create<PapersState>((set, get) => ({
   lastUpdated: null,
   citations: {},
   citationsLoading: false,
+  citationsReachable: true,
   sortMode: "newest",
 
   setCategory: (category) => {
@@ -77,6 +80,7 @@ export const usePapersStore = create<PapersState>((set, get) => ({
       papers: [],
       citations: {},
       citationsLoading: false,
+      citationsReachable: true,
       error: null,
       fallbackNote: null,
     });
@@ -90,6 +94,7 @@ export const usePapersStore = create<PapersState>((set, get) => ({
       papers: [],
       citations: {},
       citationsLoading: false,
+      citationsReachable: true,
       error: null,
       fallbackNote: null,
     });
@@ -103,6 +108,7 @@ export const usePapersStore = create<PapersState>((set, get) => ({
       papers: [],
       citations: {},
       citationsLoading: false,
+      citationsReachable: true,
       error: null,
       fallbackNote: null,
     });
@@ -116,6 +122,7 @@ export const usePapersStore = create<PapersState>((set, get) => ({
       papers: [],
       citations: {},
       citationsLoading: false,
+      citationsReachable: true,
       error: null,
       fallbackNote: null,
     });
@@ -230,7 +237,7 @@ export const usePapersStore = create<PapersState>((set, get) => ({
     if (needed.length === 0) return;
     const seq = ++citationsSeq;
     set({ citationsLoading: true });
-    void fetchCitations(needed).then((counts) => {
+    void fetchCitations(needed).then(({ counts, reachable }) => {
       // A newer attempt superseded this one: never touch the flag.
       if (seq !== citationsSeq) return;
       const entries = Object.entries(counts);
@@ -240,7 +247,7 @@ export const usePapersStore = create<PapersState>((set, get) => ({
       // The attempt COMPLETED (with counts, empty, or after the retries
       // gave up): clear the flag so the UI stops saying "loading…" and
       // shows the honest no-data state instead of spinning forever.
-      set({ citationsLoading: false });
+      set({ citationsLoading: false, citationsReachable: reachable });
     });
   },
 }));

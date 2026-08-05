@@ -102,6 +102,7 @@ export function PaperList() {
   const setSortMode = usePapersStore((s) => s.setSortMode);
   const citations = usePapersStore((s) => s.citations);
   const citationsLoading = usePapersStore((s) => s.citationsLoading);
+  const citationsReachable = usePapersStore((s) => s.citationsReachable);
   const loadCitations = usePapersStore((s) => s.loadCitations);
   // "Most cited" reorders the loaded list by the citation counts already
   // fetched (they arrive a moment after the list, and the list re-sorts
@@ -115,11 +116,14 @@ export function PaperList() {
   const hasAnyCount = papers.some((p) => (citations[p.id] ?? 0) > 0);
   const countsPending =
     sortMode === "cited" && papers.length > 0 && !hasAnyCount && citationsLoading;
-  // The batch attempt finished and no counts exist (Semantic Scholar's
-  // keyless pool 429s often): say so instead of spinning "loading…"
-  // forever — the sort keeps the feed order, which is the honest state.
-  const countsUnavailable =
-    sortMode === "cited" && papers.length > 0 && !hasAnyCount && !citationsLoading;
+  const countsDone = sortMode === "cited" && papers.length > 0 && !hasAnyCount && !citationsLoading;
+  // No citation source answered (network/S2 429 + OpenAlex down):
+  // retryable — show a retry affordance.
+  const countsUnreachable = countsDone && !citationsReachable;
+  // Sources answered but the papers have no data: fresh papers are not
+  // indexed anywhere for days — the sort keeps the feed order, which is
+  // the honest state.
+  const countsFresh = countsDone && citationsReachable;
 
   const handleSortChange = (v: string) => {
     setSortMode(v as PaperSortMode);
@@ -217,10 +221,20 @@ export function PaperList() {
               {t("papers.citationsLoading")}
             </span>
           )}
-          {countsUnavailable && (
-            <span className="text-[11px] text-muted-foreground">
-              {t("papers.citationsUnavailable")}
+          {countsUnreachable && (
+            <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              {t("papers.citationsUnreachable")}
+              <button
+                type="button"
+                onClick={() => loadCitations(papers.map((p) => p.id))}
+                className="rounded border border-input px-1.5 py-0.5 text-[11px] text-foreground transition-colors hover:bg-accent"
+              >
+                {t("papers.citationsRetry")}
+              </button>
             </span>
+          )}
+          {countsFresh && (
+            <span className="text-[11px] text-muted-foreground">{t("papers.citationsFresh")}</span>
           )}
           <div className="flex items-center gap-2">
             <Button
@@ -297,8 +311,10 @@ export function PaperList() {
 
       {/* Everything below the pinned bar scrolls in its own container.
           pe-2 keeps the paper cards clear of the scrollbar (logical
-          edge: left in RTL, right in LTR). */}
-      <div className="min-h-0 flex-1 overflow-y-auto pe-2">
+          edge: left in RTL, right in LTR); pt-1 guarantees a visible
+          gap between the bar and the first card even when a strip
+          above it (Today's picks) is dismissed. */}
+      <div className="min-h-0 flex-1 overflow-y-auto pe-2 pt-1">
         <div className="flex flex-col gap-4">
           {!loading && fallbackNote && (
             <div

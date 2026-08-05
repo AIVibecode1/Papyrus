@@ -1,16 +1,24 @@
 import { invoke } from "@tauri-apps/api/core";
 
 /**
- * Citation counts (Semantic Scholar). Purely decorative enrichment: any
- * failure returns an empty map and the paper list renders unchanged.
- * Inside Tauri the Rust backend batches the request; in a plain browser
- * the S2 Graph API is called directly (it sends CORS headers).
+ * Citation counts (Semantic Scholar, falling back to OpenAlex in the
+ * Rust backend). Purely decorative enrichment: any failure returns an
+ * empty map and the paper list renders unchanged. Returns the counts
+ * plus whether ANY source answered (so the UI can tell "network down"
+ * from "papers too fresh to have citation data yet").
  */
-export async function fetchCitations(ids: string[]): Promise<Record<string, number>> {
-  if (ids.length === 0) return {};
+export async function fetchCitations(ids: string[]): Promise<{
+  counts: Record<string, number>;
+  reachable: boolean;
+}> {
+  if (ids.length === 0) return { counts: {}, reachable: false };
   try {
     if ("__TAURI_INTERNALS__" in window) {
-      return await invoke<Record<string, number>>("fetch_citations", { ids });
+      const [counts, reachable] = await invoke<[Record<string, number>, boolean]>(
+        "fetch_citations",
+        { ids },
+      );
+      return { counts, reachable };
     }
     const unique = [...new Set(ids)];
     const body = {
@@ -31,7 +39,7 @@ export async function fetchCitations(ids: string[]): Promise<Record<string, numb
       const count = entries[i]?.citationCount;
       if (typeof count === "number") counts[unique[i]] = count;
     }
-    return counts;
+    return { counts, reachable: true };
   } catch {
     // Semantic Scholar sends no CORS headers, so the browser dev preview
     // cannot reach it (same situation as arXiv). The desktop app fetches
@@ -44,8 +52,8 @@ export async function fetchCitations(ids: string[]): Promise<Record<string, numb
         for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
         sample[id] = 3 + (hash % 38); // 3..40, sample data
       }
-      return sample;
+      return { counts: sample, reachable: true };
     }
-    return {};
+    return { counts: {}, reachable: false };
   }
 }

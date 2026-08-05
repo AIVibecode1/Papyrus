@@ -150,8 +150,17 @@ fn bare_arxiv_id(id: &str) -> String {
 /// Fetches citation counts for the given arXiv ids through the disk cache:
 /// fresh on-disk counts are loaded into the session map first, and every
 /// successful fetch persists the session back to disk.
+///
+/// Returns (counts, reachable): `reachable` is true when ANY citation
+/// source answered (Semantic Scholar or OpenAlex), even with zero counts.
+/// The UI uses it to tell "the network failed" apart from "these papers
+/// are too fresh to have citation data yet" — both show a hint, but the
+/// first one is retryable and the second is a data reality.
 #[tauri::command]
-pub async fn fetch_citations(app: tauri::AppHandle, ids: Vec<String>) -> HashMap<String, u32> {
+pub async fn fetch_citations(
+    app: tauri::AppHandle,
+    ids: Vec<String>,
+) -> (HashMap<String, u32>, bool) {
     fetch_citations_with_cache(Some(&app), ids).await
 }
 
@@ -160,7 +169,7 @@ pub async fn fetch_citations(app: tauri::AppHandle, ids: Vec<String>) -> HashMap
 async fn fetch_citations_with_cache(
     app: Option<&tauri::AppHandle>,
     ids: Vec<String>,
-) -> HashMap<String, u32> {
+) -> (HashMap<String, u32>, bool) {
     load_disk_cache(app);
     let result = fetch_citations_impl(ids).await;
     save_disk_cache(app);
@@ -169,12 +178,15 @@ async fn fetch_citations_with_cache(
 
 /// Core fetcher: session cache + network, no disk. Returns a map keyed by
 /// the ORIGINAL ids (with version suffixes preserved) so callers can match
-/// papers directly. Unknown papers are simply absent from the map. Any
-/// network or API error returns an empty map: citations are decoration.
-async fn fetch_citations_impl(ids: Vec<String>) -> HashMap<String, u32> {
+/// papers directly, plus `reachable` (true when any source answered with
+/// a successful HTTP response — even zero counts). Unknown papers are
+/// simply absent from the map. Any network or API error returns an empty
+/// map: citations are decoration.
+async fn fetch_citations_impl(ids: Vec<String>) -> (HashMap<String, u32>, bool) {
     let mut result = HashMap::new();
+    let mut reachable = false;
     if ids.is_empty() {
-        return result;
+        return (result, reachable);
     }
 
     // Serve already-known ids from the session cache. Stale entries
@@ -212,7 +224,7 @@ async fn fetch_citations_impl(ids: Vec<String>) -> HashMap<String, u32> {
     // nothing.
     missing.retain(|id| !id.starts_with("s2:"));
     if missing.is_empty() {
-        return result;
+        return (result, reachable);
     }
 
     // Semantic Scholar ids must be unique per request; dedupe on the bare id.
@@ -263,6 +275,7 @@ async fn fetch_citations_impl(ids: Vec<String>) -> HashMap<String, u32> {
         if !response.status().is_success() {
             break; // rate-limited or down: skip silently
         }
+        reachable = true;
         let text = match response.text().await {
             Ok(t) => t,
             Err(_) => break,
@@ -308,6 +321,7 @@ async fn fetch_citations_impl(ids: Vec<String>) -> HashMap<String, u32> {
         if !response.status().is_success() {
             continue;
         }
+        reachable = true;
         let Ok(text) = response.text().await else {
             continue;
         };
@@ -350,7 +364,7 @@ async fn fetch_citations_impl(ids: Vec<String>) -> HashMap<String, u32> {
         }
     }
 
-    result
+    (result, reachable)
 }
 
 #[cfg(test)]
@@ -532,7 +546,8 @@ mod tests {
         }
         let result = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(fetch_citations_impl(ids));
+            .block_on(fetch_citations_impl(ids))
+            .0;
         unsafe {
             std::env::remove_var("PAPYRUS_S2_URL");
             std::env::remove_var("PAPYRUS_OPENALEX_URL");
@@ -549,7 +564,8 @@ mod tests {
         }
         let result = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(fetch_citations_impl(ids));
+            .block_on(fetch_citations_impl(ids))
+            .0;
         unsafe {
             std::env::remove_var("PAPYRUS_S2_URL");
             std::env::remove_var("PAPYRUS_OPENALEX_URL");
@@ -633,6 +649,58 @@ mod tests {
     }
 
     #[test]
+    fn reachable_flag_is_true_when_a_source_answers_with_zero() {
+        // S2 429s, OpenAlex answers 200 with zero results: reachable must
+        // be true — the honest message is "papers too fresh", not
+        // "network down".
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            while let Ok((mut stream, _)) = listener.accept() {
+                let head = "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(head.as_bytes());
+            }
+        });
+        let oa = spawn_mock_openalex(vec![]);
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_session_cache();
+        unsafe {
+            std::env::set_var("PAPYRUS_S2_URL", format!("http://{addr}"));
+            std::env::set_var("PAPYRUS_OPENALEX_URL", oa);
+        }
+        let (counts, reachable) = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_citations_impl(vec!["2607.00001".into()]));
+        unsafe {
+            std::env::remove_var("PAPYRUS_S2_URL");
+            std::env::remove_var("PAPYRUS_OPENALEX_URL");
+        }
+        assert!(counts.is_empty());
+        assert!(reachable);
+    }
+
+    #[test]
+    fn reachable_flag_is_false_when_everything_is_down() {
+        // Both sources unreachable: reachable stays false so the UI can
+        // offer a retry instead of claiming the papers have no data.
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_session_cache();
+        unsafe {
+            std::env::set_var("PAPYRUS_S2_URL", "http://127.0.0.1:1");
+            std::env::set_var("PAPYRUS_OPENALEX_URL", "http://127.0.0.1:1");
+        }
+        let (counts, reachable) = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_citations_impl(vec!["2607.00001".into()]));
+        unsafe {
+            std::env::remove_var("PAPYRUS_S2_URL");
+            std::env::remove_var("PAPYRUS_OPENALEX_URL");
+        }
+        assert!(counts.is_empty());
+        assert!(!reachable);
+    }
+
+    #[test]
     fn openalex_fallback_ignores_foreign_results() {
         // A response containing a doi that was not requested must be
         // ignored (defense against a misbehaving proxy or cache).
@@ -679,7 +747,8 @@ mod tests {
             .block_on(fetch_citations_with_cache(
                 None,
                 vec!["2607.00001v2".into()],
-            ));
+            ))
+            .0;
         assert_eq!(first.get("2607.00001v2"), Some(&42));
 
         reset_session_cache();
@@ -691,7 +760,8 @@ mod tests {
             .block_on(fetch_citations_with_cache(
                 None,
                 vec!["2607.00001v2".into()],
-            ));
+            ))
+            .0;
         assert_eq!(
             second.get("2607.00001v2"),
             Some(&42),
@@ -733,7 +803,8 @@ mod tests {
         }
         let result = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(fetch_citations_with_cache(None, vec!["2607.00001".into()]));
+            .block_on(fetch_citations_with_cache(None, vec!["2607.00001".into()]))
+            .0;
         assert!(result.is_empty(), "a stale disk cache must be ignored");
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -754,6 +825,7 @@ mod tests {
             tokio::runtime::Runtime::new()
                 .unwrap()
                 .block_on(fetch_citations_impl(ids))
+                .0
         };
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
@@ -911,6 +983,7 @@ mod tests {
             tokio::runtime::Runtime::new()
                 .unwrap()
                 .block_on(fetch_citations_impl(ids))
+                .0
         };
         let first = {
             unsafe {
@@ -966,7 +1039,8 @@ mod tests {
         }
         let result = tokio::runtime::Runtime::new()
             .unwrap()
-            .block_on(fetch_citations_with_cache(None, vec!["2607.00001".into()]));
+            .block_on(fetch_citations_with_cache(None, vec!["2607.00001".into()]))
+            .0;
         assert!(result.is_empty(), "TTL 0 must expire the cache immediately");
 
         let _ = std::fs::remove_dir_all(&dir);
