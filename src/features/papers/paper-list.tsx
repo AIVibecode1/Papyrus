@@ -1,28 +1,8 @@
-import {
-  AlertCircle,
-  Bookmark,
-  BookOpenText,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  RefreshCw,
-  Search,
-  X,
-} from "lucide-react";
+import { AlertCircle, Bookmark, BookOpenText, Loader2, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { formatUiDate } from "@/lib/dates";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { pickPapers } from "@/lib/picks";
 import { sortPapers, type PaperSortMode } from "@/lib/paper-sort";
@@ -32,6 +12,7 @@ import { useDigestStore, addDays, todayStr } from "@/stores/digest";
 import { useReaderStore } from "@/stores/reader";
 import { useUiStore } from "@/stores/ui";
 import { PaperCard } from "@/features/papers/paper-card";
+import { PapersToolbar } from "@/features/papers/papers-toolbar";
 import { TodayPicks } from "@/features/papers/today-picks";
 
 function PaperSkeleton() {
@@ -54,12 +35,8 @@ function PaperSkeleton() {
   );
 }
 
-function formatDay(date: string, language: string): string {
-  return formatUiDate(`${date}T00:00:00Z`, language, { month: "short", day: "numeric" });
-}
-
 export function PaperList() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { papers, loading, error, refresh, lastUpdated, fallbackNote, clearFallbackNote } =
     usePapersStore();
   const category = usePapersStore((s) => s.category);
@@ -169,145 +146,36 @@ export function PaperList() {
           sits OUTSIDE the scroll container: main's list area scrolls
           below it, so the bar physically cannot move with the scroll —
           no sticky, no z-index, no gap it can float through. */}
-      <div className="flex flex-col gap-4 pb-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
-            {lastUpdated &&
-              t("papers.updated", {
-                time: new Intl.DateTimeFormat(undefined, {
-                  timeStyle: "short",
-                }).format(new Date(lastUpdated)),
-              })}
-          </div>
-          {/* Search box with the sort dropdown embedded at its end: the
-            user picks Newest or Most cited without leaving the box. */}
-          <div className="flex h-9 w-full max-w-md items-center gap-1.5 rounded-md border border-input bg-background px-2.5 transition-colors focus-within:border-ring">
-            <Search className="size-3.5 shrink-0 text-muted-foreground" />
-            <Input
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder={t(
-                source === "semanticscholar"
-                  ? "papers.searchScholarPlaceholder"
-                  : "papers.searchPlaceholder",
-              )}
-              aria-label={t(
-                source === "semanticscholar"
-                  ? "papers.searchScholarPlaceholder"
-                  : "papers.searchPlaceholder",
-              )}
-              className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
-            />
-            {papers.length > 0 && (
-              <>
-                <div className="h-4 w-px shrink-0 bg-border" />
-                <Select value={sortMode} onValueChange={handleSortChange}>
-                  <SelectTrigger
-                    className="h-7 w-auto shrink-0 gap-1 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0"
-                    aria-label={t("papers.sortBy")}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="newest">{t("papers.sortNewest")}</SelectItem>
-                    <SelectItem value="cited">{t("papers.sortCited")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </>
-            )}
-          </div>
-          {countsPending && (
-            <span className="text-[11px] text-muted-foreground">
-              {t("papers.citationsLoading")}
-            </span>
-          )}
-          {countsUnreachable && (
-            <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              {t("papers.citationsUnreachable")}
-              <button
-                type="button"
-                onClick={() => loadCitations(papers.map((p) => p.id))}
-                className="rounded border border-input px-1.5 py-0.5 text-[11px] text-foreground transition-colors hover:bg-accent"
-              >
-                {t("papers.citationsRetry")}
-              </button>
-            </span>
-          )}
-          {countsFresh && (
-            <span className="text-[11px] text-muted-foreground">{t("papers.citationsFresh")}</span>
-          )}
-          <div className="flex items-center gap-2">
-            <Button
-              variant={savedOnly ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => setSavedOnly((v) => !v)}
-              aria-pressed={savedOnly}
-            >
-              <Bookmark className="size-4" />
-              {t("papers.savedOnly")}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={loading}>
-              <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
-              {t("papers.refresh")}
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={goPrevDay}
-            aria-label={t("papers.prevDay")}
-            className="rtl:rotate-180"
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Select
-            value={date ?? "latest"}
-            onValueChange={(v) => setDate(v === "latest" ? null : v)}
-          >
-            <SelectTrigger
-              className="h-8 w-auto gap-2 text-xs"
-              aria-label={t("papers.browseByDay")}
-            >
-              <CalendarDays className="size-3.5" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="latest">{t("papers.latest")}</SelectItem>
-              {digestDays.slice(0, 14).map((d) => (
-                <SelectItem key={d} value={d}>
-                  {formatDay(d, i18n.language)} ({dayCount(d)})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={goNextDay}
-            disabled={!date || date >= today}
-            aria-label={t("papers.nextDay")}
-            className="rtl:rotate-180"
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-          {date && (
-            <Button variant="ghost" size="sm" onClick={() => setDate(null)}>
-              {t("papers.today")}
-            </Button>
-          )}
-          {backfillActive && (
-            <span className="text-xs text-muted-foreground">
-              {t("papers.historyLoading", {
-                done: progress.done,
-                total: progress.total,
-              })}
-            </span>
-          )}
-        </div>
-      </div>
+      <PapersToolbar
+        lastUpdated={lastUpdated}
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        searchPlaceholder={t(
+          source === "semanticscholar"
+            ? "papers.searchScholarPlaceholder"
+            : "papers.searchPlaceholder",
+        )}
+        sortVisible={papers.length > 0}
+        sortMode={sortMode}
+        onSortChange={handleSortChange}
+        countsPending={countsPending}
+        countsUnreachable={countsUnreachable}
+        countsFresh={countsFresh}
+        onRetryCitations={() => loadCitations(papers.map((p) => p.id))}
+        savedOnly={savedOnly}
+        onToggleSavedOnly={() => setSavedOnly((v) => !v)}
+        onRefresh={() => void refresh()}
+        loading={loading}
+        date={date}
+        onPrevDay={goPrevDay}
+        onNextDay={goNextDay}
+        onSetDate={(v) => setDate(v === "latest" ? null : v)}
+        onToday={() => setDate(null)}
+        digestDays={digestDays}
+        dayCount={dayCount}
+        backfillActive={backfillActive}
+        backfillProgress={progress}
+      />
 
       {/* Everything below the pinned bar scrolls in its own container.
           pe-2 keeps the paper cards clear of the scrollbar (logical

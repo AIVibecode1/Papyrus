@@ -102,6 +102,7 @@
     "tldrBadge": "TLDR",
     "updated": "Updated {{time}}",
     "searchPlaceholder": "Search arXiv…",
+    "clearSearch": "Clear search",
     "save": "Save",
     "saved": "Saved",
     "savedOnly": "Saved",

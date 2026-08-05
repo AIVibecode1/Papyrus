@@ -102,6 +102,7 @@
     "tldrBadge": "TLDR",
     "updated": "آخر تحديث {{time}}",
     "searchPlaceholder": "ابحث في arXiv…",
+    "clearSearch": "مسح البحث",
     "save": "حفظ",
     "saved": "تم الحفظ",
     "savedOnly": "المحفوظة",
