@@ -25,7 +25,12 @@
     "noMatches": "لا توجد نتائج",
     "walkthroughTab": "الشرح الموجّه",
     "chatTabs": "تبويبات القارئ",
-    "askTab": "اسأل",
+    "overviewTab": "نظرة عامة",
+    "overviewAbstract": "الملخص",
+    "overviewExplain": "اشرح هذه الورقة",
+    "overviewSearchScholar": "ابحث عن العنوان في Semantic Scholar",
+    "overviewHint": "يقرأ المرشد الورقة قسمًا قسمًا؛ والمحادثة تجيب عن أسئلة مبنية على النص؛ والملاحظات تحفظ أفكارك الخاصة.",
+    "askTab": "المحادثة",
     "explainWhole": "اشرح الورقة كاملة",
     "explainWholeHint": "يقرأ المرشد الورقة قسمًا قسمًا ويشرح كل قسم قبل الانتقال إلى التالي.",
     "sectionOf": "القسم {{current}} من {{total}}",
@@ -73,7 +78,8 @@
     "loadError": "تعذّر تحميل الملاحظات.",
     "openPaper": "فتح الورقة",
     "page": "صفحة {{page}}",
-    "deleted": "تم حذف الملاحظة"
+    "deleted": "تم حذف الملاحظة",
+    "askAbout": "اسأل عن هذه الملاحظة"
   },
   "errors": {
     "title": "حدث خطأ غير متوقع",

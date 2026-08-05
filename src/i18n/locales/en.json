@@ -25,7 +25,12 @@
     "noMatches": "No matches",
     "walkthroughTab": "Walkthrough",
     "chatTabs": "Reader tabs",
-    "askTab": "Ask",
+    "overviewTab": "Overview",
+    "overviewAbstract": "Abstract",
+    "overviewExplain": "Explain this paper",
+    "overviewSearchScholar": "Search title on Semantic Scholar",
+    "overviewHint": "The mentor reads the paper section by section; the chat answers grounded questions; notes capture your own thoughts.",
+    "askTab": "Chat",
     "explainWhole": "Explain the whole paper",
     "explainWholeHint": "The mentor reads the paper section by section and explains each one before moving on.",
     "sectionOf": "Section {{current}} of {{total}}",
@@ -73,7 +78,8 @@
     "loadError": "Could not load notes.",
     "openPaper": "Open paper",
     "page": "Page {{page}}",
-    "deleted": "Note deleted"
+    "deleted": "Note deleted",
+    "askAbout": "Ask about this note"
   },
   "errors": {
     "title": "Something went wrong",

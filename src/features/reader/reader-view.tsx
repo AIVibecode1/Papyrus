@@ -4,6 +4,7 @@ import {
   Check,
   CircleAlert,
   Copy,
+  FileText,
   Highlighter,
   Loader2,
   MessageSquareText,
@@ -22,14 +23,16 @@ import { PdfViewer } from "@/components/pdf-viewer/pdf-viewer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ReaderNotes } from "@/features/reader/reader-notes";
+import { ReaderOverview } from "@/features/reader/reader-overview";
 import { useNotesStore } from "@/stores/notes";
+import { usePapersStore } from "@/stores/papers";
 import { useReaderStore, type ChatMessage, type SectionEntry } from "@/stores/reader";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
 import { redactSecrets, truncateError } from "@/lib/provider-errors";
 
-type Tab = "walkthrough" | "ask" | "notes";
+type Tab = "overview" | "walkthrough" | "ask" | "notes";
 
 const SPLIT_KEY = "papyrus-reader-split";
 /** PDF share of the row width (0.3 = panel dominates, 0.8 = PDF dominates). */
@@ -127,7 +130,7 @@ export function ReaderView() {
   const setView = useUiStore((s) => s.setView);
   const { providers, activeProviderId } = useSettingsStore();
   const reader = useReaderStore();
-  const [tab, setTab] = useState<Tab>("walkthrough");
+  const [tab, setTab] = useState<Tab>("overview");
   const [question, setQuestion] = useState("");
   const [copied, setCopied] = useState(false);
   const [savingHighlight, setSavingHighlight] = useState(false);
@@ -301,11 +304,13 @@ export function ReaderView() {
       {reader.loadStatus === "ready" && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-muted/20 px-4 py-1.5 text-[11px] text-muted-foreground">
           <span className="font-medium text-foreground">
-            {tab === "walkthrough"
-              ? t("reader.walkthroughTab")
-              : tab === "notes"
-                ? t("notes.title")
-                : t("reader.askTab")}
+            {tab === "overview"
+              ? t("reader.overviewTab")
+              : tab === "walkthrough"
+                ? t("reader.walkthroughTab")
+                : tab === "notes"
+                  ? t("notes.title")
+                  : t("reader.askTab")}
           </span>
           {tab === "walkthrough" &&
             !walkthroughDone &&
@@ -451,6 +456,16 @@ export function ReaderView() {
               aria-label={t("reader.chatTabs")}
             >
               <Button
+                variant={tab === "overview" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setTab("overview")}
+                role="tab"
+                aria-selected={tab === "overview"}
+              >
+                <FileText className="size-3.5" />
+                {t("reader.overviewTab")}
+              </Button>
+              <Button
                 variant={tab === "walkthrough" ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => setTab("walkthrough")}
@@ -484,7 +499,37 @@ export function ReaderView() {
             </div>
 
             {tab === "notes" ? (
-              <ReaderNotes paper={paper} />
+              <ReaderNotes
+                paper={paper}
+                onAskAbout={(note) => {
+                  // Pre-fill the chat with the note as context; the user
+                  // edits and sends (explicit, cancellable).
+                  const context = note.quote ?? note.body;
+                  setQuestion(`${t("notes.askAbout")}: “${context.trim().slice(0, 500)}”`);
+                  setTab("ask");
+                }}
+              />
+            ) : tab === "overview" ? (
+              <ReaderOverview
+                paper={paper}
+                citationCount={usePapersStore.getState().citations[paper.id]}
+                explainDisabled={!provider}
+                noProvider={providers.length === 0}
+                onOpenSettings={() => setView("settings")}
+                onExplain={() => {
+                  setTab("walkthrough");
+                  if (provider) void reader.startWalkthrough(provider, i18n.language);
+                }}
+                onSearchScholar={() => {
+                  // Plan 045 WU4: reopen the paper's title in the papers
+                  // view with the title field preselected on Scholar.
+                  const store = usePapersStore.getState();
+                  store.setSource("semanticscholar");
+                  store.setSearchField("title");
+                  store.setQuery(paper.title);
+                  setView("papers");
+                }}
+              />
             ) : providers.length === 0 ? (
               <div
                 role="tabpanel"

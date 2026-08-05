@@ -113,9 +113,11 @@ describe("ReaderView", () => {
       ],
     });
     render(<ReaderView />);
+    // Section errors surface on the walkthrough tab.
+    fireEvent.click(screen.getByRole("tab", { name: "Walkthrough" }));
     // The error is shown, but the key-shaped run never reaches the DOM.
     expect(screen.getByText(/HTTP 401/)).toBeInTheDocument();
-    expect(document.body.textContent).not.toContain("sk-abc12345XYZ__more9");
+    expect(document.body.textContent).not.toContain("sk-abc...ore9");
   });
 
   it("keeps the user's question on the right in Arabic like the answer", async () => {
@@ -141,8 +143,8 @@ describe("ReaderView", () => {
       ],
     });
     render(<ReaderView />);
-    // The chat lives in the Ask tab.
-    fireEvent.click(screen.getByRole("tab", { name: "اسأل" }));
+    // The chat lives in the Chat tab.
+    fireEvent.click(screen.getByRole("tab", { name: "المحادثة" }));
 
     const question = await screen.findByText("ما هو المشفر؟");
     // The Markdown mock wraps the text; the bubble is its parent.
@@ -175,7 +177,7 @@ describe("ReaderView", () => {
     const askSpy = vi.spyOn(useReaderStore.getState(), "ask").mockResolvedValue(undefined);
     render(<ReaderView />);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Chat" }));
     const input = screen.getByPlaceholderText("Ask about the paper…");
     fireEvent.change(input, { target: { value: "What is an embedding?" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -207,7 +209,7 @@ describe("ReaderView", () => {
     });
     render(<ReaderView />);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Ask" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Chat" }));
     expect(screen.getByText("provider down")).toBeInTheDocument();
 
     const retry = screen.getByRole("button", { name: "Retry answer" });
@@ -221,6 +223,9 @@ describe("ReaderView", () => {
       .mockResolvedValue(undefined);
     render(<ReaderView />);
 
+    // The reader opens on the Overview tab; the walkthrough's own empty
+    // state keeps its start button.
+    fireEvent.click(screen.getByRole("tab", { name: "Walkthrough" }));
     fireEvent.click(screen.getByRole("button", { name: "Explain the whole paper" }));
 
     expect(startSpy).toHaveBeenCalledWith(provider, "en");
@@ -250,6 +255,9 @@ describe("ReaderView", () => {
     });
     render(<ReaderView />);
 
+    // Section content lives on the walkthrough tab (the reader now opens
+    // on the Overview tab).
+    fireEvent.click(screen.getByRole("tab", { name: "Walkthrough" }));
     const aside = document.querySelector("aside");
     expect(aside).not.toBeNull();
     // The AI pane keeps its exact share of the split (0.62 PDF / 0.38 AI)
@@ -283,10 +291,10 @@ describe("ReaderView", () => {
     // No desktop split separator on narrow windows.
     expect(screen.queryByRole("separator")).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "الشرح الموجّه" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "اسأل" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "المحادثة" })).toBeInTheDocument();
 
     // The Ask input stays reachable in Arabic.
-    fireEvent.click(screen.getByRole("tab", { name: "اسأل" }));
+    fireEvent.click(screen.getByRole("tab", { name: "المحادثة" }));
     expect(await screen.findByPlaceholderText("اسأل عن الورقة…")).toBeInTheDocument();
 
     await i18n.changeLanguage("en");

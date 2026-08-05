@@ -1,4 +1,4 @@
-import { Highlighter, Loader2, NotebookPen, Plus, Trash2 } from "lucide-react";
+import { Highlighter, Loader2, MessageSquareText, NotebookPen, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Markdown } from "@/components/markdown/markdown";
@@ -14,12 +14,14 @@ function ReaderNoteRow({
   onConfirmDelete,
   onCancelDelete,
   onDelete,
+  onAskAbout,
 }: {
   note: PaperNote;
   confirmId: string | null;
   onConfirmDelete: (id: string) => void;
   onCancelDelete: () => void;
   onDelete: (id: string) => void;
+  onAskAbout?: (note: PaperNote) => void;
 }) {
   const { t } = useTranslation();
   const isConfirming = confirmId === note.id;
@@ -48,37 +50,50 @@ function ReaderNoteRow({
             </Badge>
           )}
         </div>
-        {isConfirming ? (
-          <span className="flex items-center gap-1.5">
-            <span className="text-[11px] text-destructive">{t("notes.deleteConfirm")}</span>
-            <Button
-              variant="destructive"
-              size="sm"
-              className="h-6 px-2 text-[11px]"
-              onClick={() => onDelete(note.id)}
-            >
-              {t("notes.delete")}
-            </Button>
+        <div className="flex items-center gap-1">
+          {onAskAbout && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-[11px]"
-              onClick={onCancelDelete}
+              className="h-6 px-2 text-[11px] text-muted-foreground"
+              onClick={() => onAskAbout(note)}
             >
-              {t("settings.cancel")}
+              <MessageSquareText className="size-3" />
+              {t("notes.askAbout")}
             </Button>
-          </span>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
-            onClick={() => onConfirmDelete(note.id)}
-            aria-label={t("notes.delete")}
-          >
-            <Trash2 className="size-3" />
-          </Button>
-        )}
+          )}
+          {isConfirming ? (
+            <span className="flex items-center gap-1.5">
+              <span className="text-[11px] text-destructive">{t("notes.deleteConfirm")}</span>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => onDelete(note.id)}
+              >
+                {t("notes.delete")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[11px]"
+                onClick={onCancelDelete}
+              >
+                {t("settings.cancel")}
+              </Button>
+            </span>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
+              onClick={() => onConfirmDelete(note.id)}
+              aria-label={t("notes.delete")}
+            >
+              <Trash2 className="size-3" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -86,8 +101,16 @@ function ReaderNoteRow({
 
 /** The reader's Notes tab (plan 042): existing notes for the open paper
  * plus an add-note form. Highlights created from a PDF selection land
- * here too. */
-export function ReaderNotes({ paper }: { paper: Paper }) {
+ * here too. `onAskAbout` wires the plan-045 "ask about this note" flow:
+ * it only pre-fills the chat input with the note as context — sending
+ * stays a manual, cancellable user action. */
+export function ReaderNotes({
+  paper,
+  onAskAbout,
+}: {
+  paper: Paper;
+  onAskAbout?: (note: PaperNote) => void;
+}) {
   const { t } = useTranslation();
   const notes = useNotesStore((s) => s.notes);
   const upsert = useNotesStore((s) => s.upsert);
@@ -135,6 +158,7 @@ export function ReaderNotes({ paper }: { paper: Paper }) {
               void remove(id);
               setConfirmId(null);
             }}
+            onAskAbout={onAskAbout}
           />
         ))}
 
