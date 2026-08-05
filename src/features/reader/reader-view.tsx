@@ -4,8 +4,10 @@ import {
   Check,
   CircleAlert,
   Copy,
+  Highlighter,
   Loader2,
   MessageSquareText,
+  NotebookPen,
   RotateCcw,
   Send,
   Settings,
@@ -19,13 +21,15 @@ import { Markdown } from "@/components/markdown/markdown";
 import { PdfViewer } from "@/components/pdf-viewer/pdf-viewer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ReaderNotes } from "@/features/reader/reader-notes";
+import { useNotesStore } from "@/stores/notes";
 import { useReaderStore, type ChatMessage, type SectionEntry } from "@/stores/reader";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
 import { redactSecrets, truncateError } from "@/lib/provider-errors";
 
-type Tab = "walkthrough" | "ask";
+type Tab = "walkthrough" | "ask" | "notes";
 
 const SPLIT_KEY = "papyrus-reader-split";
 /** PDF share of the row width (0.3 = panel dominates, 0.8 = PDF dominates). */
@@ -126,6 +130,8 @@ export function ReaderView() {
   const [tab, setTab] = useState<Tab>("walkthrough");
   const [question, setQuestion] = useState("");
   const [copied, setCopied] = useState(false);
+  const [savingHighlight, setSavingHighlight] = useState(false);
+  const upsertNote = useNotesStore((s) => s.upsert);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   // PDF share of the horizontal split (desktop); persisted between
@@ -209,6 +215,26 @@ export function ReaderView() {
     setQuestion("");
   };
 
+  // Saves the current PDF selection as a highlight note (explicit user
+  // action — selecting text never auto-saves anything).
+  const handleSaveHighlight = async () => {
+    if (!reader.selection || !paper) return;
+    setSavingHighlight(true);
+    try {
+      await upsertNote({
+        paperId: paper.id,
+        paperTitle: paper.title,
+        kind: "highlight",
+        body: "",
+        quote: reader.selection,
+      });
+      setTab("notes");
+      reader.clearSelection();
+    } finally {
+      setSavingHighlight(false);
+    }
+  };
+
   const handleCopySelection = async () => {
     if (!reader.selection) return;
     try {
@@ -275,7 +301,11 @@ export function ReaderView() {
       {reader.loadStatus === "ready" && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b bg-muted/20 px-4 py-1.5 text-[11px] text-muted-foreground">
           <span className="font-medium text-foreground">
-            {tab === "walkthrough" ? t("reader.walkthroughTab") : t("reader.askTab")}
+            {tab === "walkthrough"
+              ? t("reader.walkthroughTab")
+              : tab === "notes"
+                ? t("notes.title")
+                : t("reader.askTab")}
           </span>
           {tab === "walkthrough" &&
             !walkthroughDone &&
@@ -399,6 +429,20 @@ export function ReaderView() {
                 >
                   <X className="size-3.5" />
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={handleSaveHighlight}
+                  disabled={savingHighlight}
+                >
+                  {savingHighlight ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <Highlighter className="size-3" />
+                  )}
+                  {t("notes.highlight")}
+                </Button>
               </div>
             )}
             <div
@@ -426,10 +470,22 @@ export function ReaderView() {
                 <MessageSquareText className="size-3.5" />
                 {t("reader.askTab")}
               </Button>
+              <Button
+                variant={tab === "notes" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setTab("notes")}
+                role="tab"
+                aria-selected={tab === "notes"}
+              >
+                <NotebookPen className="size-3.5" />
+                {t("notes.title")}
+              </Button>
               <div className="flex-1" />
             </div>
 
-            {providers.length === 0 ? (
+            {tab === "notes" ? (
+              <ReaderNotes paper={paper} />
+            ) : providers.length === 0 ? (
               <div
                 role="tabpanel"
                 className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
