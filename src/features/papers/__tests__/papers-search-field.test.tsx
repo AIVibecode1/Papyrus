@@ -75,4 +75,18 @@ describe("PapersSearchField", () => {
     expect(html).not.toMatch(/\b(ml|mr|pl|pr)-/);
     expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
+
+  it("carries no muddy dark fill on the input or dropdown triggers (plan 051)", () => {
+    const { container } = render(
+      <PapersSearchField {...baseProps} value="transformer" onClear={vi.fn()} sortVisible />,
+    );
+    const html = container.innerHTML;
+    // The base Input/SelectTrigger ship dark:bg-input/30; the search
+    // chrome must override it in BOTH themes or dark mode shows a gray
+    // slab under the typed text and the dropdown value.
+    expect(html).not.toContain("dark:bg-input/30");
+    expect(html).toContain("dark:bg-transparent");
+    // The control group itself is one bordered surface, no nested fill.
+    expect(html).not.toContain("bg-muted");
+  });
 });

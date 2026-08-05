@@ -60,7 +60,7 @@ export function PapersSearchField({
       <Search className="size-3.5 shrink-0 text-muted-foreground" />
       <Select value={field} onValueChange={(v) => onFieldChange(v as SearchField)}>
         <SelectTrigger
-          className="h-7 w-auto shrink-0 gap-1 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0"
+          className="h-7 w-auto shrink-0 gap-1 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 dark:bg-transparent dark:hover:bg-transparent"
           aria-label={t("papers.searchField")}
         >
           <SelectValue />
@@ -80,7 +80,7 @@ export function PapersSearchField({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
+        className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
       {onClear && value.length > 0 && (
         <button
@@ -98,7 +98,7 @@ export function PapersSearchField({
           <div className="h-4 w-px shrink-0 bg-border" />
           <Select value={sortMode} onValueChange={onSortChange}>
             <SelectTrigger
-              className="h-7 w-auto shrink-0 gap-1 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0"
+              className="h-7 w-auto shrink-0 gap-1 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 dark:bg-transparent dark:hover:bg-transparent"
               aria-label={t("papers.sortBy")}
             >
               <SelectValue />
