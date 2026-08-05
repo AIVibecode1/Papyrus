@@ -8,6 +8,7 @@ import { NotesPage } from "@/features/notes/notes-page";
 import { ReaderView } from "@/features/reader/reader-view";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { useFavoritesStore } from "@/stores/favorites";
+import { useHistoryStore } from "@/stores/history";
 import { useNotesStore } from "@/stores/notes";
 import { usePapersStore } from "@/stores/papers";
 import { useSettingsStore } from "@/stores/settings";
@@ -19,14 +20,16 @@ export default function App() {
   const loadSettings = useSettingsStore((s) => s.load);
   const loadFavorites = useFavoritesStore((s) => s.load);
   const loadNotes = useNotesStore((s) => s.load);
+  const loadHistory = useHistoryStore((s) => s.load);
   const view = useUiStore((s) => s.view);
 
   useEffect(() => {
     loadSettings();
     loadFavorites();
     void loadNotes();
+    void loadHistory();
     void refresh();
-  }, [loadSettings, loadFavorites, loadNotes, refresh]);
+  }, [loadSettings, loadFavorites, loadNotes, loadHistory, refresh]);
 
   return (
     <ErrorBoundary>

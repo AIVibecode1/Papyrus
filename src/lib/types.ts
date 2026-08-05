@@ -15,6 +15,24 @@ export interface Paper {
 
 export type NoteKind = "note" | "highlight";
 
+/** A paper the user opened in the reader (plan 060). History is
+ * automatic and local-only; it is NOT favorites (which stay explicit
+ * saves) and not notes. Kept denormalized so the list renders without
+ * re-fetching papers. */
+export interface ReadingHistoryEntry {
+  paperId: string;
+  title: string;
+  authors: string[];
+  published: string;
+  pdfUrl: string;
+  categories: string[];
+  source?: "arxiv" | "semanticscholar";
+  /** ISO timestamp of the last successful reader open. */
+  lastOpenedAt: string;
+  /** Optional: last known page from position memory (display only). */
+  lastPage?: number;
+}
+
 /** A note or highlight attached to a paper (plan 042). Persisted by the
  * Rust notes.rs commands in the app data dir; never leaves the device
  * unless the user exports. */

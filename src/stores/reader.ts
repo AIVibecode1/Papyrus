@@ -7,6 +7,7 @@ import { capTotal, findContextSection, splitIntoSections } from "@/lib/paper-tex
 import { streamAsk, streamSectionExplanation, streamSynthesis } from "@/lib/reader-ai";
 import { createStreamBuffer } from "@/lib/stream";
 import type { Paper, ProviderConfig } from "@/lib/types";
+import { useHistoryStore } from "@/stores/history";
 
 export type ReaderStatus = "idle" | "loading" | "ready" | "error";
 export type StreamStatus = "idle" | "loading" | "streaming" | "done" | "error" | "stopped";
@@ -225,6 +226,10 @@ export const useReaderStore = create<ReaderState>((set, get) => {
           selection: null,
           loadStatus: "ready",
         });
+        // Plan 060: a successful PDF load records (or refreshes) the
+        // reading-history entry. Fire-and-forget: history persistence is
+        // best-effort and must never block the reader.
+        useHistoryStore.getState().recordOpen(paper);
         // Restore a previous walkthrough of this paper (best-effort):
         // reopening a favorited paper must not re-stream ~10 sections.
         const { sectionEntries, synthesis } = loadWalkthrough(paper.id);
@@ -244,7 +249,6 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         });
       }
     },
-
     // Lazy whole-paper text extraction: the viewer needs only the bytes,
     // so the pdf.js parse for Walkthrough/Ask happens on first use and is
     // cached. A newer open/close invalidates an in-flight extraction.

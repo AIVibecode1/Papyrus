@@ -50,6 +50,7 @@ pub struct ImportSummary {
     pub favorites: usize,
     pub chats: usize,
     pub notes: usize,
+    pub reading_history: usize,
 }
 
 /// Validates a Papyrus export payload and reports its contents. The
@@ -78,11 +79,17 @@ pub fn import_data(payload: String) -> Result<ImportSummary, String> {
         .and_then(|v| v.as_array())
         .map(|a| a.len())
         .unwrap_or(0);
+    let reading_history = value
+        .get("readingHistory")
+        .and_then(|v| v.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
     Ok(ImportSummary {
         app: "papyrus".into(),
         favorites,
         chats,
         notes,
+        reading_history,
     })
 }
 

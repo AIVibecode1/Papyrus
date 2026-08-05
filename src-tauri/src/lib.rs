@@ -2,6 +2,7 @@ mod ai;
 mod cache;
 mod citations;
 mod export;
+mod history;
 mod notes;
 mod papers;
 mod pdf;
@@ -29,6 +30,10 @@ pub fn run() {
             notes::list_notes,
             notes::upsert_note,
             notes::delete_note,
+            history::list_history,
+            history::record_history,
+            history::remove_history_entry,
+            history::clear_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

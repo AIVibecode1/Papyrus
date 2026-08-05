@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { isTauri } from "@/lib/ai";
-import type { Paper, PaperNote } from "@/lib/types";
+import type { Paper, PaperNote, ReadingHistoryEntry } from "@/lib/types";
 import { useFavoritesStore } from "@/stores/favorites";
+import { useHistoryStore } from "@/stores/history";
 import { useNotesStore } from "@/stores/notes";
 
 const CHAT_STORAGE_KEY = "papyrus-reader-chat-v1";
@@ -20,6 +21,9 @@ export interface ExportPayload {
   chat: Record<string, ExportChatTurn[]>;
   /** Notes and highlights (plan 042); imported merged by note id. */
   notes: PaperNote[];
+  /** Reading history (plan 060); imported merged by paperId keeping the
+   * newer lastOpenedAt. */
+  readingHistory: ReadingHistoryEntry[];
 }
 
 /** Maps a chat message to its exportable { role, content } shape; returns
@@ -34,12 +38,15 @@ function toChatTurn(value: unknown): ExportChatTurn | null {
   return null;
 }
 
-/** Collects the user's saved data (favorites + chat transcripts + notes). */
+/** Collects the user's saved data (favorites + chat transcripts + notes
+ * + reading history). */
 export function buildExportPayload(): ExportPayload {
   const favorites = useFavoritesStore.getState();
   if (!favorites.loaded) favorites.load();
   const notes = useNotesStore.getState();
   if (!notes.loaded) void notes.load();
+  const history = useHistoryStore.getState();
+  if (!history.loaded) void history.load();
 
   let chatRaw: unknown = {};
   try {
@@ -63,6 +70,7 @@ export function buildExportPayload(): ExportPayload {
     favorites: Object.values(favorites.byId),
     chat,
     notes: notes.notes,
+    readingHistory: history.entries,
   };
 }
 
@@ -93,6 +101,7 @@ export interface ImportSummary {
   favorites: number;
   chats: number;
   notes: number;
+  readingHistory: number;
 }
 
 /** Structural validation for the browser path (the Tauri path validates
@@ -103,6 +112,7 @@ function parseExportPayload(raw: string): ExportPayload {
   if (!Array.isArray(value.favorites)) value.favorites = [];
   if (!value.chat || typeof value.chat !== "object") value.chat = {};
   if (!Array.isArray(value.notes)) value.notes = [];
+  if (!Array.isArray(value.readingHistory)) value.readingHistory = [];
   return value as ExportPayload;
 }
 
@@ -125,8 +135,12 @@ export async function importSavedData(fileContent: string): Promise<ImportSummar
       favorites: payload.favorites.length,
       chats: Object.keys(payload.chat).length,
       notes: payload.notes.length,
+      readingHistory: payload.readingHistory.length,
     };
   }
+
+  // Merge reading history: same paperId -> the newer lastOpenedAt wins.
+  await useHistoryStore.getState().importHistory(payload.readingHistory);
 
   // Merge notes: same id -> the newer updatedAt wins (incoming notes
   // with a newer timestamp replace, older ones are skipped).
