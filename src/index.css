@@ -172,24 +172,28 @@
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.185 0.005 70);
-  --foreground: oklch(0.93 0.004 80);
-  --card: oklch(0.225 0.006 70);
-  --card-foreground: oklch(0.93 0.004 80);
-  --popover: oklch(0.225 0.006 70);
-  --popover-foreground: oklch(0.93 0.004 80);
-  --primary: oklch(0.92 0.004 80);
-  --primary-foreground: oklch(0.2 0.006 70);
-  --secondary: oklch(0.27 0.007 70);
-  --secondary-foreground: oklch(0.93 0.004 80);
-  --muted: oklch(0.27 0.007 70);
+  /* Plan 054 elevation ladder (bg < card < popover) on a deep warm
+     charcoal, not pure black: hue 60 keeps the bone family, and each
+     surface lifts ~0.04-0.05 in L. Muted-foreground stays 6.1:1 on
+     card / 6.6:1 on background (recomputed 2026-08). */
+  --background: oklch(0.17 0.008 60);
+  --foreground: oklch(0.93 0.006 75);
+  --card: oklch(0.215 0.009 60);
+  --card-foreground: oklch(0.93 0.006 75);
+  --popover: oklch(0.235 0.009 60);
+  --popover-foreground: oklch(0.93 0.006 75);
+  --primary: oklch(0.93 0.006 75);
+  --primary-foreground: oklch(0.2 0.008 60);
+  --secondary: oklch(0.26 0.01 60);
+  --secondary-foreground: oklch(0.93 0.006 75);
+  --muted: oklch(0.25 0.009 60);
   --muted-foreground: oklch(0.68 0.008 75);
-  --accent: oklch(0.3 0.035 240);
-  --accent-foreground: oklch(0.82 0.05 240);
+  --accent: oklch(0.3 0.045 240);
+  --accent-foreground: oklch(0.85 0.05 240);
   --destructive: oklch(0.66 0.13 25);
-  --border: oklch(0.93 0.004 80 / 18%);
-  --input: oklch(0.93 0.004 80 / 20%);
-  --ring: oklch(0.65 0.06 240);
+  --border: oklch(0.32 0.012 60);
+  --input: oklch(0.32 0.012 60);
+  --ring: oklch(0.72 0.06 240);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);

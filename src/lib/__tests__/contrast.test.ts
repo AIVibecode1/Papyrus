@@ -50,8 +50,8 @@ const THEMES = {
   },
   dark: {
     mutedForeground: "#9B9893",
-    card: "#1E1B19",
-    background: "#141210",
+    card: "#1D1915",
+    background: "#120F0C",
   },
 };
 
