@@ -257,14 +257,15 @@ fn validate_category(category: &str) -> Result<String, String> {
 }
 
 /// Validates a free-text search term: non-empty, capped length, and no
-/// characters arXiv's query parser treats as operators.
+/// characters arXiv's query parser treats as operators (`"`, `(`, `)`,
+/// `:`, `&` and the range brackets / wildcards `[` `]` `*` `+`).
 fn validate_query(query: &str) -> Result<String, String> {
     let query = query.trim();
     let valid_query = !query.is_empty()
         && query.len() <= 200
         && !query
             .chars()
-            .any(|c| matches!(c, '"' | '(' | ')' | ':' | '&'));
+            .any(|c| matches!(c, '"' | '(' | ')' | ':' | '&' | '[' | ']' | '*' | '+'));
     if !valid_query {
         return Err("Invalid search query".into());
     }
@@ -1180,7 +1181,7 @@ mod tests {
 
     #[test]
     fn search_url_rejects_operator_injection() {
-        for bad in ['"', '(', ')', ':', '&'] {
+        for bad in ['"', '(', ')', ':', '&', '[', ']', '*', '+'] {
             let url = search_url(
                 "cs.AI",
                 &format!("transformer{bad}"),
