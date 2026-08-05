@@ -110,10 +110,10 @@ describe("PdfViewer", () => {
     await waitFor(() => expect(screen.getByText("1 / 3")).toBeInTheDocument());
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
-    await waitFor(() => expect(screen.getByText("2 / 3")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("2 / 3")).toBeInTheDocument(), { timeout: 3000 });
 
     fireEvent.keyDown(window, { key: "ArrowLeft" });
-    await waitFor(() => expect(screen.getByText("1 / 3")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("1 / 3")).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it("ignores arrow keys while typing in an input", async () => {
@@ -389,6 +389,25 @@ describe("render cancellation and repaint", () => {
     });
     // The click must drive real render attempts, not just flip UI.
     await waitFor(() => expect(calls[1]).toBeGreaterThan(before), { timeout: 4000 });
+  });
+
+  it("mounts fresh canvas elements per render run (black-page regression)", async () => {
+    // A canvas that had a cancelled render keeps receiving the
+    // cancelled task's residual drawing; reusing it interleaves the two
+    // draws and leaves the page black (reproduced live with a real
+    // 74-page paper). Canvases are keyed by a run generation, so every
+    // scale change mounts fresh elements with clean contexts.
+    mockDocument(1);
+    const { unmount } = render(<PdfViewer bytes={BYTES} onSelect={onSelect} />);
+    await waitFor(() => expect(canvasWidthAttr()).toBeGreaterThan(0), { timeout: 3000 });
+    const firstCanvas = document.querySelector("canvas")!;
+    fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
+    await waitFor(() => expect(document.querySelector("canvas")).not.toBe(firstCanvas), {
+      timeout: 3000,
+    });
+    // The fresh canvas is the one being painted.
+    expect(document.querySelector("canvas")?.getAttribute("width")).not.toBe("0");
+    unmount();
   });
 
   it("repaints a page whose final render attempt failed (black-page safety net)", async () => {

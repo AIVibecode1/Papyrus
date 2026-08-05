@@ -249,9 +249,19 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       // (worker destroyed on reload) must not stall this page forever.
       const previous = renderTasksRef.current.get(index);
       if (previous) {
+        // `completed` resolves when the task FULLY stops — including a
+        // cancelled task's residual operator chunk — so a fresh render
+        // can never interleave with a winding-down one on this canvas.
+        // The race bounds the wait: a cancelled task whose promise never
+        // settles (worker destroyed on reload) must not stall forever.
         await Promise.race([
-          previous.promise.catch(() => {}),
-          new Promise((r) => setTimeout(r, 500)),
+          // `completed` exists at runtime (settles when the task FULLY
+          // stops, including a cancelled task's residual chunk) but is
+          // absent from the shipped typings.
+          (
+            (previous as unknown as { completed?: Promise<void> }).completed ?? previous.promise
+          ).catch(() => {}),
+          new Promise<void>((r) => setTimeout(r, 500)),
         ]);
         renderTasksRef.current.delete(index);
       }
@@ -343,6 +353,16 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   // Monotonic id of the current render run: bumping it cancels the
   // in-flight run (zoom changes must stop the old loop immediately).
   const renderRunRef = useRef(0);
+  // Monotonic id of the current canvas GENERATION: canvases are keyed by
+  // it, so every render run mounts FRESH canvas elements. A canvas that
+  // had a cancelled render keeps receiving the cancelled task's residual
+  // drawing (pdf.js keeps executing its current operator chunk after
+  // cancel()), and reusing it for the next render interleaves the two
+  // draws — the black-page race. A fresh element has a clean context and
+  // the stale task's residual paint lands on the detached old element,
+  // invisible.
+  const canvasGenRef = useRef(0);
+  const [canvasGen, setCanvasGen] = useState(0);
 
   useEffect(() => {
     // Re-render all pages when the zoom changes. Viewports are updated in
@@ -358,6 +378,12 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
         viewportsRef.current = next;
         setPages(next);
         setPageStatus({});
+        // Bump the canvas generation and wait one frame: React commits
+        // the fresh canvas elements (and updates the refs) before the
+        // queue starts painting.
+        canvasGenRef.current += 1;
+        setCanvasGen(canvasGenRef.current);
+        await new Promise<void>((r) => requestAnimationFrame(() => r()));
         await renderInQueue(
           next,
           (view, index) => renderPage(view, index, () => run !== renderRunRef.current),
@@ -390,13 +416,15 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       clearTimeout(timer);
       // A newer effect cycle started: cancel any run still in flight.
       renderRunRef.current += 1;
-      // Cancel the in-flight tasks and DROP the entries: a cancelled
-      // task's promise may never settle (worker destroyed on reload),
-      // and a new run must not block on such a zombie. The bounded wait
-      // in renderPage plus the retry/repaint queue absorb any residual
-      // "same canvas" rejection from a still-winding-down render.
+      // Cancel the in-flight tasks but KEEP the entries: a cancelled
+      // task's residual operator chunk may still be drawing on the
+      // canvas, and the next run must wait for it to fully settle
+      // (renderPage awaits `completed`, bounded) before touching the
+      // canvas. Dropping the entries here made the wait dead code and
+      // let fresh renders interleave with winding-down ones — the
+      // black-page race. Entries are removed by renderPage after the
+      // wait; never-settling zombies are handled by the bounded race.
       renderTasksRef.current.forEach((task) => task.cancel());
-      renderTasksRef.current.clear();
     };
   }, [scale, repaintTick]);
 
@@ -780,6 +808,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
               style={{ width: viewport.width }}
             >
               <canvas
+                key={`${canvasGen}-${page.pageNumber}`}
                 ref={(el) => {
                   canvasRefs.current[i] = el;
                 }}
