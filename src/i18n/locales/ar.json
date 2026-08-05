@@ -164,7 +164,8 @@
     "deepseek": "DeepSeek",
     "groq": "Groq",
     "ollama": "Ollama (محلي)",
-    "opencode": "OpenCode Go"
+    "opencode": "OpenCode Go",
+    "codex": "OpenAI Codex"
   },
   "settings": {
     "title": "الإعدادات",
@@ -239,6 +240,12 @@
     "themeSepia": "سيبيا",
     "themeDark": "داكن",
     "urlLocked": "هذا الرابط ثابت من القالب. اختر «مخصص» لتعيين رابطك الخاص.",
+    "codexHelp": "مفتاح API من platform.openai.com؛ يُخزَّن فقط في سلسلة مفاتيح نظامك. لا يُستخدم تسجيل دخول أو OAuth.",
+    "codexOpenKeys": "فتح صفحة مفاتيح API",
+    "codexChecklistTitle": "قائمة فحص الاتصال",
+    "codexChecklistKey": "تم إنشاء المفتاح في platform.openai.com/api-keys",
+    "codexChecklistBilling": "تفعيل الفوترة في حسابك على OpenAI (مسؤوليتك)",
+    "codexChecklistModel": "اسم النموذج يطابق ما يمكن لحسابك الوصول إليه",
     "version": "الإصدار {{version}}"
   },
   "explain": {

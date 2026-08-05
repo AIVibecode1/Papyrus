@@ -164,7 +164,8 @@
     "deepseek": "DeepSeek",
     "groq": "Groq",
     "ollama": "Ollama (local)",
-    "opencode": "OpenCode Go"
+    "opencode": "OpenCode Go",
+    "codex": "OpenAI Codex"
   },
   "settings": {
     "title": "Settings",
@@ -239,6 +240,12 @@
     "themeSepia": "Sepia",
     "themeDark": "Dark",
     "urlLocked": "This URL is fixed by the preset. Choose Custom to set your own.",
+    "codexHelp": "API key from platform.openai.com; stored only in your OS keychain. No account sign-in or OAuth is used.",
+    "codexOpenKeys": "Open the API keys page",
+    "codexChecklistTitle": "Connection checklist",
+    "codexChecklistKey": "Key created on platform.openai.com/api-keys",
+    "codexChecklistBilling": "Billing enabled on your OpenAI account (user responsibility)",
+    "codexChecklistModel": "The model id matches what your account can access",
     "version": "Version {{version}}"
   },
   "explain": {

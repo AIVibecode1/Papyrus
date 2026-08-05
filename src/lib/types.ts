@@ -100,6 +100,23 @@ export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
     keyRequired: true,
     models: [{ id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" }],
   },
+  // Codex-class models via the standard OpenAI API (plan 043): the same
+  // keychain path as every other provider — no OAuth, no embedded
+  // secrets. Model ids verified against OpenAI's public API list (2026-08):
+  // gpt-5.3-codex is the agentic coding model; the 5.6 family is the
+  // current frontier (Sol/Terra/Luna).
+  codex: {
+    key: "presets.codex",
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-5.3-codex",
+    keyRequired: true,
+    models: [
+      { id: "gpt-5.3-codex", label: "GPT-5.3 Codex" },
+      { id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+      { id: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+      { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+    ],
+  },
 };
 
 /**
