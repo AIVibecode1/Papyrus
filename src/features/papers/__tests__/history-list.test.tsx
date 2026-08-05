@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 // Plan 060: the history surface. Importing the component pulls in the
-// reader store (pdf.js), so the same module mocks the reader tests use
-// are applied here.
-import "pdfjs-dist";
+// reader store, whose import chain reaches pdfjs-dist at module level;
+// jsdom lacks DOMMatrix, so the established stub module (same as
+// reader-view.test.tsx) satisfies the chain.
 import "@testing-library/jest-dom/vitest";
 import "@/i18n";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("pdfjs-dist", () => ({
+  getDocument: vi.fn(),
+  GlobalWorkerOptions: { workerSrc: "" },
+  TextLayer: class {},
+}));
 
 import { HistoryList, relativeOpened } from "@/features/papers/history-list";
 import { useFavoritesStore } from "@/stores/favorites";
@@ -14,47 +20,7 @@ import { useHistoryStore } from "@/stores/history";
 import { useReaderStore } from "@/stores/reader";
 import { useUiStore } from "@/stores/ui";
 
-// pdf.js touches DOMMatrix, which jsdom does not implement.
-class DOMMatrixMock {
-  a = 1;
-  b = 0;
-  c = 0;
-  d = 1;
-  e = 0;
-  f = 0;
-  m11 = 1;
-  m12 = 0;
-  m13 = 0;
-  m14 = 0;
-  m21 = 0;
-  m22 = 1;
-  m23 = 0;
-  m24 = 0;
-  m31 = 0;
-  m32 = 0;
-  m33 = 1;
-  m34 = 0;
-  m41 = 0;
-  m42 = 0;
-  m43 = 0;
-  m44 = 1;
-  multiply() {
-    return this;
-  }
-  translate() {
-    return this;
-  }
-  scale() {
-    return this;
-  }
-  invert() {
-    return this;
-  }
-}
-
 beforeEach(() => {
-  vi.stubGlobal("DOMMatrix", DOMMatrixMock);
-  vi.stubGlobal("DOMPoint", class {});
   localStorage.clear();
   useHistoryStore.setState({ entries: [], loaded: true });
   useFavoritesStore.setState({ ids: [], byId: {}, loaded: true });
@@ -78,7 +44,8 @@ describe("HistoryList", () => {
           pdfUrl: "https://arxiv.org/pdf/1706.03762",
           categories: ["cs.CL"],
           source: "arxiv",
-          lastOpenedAt: new Date().toISOString(),
+          // Deterministic: exactly two hours ago so the label is stable.
+          lastOpenedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
         },
       ],
     });
@@ -86,7 +53,7 @@ describe("HistoryList", () => {
 
     render(<HistoryList />);
     expect(screen.getByText("Attention Is All You Need")).toBeInTheDocument();
-    expect(screen.getByText(/Opened .*ago/)).toBeInTheDocument();
+    expect(screen.getByText(/Opened 2 hours ago/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Open paper" }));
     // The Open action navigates to the reader view.
@@ -140,7 +107,8 @@ describe("relativeOpened", () => {
   it("produces a relative label in the given language", () => {
     const twoHours = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     expect(relativeOpened(twoHours, "en")).toBe("2 hours ago");
-    expect(relativeOpened(twoHours, "ar")).toContain("ساعة");
+    // Arabic uses the dual form for two hours.
+    expect(relativeOpened(twoHours, "ar")).toMatch(/ساعتين|ساعة/);
   });
 
   it("falls back to the raw value for unparseable dates", () => {
