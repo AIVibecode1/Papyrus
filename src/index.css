@@ -113,6 +113,11 @@
 :root {
   color-scheme: light;
   --radius: 0.625rem;
+  /* Density tokens (plan 040 WU4): card vertical rhythm and the two
+     card text sizes live here so every card scales from one place. */
+  --space-card-y: 1rem;
+  --text-card-title: 0.9375rem; /* 15px card titles (plan 034) */
+  --text-card-meta: 0.75rem;
   /* Softened day palette: lower text contrast, warm off-white cards. */
   --background: oklch(0.968 0.005 85);
   --foreground: oklch(0.3 0.01 70);

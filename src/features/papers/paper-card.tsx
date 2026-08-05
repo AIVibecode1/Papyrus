@@ -90,7 +90,7 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
         <div dir="ltr" className="flex items-start justify-between gap-3">
           <h3
             dir="ltr"
-            className="text-[15px] font-semibold leading-snug tracking-tight text-balance"
+            className="text-(--text-card-title) font-semibold leading-snug tracking-tight text-balance"
           >
             {paper.title}
           </h3>
@@ -113,7 +113,10 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
           )}
         </div>
 
-        <p dir="ltr" className="font-mono text-[11px] leading-relaxed text-muted-foreground">
+        <p
+          dir="ltr"
+          className="font-mono text-(--text-card-meta) leading-relaxed text-muted-foreground"
+        >
           <time dateTime={paper.published}>{published}</time>
           {paper.authors.length > 0 && (
             <>
