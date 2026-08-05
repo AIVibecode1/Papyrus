@@ -13,6 +13,29 @@ export interface Paper {
   venue?: string;
 }
 
+export type NoteKind = "note" | "highlight";
+
+/** A note or highlight attached to a paper (plan 042). Persisted by the
+ * Rust notes.rs commands in the app data dir; never leaves the device
+ * unless the user exports. */
+export interface PaperNote {
+  id: string; // uuid v4
+  paperId: string;
+  /** Denormalized for the hub list without re-fetching papers. */
+  paperTitle: string;
+  kind: NoteKind;
+  /** Markdown; for highlights, the user comment (may be empty). */
+  body: string;
+  /** Required for highlights. */
+  quote?: string;
+  /** 1-based page number when known. */
+  page?: number;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+  /** Max 5 short tags. */
+  tags?: string[];
+}
+
 export interface ProviderConfig {
   id: string;
   name: string;
