@@ -47,6 +47,10 @@ describe("papers store", () => {
       error: null,
       lastUpdated: null,
       citations: {},
+      searchField: "all",
+      yearFrom: null,
+      yearTo: null,
+      limitToCategory: true,
     });
   });
 
@@ -99,7 +103,18 @@ describe("papers store", () => {
     usePapersStore.getState().setQuery("transformer");
 
     // refresh() calls fetchPapers synchronously; the query must reach it.
-    expect(fetchMock).toHaveBeenCalledWith("cs.MATH", 20, "transformer", undefined, 0, "arxiv");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "cs.MATH",
+      20,
+      "transformer",
+      undefined,
+      0,
+      "arxiv",
+      "all",
+      undefined,
+      undefined,
+      true,
+    );
     await Promise.resolve();
 
     const state = usePapersStore.getState();
@@ -136,6 +151,10 @@ describe("papers store", () => {
       undefined,
       0,
       "semanticscholar",
+      "all",
+      undefined,
+      undefined,
+      true,
     );
     expect(usePapersStore.getState().error).toBeNull();
     expect(usePapersStore.getState().papers).toEqual([aiPaper]);
@@ -149,7 +168,18 @@ describe("papers store", () => {
     usePapersStore.getState().setDate("2026-08-01");
 
     // The date must reach the fetch layer as the 4th argument.
-    expect(fetchMock).toHaveBeenCalledWith("cs.MATH", 20, undefined, "2026-08-01", 0, "arxiv");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "cs.MATH",
+      20,
+      undefined,
+      "2026-08-01",
+      0,
+      "arxiv",
+      "all",
+      undefined,
+      undefined,
+      true,
+    );
     await Promise.resolve();
 
     const state = usePapersStore.getState();
@@ -166,7 +196,18 @@ describe("papers store", () => {
     usePapersStore.getState().setDate("2026-08-01");
     usePapersStore.getState().setDate(null);
 
-    expect(fetchMock).toHaveBeenLastCalledWith("cs.MATH", 20, undefined, undefined, 0, "arxiv");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "cs.MATH",
+      20,
+      undefined,
+      undefined,
+      0,
+      "arxiv",
+      "all",
+      undefined,
+      undefined,
+      true,
+    );
     await Promise.resolve();
 
     expect(usePapersStore.getState().date).toBeNull();
@@ -218,7 +259,18 @@ describe("papers store", () => {
     // The duplicated aiPaper from page 2 must not appear twice.
     expect(usePapersStore.getState().papers).toEqual([aiPaper, lgPaper]);
     // Page 2 was requested with start = current length.
-    expect(fetchPapers).toHaveBeenLastCalledWith("cs.AI", 20, undefined, undefined, 1, "arxiv");
+    expect(fetchPapers).toHaveBeenLastCalledWith(
+      "cs.AI",
+      20,
+      undefined,
+      undefined,
+      1,
+      "arxiv",
+      "all",
+      undefined,
+      undefined,
+      true,
+    );
     expect(usePapersStore.getState().loadingMore).toBe(false);
   });
 
@@ -355,6 +407,10 @@ describe("papers store", () => {
       undefined,
       0,
       "semanticscholar",
+      "all",
+      undefined,
+      undefined,
+      true,
     );
     await Promise.resolve();
     expect(usePapersStore.getState().source).toBe("semanticscholar");
@@ -380,5 +436,80 @@ describe("papers store", () => {
     usePapersStore.setState({ fallbackNote: "boom" });
     usePapersStore.getState().clearFallbackNote();
     expect(usePapersStore.getState().fallbackNote).toBeNull();
+  });
+
+  it("setSearchField re-runs the active query with the field", async () => {
+    const fetchMock = vi
+      .mocked(fetchPapers)
+      .mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
+
+    usePapersStore.setState({ query: "attention", searchField: "all" });
+    usePapersStore.getState().setSearchField("title");
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "cs.MATH",
+      20,
+      "attention",
+      undefined,
+      0,
+      "arxiv",
+      "title",
+      undefined,
+      undefined,
+      true,
+    );
+    expect(usePapersStore.getState().searchField).toBe("title");
+    await Promise.resolve();
+  });
+
+  it("setYearRange passes the bounds to the fetch layer", async () => {
+    const fetchMock = vi
+      .mocked(fetchPapers)
+      .mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
+
+    usePapersStore.setState({ query: "attention" });
+    usePapersStore.getState().setYearRange(2017, 2017);
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "cs.MATH",
+      20,
+      "attention",
+      undefined,
+      0,
+      "arxiv",
+      "all",
+      2017,
+      2017,
+      true,
+    );
+    expect(usePapersStore.getState().yearFrom).toBe(2017);
+    expect(usePapersStore.getState().yearTo).toBe(2017);
+    await Promise.resolve();
+  });
+
+  it("clearSearch restores the feed without the query or field", async () => {
+    const fetchMock = vi
+      .mocked(fetchPapers)
+      .mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
+
+    usePapersStore.setState({ query: "attention", searchField: "id" });
+    usePapersStore.getState().clearSearch();
+
+    expect(usePapersStore.getState().query).toBe("");
+    expect(usePapersStore.getState().searchField).toBe("all");
+    // The restore must fetch the plain feed, not the id lookup.
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "cs.MATH",
+      20,
+      undefined,
+      undefined,
+      0,
+      "arxiv",
+      "all",
+      undefined,
+      undefined,
+      true,
+    );
+    await Promise.resolve();
   });
 });

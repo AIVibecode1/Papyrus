@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { fetchPapers, type PaperSource } from "@/lib/arxiv";
+import { fetchPapers, type PaperSource, type SearchField } from "@/lib/arxiv";
 import { fetchCitations } from "@/lib/citations";
 import type { PaperSortMode } from "@/lib/paper-sort";
 import { useDigestStore } from "@/stores/digest";
@@ -7,6 +7,32 @@ import type { Paper } from "@/lib/types";
 
 const DEFAULT_CATEGORY = "cs.AI";
 const PAGE_SIZE = 20;
+
+// Non-secret search preferences survive restarts (the raw query string is
+// deliberately NOT persisted: privacy + no surprise on reopen).
+const FIELD_STORAGE_KEY = "papyrus-search-field";
+const LIMIT_CATEGORY_STORAGE_KEY = "papyrus-search-limit-category";
+
+function readStoredField(): SearchField {
+  let value: string | null;
+  try {
+    value = localStorage.getItem(FIELD_STORAGE_KEY);
+  } catch {
+    // Node test env has no localStorage; defaults apply.
+    value = null;
+  }
+  return value === "title" || value === "author" || value === "abstract" || value === "id"
+    ? value
+    : "all";
+}
+
+function readStoredLimitCategory(): boolean {
+  try {
+    return localStorage.getItem(LIMIT_CATEGORY_STORAGE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Error sentinel: the Semantic Scholar source needs a search term.
@@ -43,11 +69,26 @@ interface PapersState {
   citationsReachable: boolean;
   /** How the visible list is ordered: feed order or most cited first. */
   sortMode: PaperSortMode;
+  /** Field the free-text query targets (plan 041). */
+  searchField: SearchField;
+  /** Inclusive year bounds for the search; null = unbounded. */
+  yearFrom: number | null;
+  yearTo: number | null;
+  /** AND the current category onto arXiv searches (S2 has its own ranking). */
+  limitToCategory: boolean;
   setCategory: (category: string) => void;
   setQuery: (query: string) => void;
   setDate: (date: string | null) => void;
   setSource: (source: PaperSource) => void;
   setSortMode: (mode: PaperSortMode) => void;
+  setSearchField: (field: SearchField) => void;
+  setYearRange: (from: number | null, to: number | null) => void;
+  setLimitToCategory: (value: boolean) => void;
+  /**
+   * Clears the search query and resets the field to `all`, restoring the
+   * feed. Year chips are kept until the user clears them separately.
+   */
+  clearSearch: () => void;
   /** Clears the fallback notice (dismissed by the user). */
   clearFallbackNote: () => void;
   refresh: () => Promise<void>;
@@ -72,6 +113,10 @@ export const usePapersStore = create<PapersState>((set, get) => ({
   citationsLoading: false,
   citationsReachable: true,
   sortMode: "newest",
+  searchField: readStoredField(),
+  yearFrom: null,
+  yearTo: null,
+  limitToCategory: readStoredLimitCategory(),
 
   setCategory: (category) => {
     if (category === get().category) return;
@@ -134,11 +179,51 @@ export const usePapersStore = create<PapersState>((set, get) => ({
     set({ sortMode });
   },
 
+  setSearchField: (searchField) => {
+    if (searchField === get().searchField) return;
+    try {
+      localStorage.setItem(FIELD_STORAGE_KEY, searchField);
+    } catch {
+      // Best-effort persistence; the in-memory value still applies.
+    }
+    set({ searchField });
+    // The field changes how the current query is interpreted: re-run it.
+    if (get().query.trim()) void get().refresh();
+  },
+
+  setYearRange: (yearFrom, yearTo) => {
+    if (yearFrom === get().yearFrom && yearTo === get().yearTo) return;
+    set({ yearFrom, yearTo });
+    if (get().query.trim()) void get().refresh();
+  },
+
+  setLimitToCategory: (limitToCategory) => {
+    if (limitToCategory === get().limitToCategory) return;
+    try {
+      localStorage.setItem(LIMIT_CATEGORY_STORAGE_KEY, limitToCategory ? "1" : "0");
+    } catch {
+      // Best-effort persistence; the in-memory value still applies.
+    }
+    set({ limitToCategory });
+    if (get().query.trim() && get().source === "arxiv") void get().refresh();
+  },
+
+  clearSearch: () => {
+    if (!get().query && get().searchField === "all") return;
+    set({ query: "", searchField: "all", papers: [], citations: {}, error: null });
+    try {
+      localStorage.setItem(FIELD_STORAGE_KEY, "all");
+    } catch {
+      // Best-effort persistence.
+    }
+    void get().refresh();
+  },
+
   clearFallbackNote: () => set({ fallbackNote: null }),
 
   refresh: async () => {
     const seq = ++requestSeq;
-    const { category, query, date, source } = get();
+    const { category, query, date, source, searchField, yearFrom, yearTo, limitToCategory } = get();
     set({ loading: true, error: null, fallbackNote: null });
     // Semantic Scholar is search-only: surface a friendly, translatable
     // state instead of hitting the backend and showing a raw Rust error.
@@ -164,6 +249,10 @@ export const usePapersStore = create<PapersState>((set, get) => ({
         date ?? undefined,
         0,
         source,
+        searchField,
+        yearFrom ?? undefined,
+        yearTo ?? undefined,
+        limitToCategory,
       );
       if (seq !== requestSeq) return;
       set({ papers, fallbackNote, loading: false, lastUpdated: Date.now() });
@@ -178,7 +267,19 @@ export const usePapersStore = create<PapersState>((set, get) => ({
   },
 
   loadMore: async () => {
-    const { papers, category, query, date, source, loading, loadingMore } = get();
+    const {
+      papers,
+      category,
+      query,
+      date,
+      source,
+      loading,
+      loadingMore,
+      searchField,
+      yearFrom,
+      yearTo,
+      limitToCategory,
+    } = get();
     if (loading || loadingMore || papers.length === 0) return;
     // Same generation token as refresh: a category/query/source/date
     // change that lands while this request is in flight must invalidate
@@ -193,6 +294,10 @@ export const usePapersStore = create<PapersState>((set, get) => ({
         date ?? undefined,
         papers.length,
         source,
+        searchField,
+        yearFrom ?? undefined,
+        yearTo ?? undefined,
+        limitToCategory,
       );
       if (seq !== requestSeq) {
         // Stale: never touch the list, but always release the busy flag
