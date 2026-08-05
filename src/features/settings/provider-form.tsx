@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
+import { CheckCircle2, ExternalLink, Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,17 @@ export function ProviderForm({
     setFieldErrors((e) => ({ ...e, baseUrl: undefined }));
     const p = PROVIDER_PRESETS[key];
     if (p) setForm((f) => ({ ...f, baseUrl: p.baseUrl, model: p.model }));
+  };
+
+  // The Codex help block links to OpenAI's key-management page through
+  // the opener plugin (paper-card uses the same pattern for PDF links).
+  const openApiKeysPage = () => {
+    const url = "https://platform.openai.com/api-keys";
+    if ("__TAURI_INTERNALS__" in window) {
+      void openUrl(url).catch(() => window.open(url, "_blank", "noreferrer"));
+    } else {
+      window.open(url, "_blank", "noreferrer");
+    }
   };
 
   const validate = (): boolean => {
@@ -224,6 +236,32 @@ export function ProviderForm({
             <KeyRound className="size-3" />
             {t("settings.keyHint")}
           </p>
+          {preset === "codex" && (
+            <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+              <p>{t("settings.codexHelp")}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 h-7 text-xs"
+                onClick={openApiKeysPage}
+              >
+                <ExternalLink className="size-3" />
+                {t("settings.codexOpenKeys")}
+              </Button>
+              <details className="mt-2">
+                <summary className="cursor-pointer">{t("settings.codexChecklistTitle")}</summary>
+                <ul className="mt-2 flex list-inside list-disc flex-col gap-1">
+                  <li>
+                    <CheckCircle2 className="me-1 inline size-3 text-primary" />
+                    {t("settings.codexChecklistKey")}
+                  </li>
+                  <li>{t("settings.codexChecklistBilling")}</li>
+                  <li>{t("settings.codexChecklistModel")}</li>
+                </ul>
+              </details>
+            </div>
+          )}
         </div>
 
         <div aria-live="polite">
