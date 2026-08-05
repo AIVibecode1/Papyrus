@@ -36,6 +36,13 @@ pub fn clear_app_cache(app: AppHandle) -> Result<(), String> {
     if notes_file.exists() {
         fs::remove_file(&notes_file).map_err(|e| format!("Cannot clear the notes: {e}"))?;
     }
+
+    // Reading history is saved data like notes: the big clear wipes it,
+    // while Settings also offers a dedicated history-only clear.
+    let history_file = crate::history::history_path(Some(&app));
+    if history_file.exists() {
+        fs::remove_file(&history_file).map_err(|e| format!("Cannot clear the history: {e}"))?;
+    }
     Ok(())
 }
 

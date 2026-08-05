@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Download, Loader2, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  Clock,
+  Download,
+  Loader2,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
@@ -14,6 +23,7 @@ import type { PaperSource } from "@/lib/arxiv";
 import { exportSavedData, importSavedData } from "@/lib/export";
 import type { ProviderConfig } from "@/lib/types";
 import { useTheme, type Theme } from "@/hooks/use-theme";
+import { useHistoryStore } from "@/stores/history";
 import { usePapersStore } from "@/stores/papers";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
@@ -47,6 +57,10 @@ export function SettingsPage() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearMessage, setClearMessage] = useState<string | null>(null);
+  // Plan 060: history-only clear (favorites and notes are untouched).
+  const [confirmHistoryClear, setConfirmHistoryClear] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
+  const [historyMessage, setHistoryMessage] = useState<string | null>(null);
 
   const handleImportFile = async (file: File | undefined) => {
     if (!file) return;
@@ -81,6 +95,7 @@ export function SettingsPage() {
         "papyrus-reader-split",
         "papyrus-reader-walkthrough-v1",
         "papyrus-notes-v1",
+        "papyrus-reading-history-v1",
       ]) {
         localStorage.removeItem(key);
       }
@@ -89,6 +104,21 @@ export function SettingsPage() {
       setClearing(false);
       setConfirmClear(false);
       setClearMessage(t("settings.clearDataFailed", { error: String(err) }));
+    }
+  };
+
+  const handleClearHistory = async () => {
+    setClearingHistory(true);
+    setHistoryMessage(null);
+    try {
+      await useHistoryStore.getState().clear();
+      setConfirmHistoryClear(false);
+      setHistoryMessage(t("history.clearDone"));
+    } catch {
+      setConfirmHistoryClear(false);
+      setHistoryMessage(t("settings.clearDataFailed", { error: "history" }));
+    } finally {
+      setClearingHistory(false);
     }
   };
 
@@ -310,6 +340,57 @@ export function SettingsPage() {
           {clearMessage && (
             <p role="alert" className="mt-2 text-xs text-destructive">
               {clearMessage}
+            </p>
+          )}
+        </div>
+
+        {/* Plan 060: history-only clear. Favorites and notes are never
+            touched; unlike the big clear above there is no reload. */}
+        <div className="mt-4 rounded-md border p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">{t("settings.clearHistoryHint")}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 text-destructive"
+              onClick={() => setConfirmHistoryClear(true)}
+            >
+              <Clock className="size-4" />
+              {t("history.clear")}
+            </Button>
+          </div>
+          {confirmHistoryClear && (
+            <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+              <p className="text-xs text-destructive">{t("history.clearPrompt")}</p>
+              <div className="mt-2 flex gap-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  autoFocus
+                  onClick={() => void handleClearHistory()}
+                  disabled={clearingHistory}
+                >
+                  {clearingHistory ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-4" />
+                  )}
+                  {clearingHistory ? t("settings.clearing") : t("settings.clearConfirm")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmHistoryClear(false)}
+                  disabled={clearingHistory}
+                >
+                  {t("settings.cancel")}
+                </Button>
+              </div>
+            </div>
+          )}
+          {historyMessage && (
+            <p role="status" className="mt-2 text-xs text-muted-foreground">
+              {historyMessage}
             </p>
           )}
         </div>

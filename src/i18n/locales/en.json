@@ -64,7 +64,10 @@
     "opened": "Opened {{rel}}",
     "open": "Open paper",
     "save": "Save to favorites",
-    "remove": "Remove from history"
+    "remove": "Remove from history",
+    "clear": "Clear reading history",
+    "clearPrompt": "Removes the list of papers you opened. Favorites and notes are kept.",
+    "clearDone": "Reading history cleared."
   },
   "notes": {
     "title": "Notes",
@@ -242,11 +245,12 @@
     "exportedTo": "Saved to {{path}}",
     "exportFailed": "Export failed: {{error}}",
     "importData": "Import data",
-    "importedCount": "Imported {{favorites}} saved papers, {{chats}} chat transcripts and {{notes}} notes.",
+    "clearHistoryHint": "Removes the list of papers you opened in the reader. Favorites and notes are kept.",
+    "importedCount": "Imported {{favorites}} saved papers, {{chats}} chat transcripts, {{notes}} notes and {{readingHistory}} history entries.",
     "importFailed": "Import failed: {{error}}",
     "clearData": "Clear cache and saved data",
-    "clearDataHint": "Removes downloaded PDFs, the daily digest, saved papers, notes, chat history and reading positions. Your providers and API keys are kept.",
-    "clearDataPrompt": "This clears downloaded PDFs, the daily digest, saved papers, notes, chat history and reading positions. Providers and API keys are kept. Continue?",
+    "clearDataHint": "Removes downloaded PDFs, the daily digest, saved papers, notes, chat history, reading positions and reading history. Your providers and API keys are kept.",
+    "clearDataPrompt": "This clears downloaded PDFs, the daily digest, saved papers, notes, chat history, reading positions and reading history. Providers and API keys are kept. Continue?",
     "clearConfirm": "Clear everything",
     "clearing": "Clearing…",
     "clearDataFailed": "Could not clear the data: {{error}}",
