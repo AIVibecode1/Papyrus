@@ -312,7 +312,9 @@ async fn fetch_citations_impl(ids: Vec<String>) -> (HashMap<String, u32>, bool) 
         let url = format!(
             "{}?filter=doi:{}&per-page={}&select=doi,cited_by_count",
             openalex_url(),
-            filter,
+            // Percent-encode the pipe: a strict proxy in between may
+            // reject the raw `|` in the query.
+            filter.replace('|', "%7C"),
             chunk.len()
         );
         let Ok(response) = client.get(&url).timeout(CITATION_TIMEOUT).send().await else {
