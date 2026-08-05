@@ -179,7 +179,7 @@ export function PaperList() {
             </div>
             {/* Search box with the sort dropdown embedded at its end: the
             user picks Newest or Most cited without leaving the box. */}
-            <div className="flex h-9 w-full max-w-sm items-center gap-1.5 rounded-md border border-input bg-transparent px-2.5 transition-[box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
+            <div className="flex h-9 w-full max-w-sm items-center gap-1.5 rounded-md border border-input bg-transparent px-2.5 transition-[box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
               <Search className="size-3.5 shrink-0 text-muted-foreground" />
               <Input
                 value={searchInput}
@@ -194,7 +194,7 @@ export function PaperList() {
                     ? "papers.searchScholarPlaceholder"
                     : "papers.searchPlaceholder",
                 )}
-                className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
+                className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
               />
               {papers.length > 0 && (
                 <>

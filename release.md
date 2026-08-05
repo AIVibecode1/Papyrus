@@ -19,6 +19,54 @@ Rules:
 
 ---
 
+## v1.0.11 - 2026-08-05
+
+Status: installers built, not yet published on GitHub.
+Built from: (fill at build time)
+Quality gates: 247 frontend tests, 96 Rust tests, clippy, rustfmt, ESLint,
+Prettier, strict typecheck, release-integrity checker, CI on Windows and
+macOS (artifacts uploaded on every run; tag v1.0.11 triggers a draft
+release with both installers).
+
+Live-verification round: every fix below was reproduced and verified in
+the running app (dev preview and the built exe over WebView2 CDP) with a
+real 74-page arXiv paper and real wheel input, not just unit tests.
+
+- Fixed the black PDF pages for good: a page whose render was cancelled
+  (zoom/refit) kept receiving the cancelled task's residual drawing, and
+  the next render on the SAME canvas interleaved with it — the promise
+  resolved "OK" while the canvas stayed 100% black or blank (reproduced
+  pixel-by-pixel: white at t=1600ms, black at t=2000ms after the refit).
+  Every render run now mounts fresh canvas elements, so a stale task's
+  residual paint lands on the detached old element, invisible. Verified:
+  73/73 pages painted after load, resize, and two zoom steps — zero
+  black pages.
+- Fixed the filter bar "floating" over the papers: the sticky bar left a
+  transparent 16px gap below its box and paper cards showed through it
+  while scrolling, reading as a bar floating over the list. The bar's
+  box is now fully opaque and extends below its content (pb-4 +
+  border-b), and the list sits in its own wrapper directly under the
+  bar. Verified with real wheel input: the list scrolls 736px while the
+  bar's position stays pixel-identical.
+- Fixed the search box's ghost rectangle: in dark mode the box had a
+  translucent background (dark:bg-input/30) that rendered as a faint
+  transparent rectangle over the sort option. The box is now fully
+  transparent with a clean border, and the sort dropdown keeps the
+  opaque background-matching popover surface.
+- Fixed "Most cited" appearing dead after a search: the citation batch
+  (Semantic Scholar's shared pool 429s often) resolved empty and the UI
+  spun "Citation counts are loading..." forever. The store now tracks
+  the batch attempt and clears it on completion, showing an honest
+  "counts unavailable - feed order kept" hint instead of an eternal
+  spinner (verified live in the built app; search itself verified
+  working: skeleton -> new results in ~1.5s).
+- tooling: plan.md (private attachment) is excluded from Prettier so
+  format:check is deterministic again; round-3 audit plans 032-037
+  committed (PDF virtualization, citation disk cache, design pass,
+  search UX, deep logic review, this release).
+
+---
+
 ## v1.0.10 - 2026-08-04
 
 Status: installers built, not yet published on GitHub.
