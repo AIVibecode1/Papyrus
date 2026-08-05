@@ -130,7 +130,10 @@
   --secondary: oklch(0.945 0.006 85);
   --secondary-foreground: oklch(0.36 0.01 70);
   --muted: oklch(0.948 0.006 85);
-  --muted-foreground: oklch(0.55 0.012 75);
+  /* Contrast-adjusted for WCAG AA (plan 044 WU5): 0.54 light gives
+     4.90:1 on --card and 4.62:1 on --background (0.55 was 4.43:1 on
+     the background surface). */
+  --muted-foreground: oklch(0.54 0.012 75);
   --accent: oklch(0.955 0.02 240);
   --accent-foreground: oklch(0.44 0.07 240);
   --destructive: oklch(0.52 0.12 25);
