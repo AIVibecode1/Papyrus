@@ -90,7 +90,7 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
         <div dir="ltr" className="flex items-start justify-between gap-3">
           <h3
             dir="ltr"
-            className="text-(--text-card-title) font-semibold leading-snug tracking-tight text-balance"
+            className="line-clamp-2 text-(--text-card-title) font-semibold leading-5 tracking-tight text-balance"
           >
             {paper.title}
           </h3>
@@ -115,12 +115,14 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
 
         <p
           dir="ltr"
-          className="font-mono text-(--text-card-meta) leading-relaxed text-muted-foreground"
+          className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-(--text-card-meta) leading-relaxed text-muted-foreground"
         >
           <time dateTime={paper.published}>{published}</time>
           {paper.authors.length > 0 && (
             <>
-              {" · "}
+              <span aria-hidden="true" className="text-muted-foreground/50">
+                ·
+              </span>
               <span dir="ltr" className="line-clamp-1" title={paper.authors.join(", ")}>
                 {paper.authors.join(", ")}
               </span>
@@ -128,7 +130,9 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
           )}
           {typeof citationCount === "number" && (
             <>
-              {" · "}
+              <span aria-hidden="true" className="text-muted-foreground/50">
+                ·
+              </span>
               <span title={t("papers.citedBy", { count: citationCount })}>
                 {/* The count is exact metadata: keep it in its own LTR span
                     so Arabic punctuation can never reorder it. */}
