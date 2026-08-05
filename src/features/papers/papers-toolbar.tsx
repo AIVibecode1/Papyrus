@@ -149,8 +149,9 @@ export function PapersToolbar({
                   query,
                   field: t(fieldKey),
                   years,
-                })
-              : t("papers.searchStatus", { query, field: t(fieldKey) })
+                }) + (limitToCategory ? t("papers.searchStatusLimitOn") : "")
+              : t("papers.searchStatus", { query, field: t(fieldKey) }) +
+                (limitToCategory ? t("papers.searchStatusLimitOn") : "")
             : lastUpdated &&
               t("papers.updated", {
                 time: new Intl.DateTimeFormat(undefined, {

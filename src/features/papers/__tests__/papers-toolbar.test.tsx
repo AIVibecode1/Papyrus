@@ -18,7 +18,7 @@ const baseProps = {
   yearFrom: null,
   yearTo: null,
   onYearRange: vi.fn(),
-  limitToCategory: true,
+  limitToCategory: false,
   onLimitToCategory: vi.fn(),
   source: "arxiv" as const,
   sortVisible: false,
@@ -53,7 +53,22 @@ describe("PapersToolbar search chrome", () => {
         searchField="title"
       />,
     );
-    expect(screen.getByText(/Results for “attention” · Title/)).toBeInTheDocument();
+    expect(screen.getByText(/Best matches for “attention” · Title/)).toBeInTheDocument();
+  });
+
+  it("appends the limit-on suffix to the status while the category limit is active", () => {
+    render(
+      <PapersToolbar
+        {...baseProps}
+        query="attention"
+        searchValue="attention"
+        searchField="title"
+        limitToCategory={true}
+      />,
+    );
+    expect(
+      screen.getByText(/Best matches for “attention” · Title · limited to current field/),
+    ).toBeInTheDocument();
   });
 
   it("hides day navigation and shows year chips while a query is active", () => {
@@ -88,7 +103,8 @@ describe("PapersToolbar search chrome", () => {
       <PapersToolbar {...baseProps} query="attention" searchValue="attention" />,
     );
     const checkbox = screen.getByRole("checkbox", { name: "Limit to current field" });
-    expect(checkbox).toBeChecked();
+    // Default is off (plan 050): the checkbox is a deliberate opt-in.
+    expect(checkbox).not.toBeChecked();
 
     rerender(
       <PapersToolbar

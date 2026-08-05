@@ -28,9 +28,11 @@ function readStoredField(): SearchField {
 
 function readStoredLimitCategory(): boolean {
   try {
-    return localStorage.getItem(LIMIT_CATEGORY_STORAGE_KEY) !== "0";
+    // Missing key = off (plan 050: archive search must see other
+    // categories by default; the checkbox is a deliberate opt-in).
+    return localStorage.getItem(LIMIT_CATEGORY_STORAGE_KEY) === "1";
   } catch {
-    return true;
+    return false;
   }
 }
 
