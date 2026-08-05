@@ -19,6 +19,53 @@ Rules:
 
 ---
 
+## v1.1.1 - 2026-08-05
+
+Status: installers built, not yet published on GitHub.
+Built from: 4b398ec (release commit; feature commits 050-054 precede it)
+Quality gates: 303 frontend tests, 122 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker, CI on
+Windows and macOS (artifacts uploaded on every run; tag v1.1.1
+triggers a draft release with both installers).
+
+- Search now ranks by arXiv relevance (sortBy=relevance) instead of
+  submission date, so the exact paper you searched for can surface on
+  page 1 even when it is years old. Multi-word terms are sent as
+  quoted phrases: live-verified against the export API, "Attention Is
+  All You Need" puts the original 2017 paper (1706.03762) at the top,
+  and "DeepSeek-R1" plus a category filter puts the original Jan 2025
+  paper on page 1 while year-range and category clauses still hold.
+- Limit-to-category now defaults to off: the checkbox is a deliberate
+  opt-in, a missing stored preference reads as off, and the Rust
+  command treats an omitted flag as off, so cross-field hits with
+  perfect matches are no longer hidden.
+- The search status line says "Best matches" (EN) / "أفضل النتائج"
+  (AR) and appends "limited to current field" when the category limit
+  is on.
+- Search chrome: the gray rectangle under typed text in dark mode is
+  gone (autofill kill-switch in the base layer plus explicit
+  dark-transparent overrides on the search input and dropdown
+  triggers). One bordered surface, no double slabs, RTL-clean.
+- Native PDF copy: a floating selection bar (Copy / Highlight / Ask)
+  appears above the PDF viewer when you select text; Ctrl/Cmd+C copies
+  the selection anywhere outside a text input; the clipboard helper
+  races the async API against a timeout and falls back to
+  execCommand, always resolving. PDF text layers stay selectable.
+- OpenAI preset truth: the preset is named OpenAI, not OpenAI Codex,
+  and the help text states plainly that an API key from
+  platform.openai.com is separate from a ChatGPT Plus login and is
+  stored only in the OS keychain. GPT-5.3 Codex and the GPT-5.6
+  family remain selectable models. The reader Overview adds "Open
+  paper page", which opens the arXiv abstract (or the Scholar PDF) in
+  the system browser - a continuation path for ChatGPT users with no
+  credential surface. A spike document records the reasoning.
+- Dark theme depth: deep warm charcoal background with a visible
+  surface ladder (background, card, popover), solid hairlines,
+  brighter focus rings and selection accent, near-opaque top bar,
+  distinct muted sidebar, primary-tinted card hover, darker PDF
+  surround and a lifted AI panel. Muted text is 6.1:1 on card
+  (WCAG AA, recomputed).
+
 ## v1.1.0 - 2026-08-05
 
 Status: installers built, not yet published on GitHub.
