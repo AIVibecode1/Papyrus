@@ -177,7 +177,7 @@ export function PaperList() {
           </div>
           {/* Search box with the sort dropdown embedded at its end: the
             user picks Newest or Most cited without leaving the box. */}
-          <div className="flex h-9 w-full max-w-sm items-center gap-1.5 rounded-md border border-input bg-card px-2.5 transition-colors focus-within:border-ring">
+          <div className="flex h-9 w-full max-w-md items-center gap-1.5 rounded-md border border-transparent bg-background px-2.5 transition-colors focus-within:border-ring">
             <Search className="size-3.5 shrink-0 text-muted-foreground" />
             <Input
               value={searchInput}
