@@ -22,12 +22,20 @@ const CITATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10)
 const CITATION_RETRIES: u32 = 3;
 const CITATION_RETRY_DELAY_MS: u64 = 1500;
 const MAX_IDS_PER_REQUEST: usize = 100;
+/// OpenAlex `filter=doi:` supports up to 50 pipe-separated values.
+const OPENALEX_MAX_IDS: usize = 50;
 const CACHE_FILE_NAME: &str = "citation-cache.json";
 const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 3600);
 
 /// Test hook: lets the unit tests point at a local mock server.
 fn s2_url() -> String {
     std::env::var("PAPYRUS_S2_URL").unwrap_or_else(|_| S2_BATCH_URL.to_string())
+}
+
+/// Test hook: PAPYRUS_OPENALEX_URL overrides the works endpoint.
+fn openalex_url() -> String {
+    std::env::var("PAPYRUS_OPENALEX_URL")
+        .unwrap_or_else(|_| "https://api.openalex.org/works".to_string())
 }
 
 /// Where the disk cache lives. Test hook: PAPYRUS_CACHE_DIR overrides the
@@ -272,6 +280,62 @@ async fn fetch_citations_impl(ids: Vec<String>) -> HashMap<String, u32> {
         }
     }
 
+    // OpenAlex fallback: the shared S2 pool 429s often, and citation
+    // counts are the whole point of the "Most cited" sort — a sorted
+    // list that never reorders reads as broken. Every arXiv paper has
+    // the DOI 10.48550/arxiv.<id>, which OpenAlex indexes; one GET
+    // resolves up to OPENALEX_MAX_IDS ids, with generous free limits
+    // (no key). Only ids S2 could not resolve are queried.
+    let still_missing: Vec<&String> = unique
+        .iter()
+        .filter(|id| !fetched.contains_key(*id))
+        .collect();
+    for chunk in still_missing.chunks(OPENALEX_MAX_IDS) {
+        let filter = chunk
+            .iter()
+            .map(|id| format!("10.48550/arxiv.{id}"))
+            .collect::<Vec<_>>()
+            .join("|");
+        let url = format!(
+            "{}?filter=doi:{}&per-page={}&select=doi,cited_by_count",
+            openalex_url(),
+            filter,
+            chunk.len()
+        );
+        let Ok(response) = client.get(&url).timeout(CITATION_TIMEOUT).send().await else {
+            continue;
+        };
+        if !response.status().is_success() {
+            continue;
+        }
+        let Ok(text) = response.text().await else {
+            continue;
+        };
+        let Ok(Value::Object(body)) = serde_json::from_str::<Value>(&text) else {
+            continue;
+        };
+        let Some(results) = body.get("results").and_then(|r| r.as_array()) else {
+            continue;
+        };
+        let wanted: std::collections::HashSet<&str> = chunk.iter().map(|s| s.as_str()).collect();
+        for entry in results {
+            let Some(doi) = entry.get("doi").and_then(|d| d.as_str()) else {
+                continue;
+            };
+            // doi looks like https://doi.org/10.48550/arxiv.2301.00001
+            let Some(bare) = doi.rsplit("arxiv.").next() else {
+                continue;
+            };
+            let bare = bare.trim_end_matches('/');
+            if !wanted.contains(bare) {
+                continue;
+            }
+            if let Some(count) = entry.get("cited_by_count").and_then(|c| c.as_u64()) {
+                fetched.insert(bare.to_string(), count as u32);
+            }
+        }
+    }
+
     // Map results back to the ORIGINAL ids and merge into the session cache.
     {
         let mut guard = cache().lock().unwrap_or_else(|p| p.into_inner());
@@ -463,14 +527,130 @@ mod tests {
         // Rust 2024 made env::set_var/remove_var unsafe.
         unsafe {
             std::env::set_var("PAPYRUS_S2_URL", url);
+            // The OpenAlex fallback must never hit the real API in tests.
+            std::env::set_var("PAPYRUS_OPENALEX_URL", "http://127.0.0.1:1");
         }
         let result = tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(fetch_citations_impl(ids));
         unsafe {
             std::env::remove_var("PAPYRUS_S2_URL");
+            std::env::remove_var("PAPYRUS_OPENALEX_URL");
         }
         result
+    }
+
+    fn fetch_with_overrides(ids: Vec<String>, s2: &str, oa: &str) -> HashMap<String, u32> {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        reset_session_cache();
+        unsafe {
+            std::env::set_var("PAPYRUS_S2_URL", s2);
+            std::env::set_var("PAPYRUS_OPENALEX_URL", oa);
+        }
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_citations_impl(ids));
+        unsafe {
+            std::env::remove_var("PAPYRUS_S2_URL");
+            std::env::remove_var("PAPYRUS_OPENALEX_URL");
+        }
+        result
+    }
+
+    /// Starts a mock OpenAlex works endpoint returning the given results.
+    fn spawn_mock_openalex(results: Vec<Value>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                // Read the request first: answering before the client
+                // finishes sending makes reqwest report a failed send.
+                let mut buf = [0u8; 4096];
+                let mut req = Vec::new();
+                loop {
+                    match stream.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => {
+                            req.extend_from_slice(&buf[..n]);
+                            if req.windows(4).any(|w| w == b"\r\n\r\n") {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                let body =
+                    serde_json::json!({ "meta": { "count": results.len() }, "results": results })
+                        .to_string();
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(body.as_bytes());
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    #[test]
+    fn openalex_fallback_serves_counts_when_s2_is_down() {
+        // S2 answers 429 to every attempt (the shared keyless pool does
+        // this often); OpenAlex must supply the counts so "Most cited"
+        // still reorders instead of showing "counts unavailable".
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            while let Ok((mut stream, _)) = listener.accept() {
+                let head = "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(head.as_bytes());
+            }
+        });
+        let oa = spawn_mock_openalex(vec![serde_json::json!({
+            "doi": "https://doi.org/10.48550/arxiv.2607.00001",
+            "cited_by_count": 42,
+        })]);
+        let counts =
+            fetch_with_overrides(vec!["2607.00001".into()], &format!("http://{addr}"), &oa);
+        assert_eq!(counts.get("2607.00001"), Some(&42));
+    }
+
+    #[test]
+    fn openalex_fills_ids_s2_could_not_resolve() {
+        // S2 answers one count and null for another (unknown paper);
+        // OpenAlex covers the gap with its own count.
+        let s2 = spawn_mock_s2(vec![
+            serde_json::json!({ "paperId": "ARXIV:2607.00001", "citationCount": 5 }),
+            Value::Null,
+        ]);
+        let oa = spawn_mock_openalex(vec![serde_json::json!({
+            "doi": "https://doi.org/10.48550/arxiv.2607.00002",
+            "cited_by_count": 77,
+        })]);
+        let counts = fetch_with_overrides(vec!["2607.00001".into(), "2607.00002".into()], &s2, &oa);
+        assert_eq!(counts.get("2607.00001"), Some(&5));
+        assert_eq!(counts.get("2607.00002"), Some(&77));
+    }
+
+    #[test]
+    fn openalex_fallback_ignores_foreign_results() {
+        // A response containing a doi that was not requested must be
+        // ignored (defense against a misbehaving proxy or cache).
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            while let Ok((mut stream, _)) = listener.accept() {
+                let head = "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(head.as_bytes());
+            }
+        });
+        let oa = spawn_mock_openalex(vec![serde_json::json!({
+            "doi": "https://doi.org/10.48550/arxiv.9999.99999",
+            "cited_by_count": 999,
+        })]);
+        let counts =
+            fetch_with_overrides(vec!["2607.00001".into()], &format!("http://{addr}"), &oa);
+        assert!(counts.is_empty());
     }
 
     #[test]
@@ -485,6 +665,8 @@ mod tests {
         unsafe {
             std::env::set_var("PAPYRUS_CACHE_DIR", &dir);
             std::env::set_var("PAPYRUS_S2_URL", "");
+            // Keep the OpenAlex fallback off the real network in tests.
+            std::env::set_var("PAPYRUS_OPENALEX_URL", "http://127.0.0.1:1");
         }
         let mock = spawn_mock_s2(vec![
             serde_json::json!({ "paperId": "ARXIV:2607.00001", "citationCount": 42 }),
@@ -531,6 +713,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         unsafe {
             std::env::set_var("PAPYRUS_CACHE_DIR", &dir);
+            // The OpenAlex fallback must never hit the real API in tests.
+            std::env::set_var("PAPYRUS_OPENALEX_URL", "http://127.0.0.1:1");
         }
         let stale_saved_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -762,6 +946,8 @@ mod tests {
         unsafe {
             std::env::set_var("PAPYRUS_CACHE_DIR", &dir);
             std::env::set_var("PAPYRUS_CACHE_TTL_SECS", "0"); // always stale
+            // The OpenAlex fallback must never hit the real API in tests.
+            std::env::set_var("PAPYRUS_OPENALEX_URL", "http://127.0.0.1:1");
         }
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
