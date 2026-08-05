@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { buildExportPayload, importSavedData } from "@/lib/export";
 import type { Paper, PaperNote } from "@/lib/types";
 import { useFavoritesStore } from "@/stores/favorites";
+import { useHistoryStore } from "@/stores/history";
 import { useNotesStore } from "@/stores/notes";
 
 const paper: Paper = {
@@ -61,6 +62,28 @@ describe("buildExportPayload", () => {
     const payload = buildExportPayload();
 
     expect(payload.notes).toEqual([note]);
+  });
+
+  it("includes reading history", () => {
+    useHistoryStore.setState({
+      entries: [
+        {
+          paperId: "p1",
+          title: "Saved paper",
+          authors: ["A. Author"],
+          published: "2026-01-01",
+          pdfUrl: "https://arxiv.org/pdf/1234.5678",
+          categories: ["cs.AI"],
+          lastOpenedAt: "2026-08-01T00:00:00Z",
+        },
+      ],
+      loaded: true,
+    });
+
+    const payload = buildExportPayload();
+
+    expect(payload.readingHistory).toHaveLength(1);
+    expect(payload.readingHistory[0].paperId).toBe("p1");
   });
 
   it("never exports key-shaped fields (security regression)", () => {
