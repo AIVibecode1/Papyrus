@@ -45,23 +45,25 @@ describe("shared AI resource (src-tauri/prompts.json)", () => {
 
   it("system prompts follow the research-mentor methodology", () => {
     // Mentor persona, natural-language style and researcher thinking must
-    // be present in both languages (user mandate).
+    // be present in both languages (user mandate). Assertions track the
+    // CURRENT prompts wording (the user rewrote them — shorter and
+    // sharper), not the original long versions.
     const en = prompts.systemPromptEn;
     const ar = prompts.systemPromptAr;
     expect(en).toContain("research mentor");
     expect(en).toContain("delve");
     expect(en).toContain("250");
-    expect(en).toContain("table only if it genuinely saves");
+    expect(en).toContain("exclamation marks");
     expect(ar).toContain("مرشد بحثي");
     expect(ar).toContain("حشو");
-    expect(ar).toContain("٢٥٠");
-    expect(ar).toContain("جدولاً فقط");
+    expect(ar).toContain("250");
+    expect(ar).toContain("لاتكس");
   });
 
   it("provides the full-paper mentor structure for the reader feature", () => {
     // Saved now as the single source for the upcoming whole-PDF reader.
     expect(prompts.fullPaperStructureEn).toContain("research mentor");
-    expect(prompts.fullPaperStructureEn).toContain("equations");
+    expect(prompts.fullPaperStructureEn).toContain("equation");
     expect(prompts.fullPaperStructureAr).toContain("المعادلات");
     expect(prompts.fullPaperStructureAr).toContain("مرشدي البحثي");
   });
@@ -69,9 +71,9 @@ describe("shared AI resource (src-tauri/prompts.json)", () => {
   it("provides qa and synthesis prompts in both languages", () => {
     expect(prompts.qaPromptEn).toContain("research mentor");
     expect(prompts.qaPromptEn).toContain("question");
-    expect(prompts.qaPromptAr).toContain("مرشد بحثي");
-    expect(prompts.synthesisPromptEn).toContain("five most important ideas");
-    expect(prompts.synthesisPromptAr).toContain("أهم خمس أفكار");
+    expect(prompts.qaPromptAr).toContain("مرشدي البحثي");
+    expect(prompts.synthesisPromptEn).toContain("important ideas");
+    expect(prompts.synthesisPromptAr).toContain("أهم 5 أفكار");
   });
 
   it("reader message builders match the Rust format strings", () => {
