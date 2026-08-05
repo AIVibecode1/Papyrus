@@ -152,7 +152,7 @@ fn build_fetch_url(
         append_day_range(&mut term, date)?;
     }
 
-    finish_arxiv_url(&term, max, start)
+    finish_arxiv_url(&term, max, start, ArxivSort::SubmittedDate)
 }
 
 /// Year bounds for fielded search (plan 041). Both endpoints are
@@ -193,16 +193,30 @@ fn build_search_url(
     let query = query.trim();
     let mut term = if prefix == "id" {
         // Id queries are exact: normalize (strip `arXiv:` prefix, keep
-        // the safe id charset) and never AND a category onto them.
+        // the safe id charset) and never AND a category onto them. The
+        // id charset is the sanitizer here, so `arXiv:1706.03762` (a
+        // colon) is valid input, not an operator.
         format!("id:{}", normalize_id_query(query)?)
     } else {
-        // Parenthesize the fielded term: arXiv silently DROPS trailing
-        // AND clauses (year range, cat:) when a fielded query has more
-        // than one word (verified live 2026-08). The parentheses make
-        // the whole expression one group so the ANDs are honored. The
-        // term itself is sanitized first, so the parens are server-
-        // generated, never user-injected.
-        format!("({prefix}:{})", validate_query(query)?)
+        // validate_query rejects operator characters (`"`, `(`, `)`,
+        // `:`, `&`, `[`, `]`, `*`, `+`) before anything reaches arXiv.
+        let query = validate_query(query)?;
+        if query.split_whitespace().count() > 1 {
+            // Multi-word terms ship as a QUOTED phrase (server-generated
+            // quotes; user `"` never reaches this point). Two live-
+            // verified reasons (2026-08):
+            // 1. relevance sort: unquoted/parenthesized multi-word terms
+            //    get scrambled ranking — `ti:Attention Is All You Need`
+            //    ranked unrelated papers above 1706.03762; the quoted
+            //    phrase puts the exact match at #1.
+            // 2. trailing AND clauses (year range, cat:) survive the
+            //    quoted phrase, so archive searches keep their bounds.
+            format!("{prefix}:\"{query}\"")
+        } else {
+            // Single-word terms need no wrapping: arXiv honors trailing
+            // AND clauses (verified live), and relevance ranks them fine.
+            format!("{prefix}:{query}")
+        }
     };
 
     if let Some(date) = date {
@@ -239,7 +253,7 @@ fn build_search_url(
         term.push_str(&format!(" AND cat:{category}"));
     }
 
-    finish_arxiv_url(&term, max, start)
+    finish_arxiv_url(&term, max, start, ArxivSort::Relevance)
 }
 
 /// Validates a category code (must look like a `cat:` code).
@@ -354,18 +368,40 @@ fn append_day_range(term: &mut String, date: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// How arXiv should order the result set (plan 050).
+///
+/// Category browse and day browse are inherently "newest first"
+/// (`submittedDate` desc). Free-text and fielded search must rank by
+/// `relevance`, otherwise every query returns "newest papers that
+/// happen to match the words" and foundational archive papers (e.g.
+/// DeepSeek, Jan 2025) lose to 2026 mentions.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ArxivSort {
+    SubmittedDate,
+    Relevance,
+}
+
 /// The common URL tail for every arXiv query.
-fn finish_arxiv_url(term: &str, max: usize, start: usize) -> Result<String, String> {
+fn finish_arxiv_url(
+    term: &str,
+    max: usize,
+    start: usize,
+    sort: ArxivSort,
+) -> Result<String, String> {
+    let sort_by = match sort {
+        ArxivSort::SubmittedDate => "submittedDate",
+        ArxivSort::Relevance => "relevance",
+    };
     let mut url = format!(
-        "{ARXIV_API}?search_query={}&sortBy=submittedDate&sortOrder=descending&max_results={max}",
+        "{ARXIV_API}?search_query={}&sortBy={sort_by}&sortOrder=descending&max_results={max}",
         // Percent-encode the term: arXiv's range grammar (`[` `]` `:`) and
         // any query text must arrive encoded, or the API silently returns
         // zero entries for date ranges.
         urlencode(term),
     );
     if start > 0 {
-        // Pagination: arXiv returns results ordered newest first, so the
-        // next page starts at the current list length.
+        // Pagination: arXiv returns results ordered by the sort above, so
+        // the next page starts at the current list length.
         url.push_str(&format!("&start={start}"));
     }
     Ok(url)
@@ -449,7 +485,7 @@ pub async fn fetch_papers(
     let source = source.trim().to_lowercase();
     let field = field.unwrap_or_else(|| "all".into());
     let field = field.trim().to_lowercase();
-    let limit_to_category = limit_to_category.unwrap_or(true);
+    let limit_to_category = limit_to_category.unwrap_or(false);
     // Years without a search term are a user error, never a silent browse
     // mode: day navigation already covers browsing by date.
     if query.as_deref().is_none_or(|q| q.trim().is_empty())
@@ -1069,12 +1105,60 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    fn search_url_uses_relevance_sort() {
+        // Keyword/fielded search ranks by relevance (plan 050): otherwise
+        // archive papers lose to "newest that happen to match".
+        let url = search_url("cs.AI", "DeepSeek-R1", "all", None, None, false, 20)
+            .expect("url should build");
+        assert!(
+            url.contains("sortBy=relevance&sortOrder=descending"),
+            "got: {url}"
+        );
+    }
+
+    #[test]
+    fn browse_url_uses_submitted_date_sort() {
+        // Category browse and day browse stay newest-first (plan 050).
+        let browse = build_fetch_url("cs.AI", None, None, 20, 0).expect("browse url should build");
+        assert!(
+            browse.contains("sortBy=submittedDate&sortOrder=descending"),
+            "got: {browse}"
+        );
+        let day = build_fetch_url("cs.AI", None, Some("2026-08-01"), 20, 0)
+            .expect("day url should build");
+        assert!(
+            day.contains("sortBy=submittedDate&sortOrder=descending"),
+            "got: {day}"
+        );
+    }
+
+    #[test]
+    fn search_url_without_limit_omits_cat() {
+        // The default (limit off) must not AND the active category onto a
+        // query: a cs.CL or cs.LG hit with a perfect title match has to
+        // surface while the user sits on cs.AI (plan 050).
+        let url = search_url(
+            "cs.AI",
+            "Attention Is All You Need",
+            "title",
+            None,
+            None,
+            false,
+            20,
+        )
+        .expect("url should build");
+        assert!(!url.contains("cat%3A"), "got: {url}");
+    }
+
+    #[test]
     fn search_url_maps_each_field_to_arxiv_prefix() {
+        // Single-word terms are plain `field:term` (no wrapping needed;
+        // arXiv honors trailing AND clauses and relevance ranks them).
         let cases = [
-            ("all", "search_query=%28all%3Atransformer%29"),
-            ("title", "search_query=%28ti%3Atransformer%29"),
-            ("author", "search_query=%28au%3Atransformer%29"),
-            ("abstract", "search_query=%28abs%3Atransformer%29"),
+            ("all", "search_query=all%3Atransformer"),
+            ("title", "search_query=ti%3Atransformer"),
+            ("author", "search_query=au%3Atransformer"),
+            ("abstract", "search_query=abs%3Atransformer"),
             ("id", "search_query=id%3A1706.03762"),
         ];
         for (field, expected) in cases {
@@ -1090,6 +1174,49 @@ mod tests {
                 "field {field} must produce {expected}, got: {url}"
             );
         }
+    }
+
+    #[test]
+    fn search_url_quotes_multi_word_terms() {
+        // Multi-word terms ship as a server-generated quoted phrase: with
+        // relevance sort an unquoted phrase ranks unrelated papers above
+        // the exact match (live-verified), and the quotes keep the
+        // trailing year-range and cat: clauses honored.
+        let url = search_url(
+            "cs.AI",
+            "Attention Is All You Need",
+            "title",
+            None,
+            None,
+            false,
+            20,
+        )
+        .expect("url should build");
+        assert!(
+            url.contains("search_query=ti%3A%22Attention%20Is%20All%20You%20Need%22"),
+            "got: {url}"
+        );
+
+        // Multi-word quoted + year range + cat clause all present.
+        let deepseek = search_url(
+            "cs.AI",
+            "DeepSeek R1",
+            "all",
+            Some(2025),
+            Some(2025),
+            true,
+            20,
+        )
+        .expect("deepseek url should build");
+        assert!(
+            deepseek.contains("all%3A%22DeepSeek%20R1%22"),
+            "got: {deepseek}"
+        );
+        assert!(
+            deepseek.contains("submittedDate%3A%5B20250101%20TO%2020260101%5D"),
+            "got: {deepseek}"
+        );
+        assert!(deepseek.contains("%20AND%20cat%3Acs.AI"), "got: {deepseek}");
     }
 
     #[test]
