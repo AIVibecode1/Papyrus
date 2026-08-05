@@ -80,6 +80,7 @@ export function SettingsPage() {
         "papyrus-reader-pos",
         "papyrus-reader-split",
         "papyrus-reader-walkthrough-v1",
+        "papyrus-notes-v1",
       ]) {
         localStorage.removeItem(key);
       }

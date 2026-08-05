@@ -12,9 +12,11 @@ fn clear_dir(dir: &Path) -> Result<(), String> {
     fs::create_dir_all(dir).map_err(|e| format!("Cannot recreate the cache directory: {e}"))
 }
 
-/// Wipes the on-disk caches (downloaded PDFs and the citation cache) while
-/// leaving every user setting, provider and API key untouched. Called from
-/// the Settings "Clear cache and saved data" action.
+/// Wipes the on-disk caches (downloaded PDFs, the citation cache and the
+/// user's notes) while leaving every user setting, provider and API key
+/// untouched. Called from the Settings "Clear cache and saved data"
+/// action — notes are authored user data, but the button explicitly
+/// clears saved data too.
 #[tauri::command]
 pub fn clear_app_cache(app: AppHandle) -> Result<(), String> {
     let pdf_dir = app
@@ -28,6 +30,11 @@ pub fn clear_app_cache(app: AppHandle) -> Result<(), String> {
     if citation_file.exists() {
         fs::remove_file(&citation_file)
             .map_err(|e| format!("Cannot clear the citation cache: {e}"))?;
+    }
+
+    let notes_file = crate::notes::notes_path(Some(&app));
+    if notes_file.exists() {
+        fs::remove_file(&notes_file).map_err(|e| format!("Cannot clear the notes: {e}"))?;
     }
     Ok(())
 }

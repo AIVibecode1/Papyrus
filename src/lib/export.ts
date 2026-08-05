@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { isTauri } from "@/lib/ai";
-import type { Paper } from "@/lib/types";
+import type { Paper, PaperNote } from "@/lib/types";
 import { useFavoritesStore } from "@/stores/favorites";
+import { useNotesStore } from "@/stores/notes";
 
 const CHAT_STORAGE_KEY = "papyrus-reader-chat-v1";
 
@@ -17,6 +18,8 @@ export interface ExportPayload {
   favorites: Paper[];
   /** Chat transcripts keyed by paper id (role/content only — no ids). */
   chat: Record<string, ExportChatTurn[]>;
+  /** Notes and highlights (plan 042); imported merged by note id. */
+  notes: PaperNote[];
 }
 
 /** Maps a chat message to its exportable { role, content } shape; returns
@@ -31,10 +34,12 @@ function toChatTurn(value: unknown): ExportChatTurn | null {
   return null;
 }
 
-/** Collects the user's saved data (favorites + chat transcripts). */
+/** Collects the user's saved data (favorites + chat transcripts + notes). */
 export function buildExportPayload(): ExportPayload {
   const favorites = useFavoritesStore.getState();
   if (!favorites.loaded) favorites.load();
+  const notes = useNotesStore.getState();
+  if (!notes.loaded) void notes.load();
 
   let chatRaw: unknown = {};
   try {
@@ -57,6 +62,7 @@ export function buildExportPayload(): ExportPayload {
     exportedAt: new Date().toISOString(),
     favorites: Object.values(favorites.byId),
     chat,
+    notes: notes.notes,
   };
 }
 
@@ -86,6 +92,7 @@ export interface ImportSummary {
   app: string;
   favorites: number;
   chats: number;
+  notes: number;
 }
 
 /** Structural validation for the browser path (the Tauri path validates
@@ -95,6 +102,7 @@ function parseExportPayload(raw: string): ExportPayload {
   if (value.app !== "papyrus") throw new Error("Not a Papyrus export file");
   if (!Array.isArray(value.favorites)) value.favorites = [];
   if (!value.chat || typeof value.chat !== "object") value.chat = {};
+  if (!Array.isArray(value.notes)) value.notes = [];
   return value as ExportPayload;
 }
 
@@ -116,8 +124,13 @@ export async function importSavedData(fileContent: string): Promise<ImportSummar
       app: "papyrus",
       favorites: payload.favorites.length,
       chats: Object.keys(payload.chat).length,
+      notes: payload.notes.length,
     };
   }
+
+  // Merge notes: same id -> the newer updatedAt wins (incoming notes
+  // with a newer timestamp replace, older ones are skipped).
+  await useNotesStore.getState().importNotes(payload.notes);
 
   // Merge favorites: existing entries win (the user's current data is
   // newer), imported ones fill the gaps.

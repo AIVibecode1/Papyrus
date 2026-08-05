@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   deleteKey: vi.fn(async () => {}),
   hasKey: vi.fn(async () => true),
   exportSavedData: vi.fn(async () => "/tmp/papyrus-export.json"),
-  importSavedData: vi.fn(async () => ({ app: "papyrus", favorites: 2, chats: 1 })),
+  importSavedData: vi.fn(async () => ({ app: "papyrus", favorites: 2, chats: 1, notes: 0 })),
   invoke: vi.fn(async () => {}),
   providers: [] as ProviderConfig[],
   activeProviderId: null as string | null,
@@ -105,7 +105,7 @@ describe("settings page", () => {
     fireEvent.change(input!, { target: { files: [file] } });
 
     expect(
-      await screen.findByText(/Imported 2 saved papers and 1 chat transcripts/),
+      await screen.findByText(/Imported 2 saved papers, 1 chat transcripts and 0 notes/),
     ).toBeInTheDocument();
     expect(mocks.importSavedData).toHaveBeenCalledWith(
       '{"app":"papyrus","favorites":[],"chat":{}}',

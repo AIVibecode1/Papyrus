@@ -42,13 +42,14 @@ pub fn export_data(payload: String) -> Result<String, String> {
 }
 
 /// What the import validated and how much data it carries, so the UI can
-/// report "imported N papers and M chats".
+/// report "imported N papers, M chats and K notes".
 #[derive(serde::Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportSummary {
     pub app: String,
     pub favorites: usize,
     pub chats: usize,
+    pub notes: usize,
 }
 
 /// Validates a Papyrus export payload and reports its contents. The
@@ -72,10 +73,16 @@ pub fn import_data(payload: String) -> Result<ImportSummary, String> {
         .and_then(|v| v.as_object())
         .map(|o| o.len())
         .unwrap_or(0);
+    let notes = value
+        .get("notes")
+        .and_then(|v| v.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
     Ok(ImportSummary {
         app: "papyrus".into(),
         favorites,
         chats,
+        notes,
     })
 }
 
@@ -113,11 +120,12 @@ mod tests {
 
     #[test]
     fn import_validates_the_payload_and_reports_counts() {
-        let payload = r#"{"app":"papyrus","exportedAt":"2026-08-04T00:00:00Z","favorites":[{"id":"a1"},{"id":"a2"}],"chat":{"p1":[]}}"#;
+        let payload = r#"{"app":"papyrus","exportedAt":"2026-08-04T00:00:00Z","favorites":[{"id":"a1"},{"id":"a2"}],"chat":{"p1":[]},"notes":[{"id":"n1"},{"id":"n2"},{"id":"n3"}]}"#;
         let summary = import_data(payload.into()).expect("valid payload imports");
         assert_eq!(summary.app, "papyrus");
         assert_eq!(summary.favorites, 2);
         assert_eq!(summary.chats, 1);
+        assert_eq!(summary.notes, 3);
     }
 
     #[test]

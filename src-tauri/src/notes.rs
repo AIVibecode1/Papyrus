@@ -50,7 +50,7 @@ struct NotesFile {
 /// Where notes live. Test hook: PAPYRUS_NOTES_DIR overrides the app data
 /// directory (tests cannot construct an AppHandle — same pattern as
 /// citations.rs).
-fn notes_path(app: Option<&tauri::AppHandle>) -> PathBuf {
+pub(crate) fn notes_path(app: Option<&tauri::AppHandle>) -> PathBuf {
     if let Ok(dir) = std::env::var("PAPYRUS_NOTES_DIR") {
         return PathBuf::from(dir).join(NOTES_FILE);
     }

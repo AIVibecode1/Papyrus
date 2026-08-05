@@ -2,8 +2,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { buildExportPayload, importSavedData } from "@/lib/export";
-import type { Paper } from "@/lib/types";
+import type { Paper, PaperNote } from "@/lib/types";
 import { useFavoritesStore } from "@/stores/favorites";
+import { useNotesStore } from "@/stores/notes";
 
 const paper: Paper = {
   id: "p1",
@@ -15,10 +16,21 @@ const paper: Paper = {
   categories: ["cs.AI"],
 };
 
+const note: PaperNote = {
+  id: "n1",
+  paperId: "p1",
+  paperTitle: "Saved paper",
+  kind: "note",
+  body: "A local note.",
+  createdAt: "2026-08-01T00:00:00Z",
+  updatedAt: "2026-08-02T00:00:00Z",
+};
+
 describe("buildExportPayload", () => {
   beforeEach(() => {
     localStorage.clear();
     useFavoritesStore.setState({ ids: [], byId: {}, loaded: false });
+    useNotesStore.setState({ notes: [], loaded: false });
   });
 
   it("includes favorites and chat transcripts", () => {
@@ -41,6 +53,14 @@ describe("buildExportPayload", () => {
       { role: "user", content: "What is this?" },
       { role: "assistant", content: "A paper about things." },
     ]);
+  });
+
+  it("includes saved notes", () => {
+    useNotesStore.setState({ notes: [note], loaded: true });
+
+    const payload = buildExportPayload();
+
+    expect(payload.notes).toEqual([note]);
   });
 
   it("drops malformed chat entries and empty transcripts", () => {
@@ -74,6 +94,7 @@ describe("importSavedData", () => {
   beforeEach(() => {
     localStorage.clear();
     useFavoritesStore.setState({ ids: [], byId: {}, loaded: false });
+    useNotesStore.setState({ notes: [], loaded: false });
   });
 
   const exportFile = JSON.stringify({
@@ -81,6 +102,10 @@ describe("importSavedData", () => {
     exportedAt: "2026-08-04T00:00:00Z",
     favorites: [paper, { ...paper, id: "p2", title: "Imported paper" }],
     chat: { p1: [{ role: "user", content: "Imported question?" }] },
+    notes: [
+      { ...note, id: "n1", body: "Imported (older) note", updatedAt: "2026-08-01T00:00:00Z" },
+      { ...note, id: "n2", body: "Brand new imported note", updatedAt: "2026-08-03T00:00:00Z" },
+    ],
   });
 
   it("merges favorites (existing entries win) and appends chats", async () => {
@@ -95,6 +120,7 @@ describe("importSavedData", () => {
     expect(summary.app).toBe("papyrus");
     expect(summary.favorites).toBe(2);
     expect(summary.chats).toBe(1);
+    expect(summary.notes).toBe(2);
     // p2 was imported; p1 kept the LOCAL (newer) copy.
     const byId = useFavoritesStore.getState().byId;
     expect(byId.p2.title).toBe("Imported paper");
@@ -105,6 +131,22 @@ describe("importSavedData", () => {
       "local question",
       "Imported question?",
     ]);
+  });
+
+  it("merges notes by id with the newer updatedAt winning", async () => {
+    // The local copy of n1 is NEWER than the imported one.
+    useNotesStore.setState({
+      notes: [{ ...note, id: "n1", body: "Local (newer) note" }],
+      loaded: true,
+    });
+
+    await importSavedData(exportFile);
+
+    const merged = useNotesStore.getState().notes;
+    expect(merged).toHaveLength(2);
+    // n1 kept the local body; n2 was added.
+    expect(merged.find((n) => n.id === "n1")?.body).toBe("Local (newer) note");
+    expect(merged.find((n) => n.id === "n2")?.body).toBe("Brand new imported note");
   });
 
   it("rejects a file that is not a Papyrus export", async () => {
