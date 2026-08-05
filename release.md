@@ -19,6 +19,64 @@ Rules:
 
 ---
 
+## v1.1.0 - 2026-08-05
+
+Status: installers built, not yet published on GitHub.
+Built from: 608651a (release commit; feature commits 040-046 precede it)
+Quality gates: 297 frontend tests, 117 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker, CI on
+Windows and macOS (artifacts uploaded on every run; tag v1.1.0
+triggers a draft release with both installers).
+
+- Advanced search: fielded modes (All, Title, Author, Abstract, exact
+  arXiv ID) with a mode select, year-range presets (last 5 years,
+  2010-2016, before 2010) plus custom from/to, optional scoping to the
+  current field, and one-click clear or Escape that restores the daily
+  feed. A status line always says what you are looking at. Old papers
+  are now findable, not just the newest 20.
+- Search correctness: fielded multi-word queries are parenthesized so
+  arXiv honors the year range and category clauses (verified live
+  against the export API), query terms reject arXiv operator
+  characters including range brackets and wildcards, and year ranges
+  are validated server-side.
+- Notes and highlights: save a PDF text selection as a highlight with
+  your comment, add free notes from the reader, and browse everything
+  in the Notes hub (search, per-paper filter, delete with confirm).
+  Notes persist in the app data folder via Rust commands with atomic
+  writes, per-note and total size caps, corrupt-file recovery, and a
+  serialized upsert path so two rapid saves can never lose a note.
+- Export now includes notes and imports merge by id (newer wins);
+  exports are regression-tested to never contain key-shaped fields.
+- Codex preset (OpenAI Codex): GPT-5.3 Codex default with the GPT-5.6
+  Sol/Terra/Luna picker, via the standard OpenAI API. Same keychain
+  path as every provider; no OAuth. Settings show a connection
+  checklist and a link to platform.openai.com/api-keys. Model ids
+  verified against OpenAI's public API list.
+- Reader information architecture: the side panel is now Overview |
+  Walkthrough | Chat | Notes. Overview is the landing tab (ids, venue,
+  citations, abstract) with entry points for the whole-paper mentor
+  and for searching the title on Semantic Scholar (the papers view
+  opens with the search prefilled). Ask was renamed Chat. Streaming
+  Stop stays visible on every tab.
+- Ask about a note: notes in the reader pre-fill the chat with the
+  note as context (explicit send, cancellable).
+- RTL and UX: a CI gate fails on physical CSS direction utilities;
+  dropdowns align to the trigger's start edge in both directions;
+  paper-card titles clamp to two lines with a tuned leading; muted
+  text contrast raised to WCAG AA in all three themes (light token
+  adjusted; dark was already compliant); shared empty/error/loading
+  panels; EN/AR key parity is now a test.
+- Prompt calibration: the mentor prefers plain language first (precise
+  term in parentheses only when it helps) and never invents equations
+  or numbers that are not in the section text; the chat's
+  only-context honesty rule is unchanged.
+- Bug fixes: notes saved while the first disk snapshot was loading
+  could be clobbered (merged with tombstones now); a provider delete
+  already removes its keychain entry (verified); capabilities remain
+  least-privilege (no filesystem or HTTP scope for the webview).
+
+---
+
 ## v1.0.11 - 2026-08-05
 
 Status: installers built, not yet published on GitHub.
