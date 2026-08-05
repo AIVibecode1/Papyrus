@@ -5,6 +5,7 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 
@@ -125,9 +126,19 @@ pub fn list_notes(app: tauri::AppHandle) -> Result<Vec<PaperNote>, String> {
     Ok(load_notes(&notes_path(Some(&app))))
 }
 
+/// Serializes the load-modify-save cycle (plan 046): two upserts racing
+/// each other would otherwise both read the file, both write, and the
+/// last writer would silently drop the other's note. The webview can
+/// fire several upserts back to back (save highlight + add note).
+fn notes_lock() -> &'static Mutex<()> {
+    static NOTES_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    NOTES_LOCK.get_or_init(|| Mutex::new(()))
+}
+
 #[tauri::command]
 pub fn upsert_note(app: tauri::AppHandle, note: PaperNote) -> Result<PaperNote, String> {
     validate_note(&note)?;
+    let _guard = notes_lock().lock().unwrap_or_else(|p| p.into_inner());
     let path = notes_path(Some(&app));
     let mut notes = load_notes(&path);
     match notes.iter_mut().find(|n| n.id == note.id) {
@@ -143,6 +154,7 @@ pub fn delete_note(app: tauri::AppHandle, id: String) -> Result<(), String> {
     if id.trim().is_empty() || id.len() > 128 {
         return Err("Invalid note id".into());
     }
+    let _guard = notes_lock().lock().unwrap_or_else(|p| p.into_inner());
     let path = notes_path(Some(&app));
     let mut notes = load_notes(&path);
     notes.retain(|n| n.id != id);
@@ -155,6 +167,19 @@ mod tests {
 
     /// The env var is process-global; serialize the tests that touch it.
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Exercises the raw load-modify-save cycle (the commands need an
+    /// AppHandle), so the race regression runs against the same
+    /// functions the commands wrap, under the same lock.
+    fn raw_upsert(path: &PathBuf, note: &PaperNote) -> Result<(), String> {
+        let _guard = notes_lock().lock().unwrap_or_else(|p| p.into_inner());
+        let mut notes = load_notes(path);
+        match notes.iter_mut().find(|n| n.id == note.id) {
+            Some(existing) => *existing = note.clone(),
+            None => notes.push(note.clone()),
+        }
+        save_notes(path, &notes)
+    }
 
     fn temp_notes_dir(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("papyrus-notes-test-{name}-{}", std::process::id()))
@@ -315,5 +340,40 @@ mod tests {
         })
         .expect_err("empty id rejected");
         assert!(err.contains("required"), "got: {err}");
+    }
+
+    #[test]
+    fn concurrent_upserts_do_not_lose_notes() {
+        // Two threads upsert DIFFERENT notes through the same locked
+        // load-modify-save cycle the commands use. Before the lock,
+        // the interleaved read-read-write-write dropped one of them.
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let dir = temp_notes_dir("concurrent");
+        let _ = fs::remove_dir_all(&dir);
+        unsafe {
+            std::env::set_var("PAPYRUS_NOTES_DIR", &dir);
+        }
+        let path = notes_path(None);
+
+        let a = sample_note("race-a");
+        let b = sample_note("race-b");
+        let path_a = path.clone();
+        let path_b = path.clone();
+        let t1 = std::thread::spawn(move || raw_upsert(&path_a, &a));
+        let t2 = std::thread::spawn(move || raw_upsert(&path_b, &b));
+        t1.join().unwrap().expect("first upsert ok");
+        t2.join().unwrap().expect("second upsert ok");
+
+        let notes = load_notes(&path);
+        let ids: Vec<&str> = notes.iter().map(|n| n.id.as_str()).collect();
+        assert!(
+            ids.contains(&"race-a") && ids.contains(&"race-b"),
+            "both notes must survive: {ids:?}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+        unsafe {
+            std::env::remove_var("PAPYRUS_NOTES_DIR");
+        }
     }
 }
