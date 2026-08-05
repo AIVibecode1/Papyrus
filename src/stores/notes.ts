@@ -40,6 +40,11 @@ export type NoteInput = Omit<PaperNote, "id" | "createdAt" | "updatedAt"> & { id
 interface NotesState {
   notes: PaperNote[];
   loaded: boolean;
+  /** True while the first disk snapshot is in flight (plan 046): marks
+   * the window where a concurrent upsert/remove must survive the merge. */
+  loading: boolean;
+  /** Ids removed while the snapshot was in flight (tombstones). */
+  pendingDeletes: string[];
   /** When set, the hub shows only notes for this paper. */
   filterPaperId: string | null;
   /** Hub search: matches title, body and quote. */
@@ -51,6 +56,27 @@ interface NotesState {
   setQuery: (q: string) => void;
   /** Merges imported notes; same id -> the newer updatedAt wins. */
   importNotes: (notes: PaperNote[]) => Promise<void>;
+}
+
+/** Union merge: local optimistic copies win when they are NEWER than the
+ * disk snapshot (they were written after the snapshot was taken), and
+ * ids in `pendingDeletes` (removed while the snapshot was in flight) are
+ * never resurrected. */
+export function mergeNotes(
+  disk: PaperNote[],
+  local: PaperNote[],
+  pendingDeletes: string[] = [],
+): PaperNote[] {
+  const byId = new Map<string, PaperNote>();
+  for (const note of local) byId.set(note.id, note);
+  for (const note of disk) {
+    if (pendingDeletes.includes(note.id)) continue;
+    const localNote = byId.get(note.id);
+    if (!localNote || localNote.updatedAt <= note.updatedAt) {
+      byId.set(note.id, note);
+    }
+  }
+  return [...byId.values()];
 }
 
 /** Notes for one paper, newest first (pure helper for reactive selectors). */
@@ -93,22 +119,33 @@ export function filteredNotes(state: NotesState): PaperNote[] {
 export const useNotesStore = create<NotesState>((set, get) => ({
   notes: [],
   loaded: false,
+  loading: false,
+  pendingDeletes: [],
   filterPaperId: null,
   query: "",
 
   load: async () => {
     if (get().loaded) return;
-    let notes: PaperNote[];
+    // Mark loaded optimistically: any upsert/remove that lands while the
+    // disk snapshot is in flight is local truth and must survive the
+    // merge below (plan 046: a slow list_notes must not clobber a note
+    // saved a moment ago).
+    set({ loaded: true, loading: true });
+    let disk: PaperNote[] = [];
     if (isTauri()) {
       try {
-        notes = await invoke<PaperNote[]>("list_notes");
+        disk = await invoke<PaperNote[]>("list_notes");
       } catch {
-        notes = [];
+        disk = [];
       }
     } else {
-      notes = loadBrowserNotes();
+      disk = loadBrowserNotes();
     }
-    set({ notes, loaded: true });
+    set((s) => ({
+      notes: mergeNotes(disk, s.notes, s.pendingDeletes),
+      loading: false,
+      pendingDeletes: [],
+    }));
   },
 
   upsert: async (input) => {
@@ -136,6 +173,11 @@ export const useNotesStore = create<NotesState>((set, get) => ({
 
   remove: async (id) => {
     set((s) => ({ notes: s.notes.filter((n) => n.id !== id) }));
+    // Tombstone the id while the first snapshot is in flight so the
+    // merge cannot resurrect it (plan 046).
+    if (get().loading) {
+      set((s) => ({ pendingDeletes: [...s.pendingDeletes, id] }));
+    }
     if (isTauri()) {
       await invoke("delete_note", { id });
     } else {
