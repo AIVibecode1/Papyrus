@@ -6,6 +6,7 @@ import { Markdown } from "@/components/markdown/markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { StatePanel } from "@/components/ui/state-panel";
 import { Input } from "@/components/ui/input";
 import { formatUiDate } from "@/lib/dates";
 import type { Paper, PaperNote } from "@/lib/types";
@@ -221,21 +222,17 @@ export function NotesPage() {
 
       <div className="mt-4 flex flex-col gap-3">
         {!loaded ? (
-          <Card className="border-dashed">
-            <CardContent className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              {t("notes.loadError")}
-            </CardContent>
-          </Card>
+          <StatePanel
+            icon={<Loader2 className="size-8 animate-spin" />}
+            title={t("notes.loadError")}
+            muted
+          />
         ) : visible.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <NotebookPen className="size-8 text-muted-foreground" />
-              <p className="text-sm font-medium text-muted-foreground">
-                {query.trim() || filterPaperId ? t("notes.noResults") : t("notes.empty")}
-              </p>
-            </CardContent>
-          </Card>
+          <StatePanel
+            icon={<NotebookPen className="size-8" />}
+            title={query.trim() || filterPaperId ? t("notes.noResults") : t("notes.empty")}
+            muted
+          />
         ) : (
           visible.map((note) => (
             <NoteCard

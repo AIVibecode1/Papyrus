@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatePanel } from "@/components/ui/state-panel";
 import { pickPapers } from "@/lib/picks";
 import { sortPapers, type PaperSortMode } from "@/lib/paper-sort";
 import { useFavoritesStore } from "@/stores/favorites";
@@ -253,39 +254,36 @@ export function PaperList() {
           )}
 
           {!loading && error === SCHOLAR_SEARCH_REQUIRED && (
-            <Card className="border-border">
-              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-                <Search className="size-8 text-muted-foreground" />
-                <p className="text-sm font-medium">{t("papers.scholarNeedsQuery")}</p>
-              </CardContent>
-            </Card>
+            <StatePanel
+              icon={<Search className="size-8" />}
+              title={t("papers.scholarNeedsQuery")}
+              muted
+            />
           )}
 
           {!loading && error && error !== SCHOLAR_SEARCH_REQUIRED && (
-            <Card className="border-destructive/40">
-              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-                <AlertCircle className="size-8 text-destructive" />
-                <p className="text-sm font-medium">{t("papers.error")}</p>
-                <p className="max-w-md text-xs text-muted-foreground">{error}</p>
+            <StatePanel
+              icon={<AlertCircle className="size-8 text-destructive" />}
+              title={t("papers.error")}
+              description={error}
+              tone="destructive"
+              action={
                 <Button size="sm" variant="outline" onClick={() => void refresh()}>
                   {t("papers.retry")}
                 </Button>
-              </CardContent>
-            </Card>
+              }
+            />
           )}
 
           {!loading &&
             !error &&
             savedOnly &&
             (savedIds.length === 0 ? (
-              <Card className="border-dashed">
-                <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-                  <Bookmark className="size-8 text-muted-foreground" />
-                  <p className="text-sm font-medium text-muted-foreground">
-                    {t("papers.noFavorites")}
-                  </p>
-                </CardContent>
-              </Card>
+              <StatePanel
+                icon={<Bookmark className="size-8" />}
+                title={t("papers.noFavorites")}
+                muted
+              />
             ) : (
               <div className="flex flex-col gap-4">
                 {savedIds.map((id, i) => (
@@ -295,21 +293,20 @@ export function PaperList() {
             ))}
 
           {!loading && !error && !savedOnly && papers.length === 0 && (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-                {query.trim() ? (
-                  <Search className="size-8 text-muted-foreground" />
-                ) : (
-                  <BookOpenText className="size-8 text-muted-foreground" />
-                )}
-                <p className="text-sm font-medium text-muted-foreground">
-                  {query.trim()
-                    ? t("papers.noSearchResults", { query: query.trim() })
-                    : date
-                      ? t("papers.noPapersOnDay")
-                      : t("papers.empty")}
-                </p>
-                {query.trim() && (
+            <StatePanel
+              icon={
+                query.trim() ? <Search className="size-8" /> : <BookOpenText className="size-8" />
+              }
+              title={
+                query.trim()
+                  ? t("papers.noSearchResults", { query: query.trim() })
+                  : date
+                    ? t("papers.noPapersOnDay")
+                    : t("papers.empty")
+              }
+              muted
+              action={
+                query.trim() ? (
                   <Button
                     size="sm"
                     variant="outline"
@@ -320,9 +317,9 @@ export function PaperList() {
                   >
                     {t("papers.clearSearch")}
                   </Button>
-                )}
-              </CardContent>
-            </Card>
+                ) : undefined
+              }
+            />
           )}
 
           {!loading && !error && !savedOnly && papers.length > 0 && (
