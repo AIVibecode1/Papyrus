@@ -240,7 +240,9 @@ export const usePapersStore = create<PapersState>((set, get) => ({
     void fetchCitations(needed).then(({ counts, reachable }) => {
       // A newer attempt superseded this one: never touch the flag.
       if (seq !== citationsSeq) return;
-      const entries = Object.entries(counts);
+      // Defensive: a backend (or test mock) may answer without the counts
+      // map; treat that as "no counts" instead of crashing the batch.
+      const entries = Object.entries(counts ?? {});
       if (entries.length > 0) {
         set((s) => ({ citations: { ...s.citations, ...Object.fromEntries(entries) } }));
       }
