@@ -78,6 +78,8 @@ export function SettingsPage() {
         "papyrus-favorites",
         "papyrus-reader-chat-v1",
         "papyrus-reader-pos",
+        "papyrus-reader-split",
+        "papyrus-reader-walkthrough-v1",
       ]) {
         localStorage.removeItem(key);
       }

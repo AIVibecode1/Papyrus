@@ -31,18 +31,21 @@ export async function renderInQueue(
   views: PageView[],
   render: (view: PageView, index: number) => Promise<void>,
   isCancelled: () => boolean,
+  range?: { start: number; end: number },
 ): Promise<void> {
   // Render several pages concurrently: a strictly sequential queue paints
   // slowly on long PDFs, leaving scrolled-to pages black for seconds.
   // Each page takes a unique index before any await, so no page is
   // rendered twice; per-page failures are contained (renderPage catches).
   const CONCURRENCY = 4;
-  let next = 0;
+  const start = range?.start ?? 0;
+  const end = range ? Math.min(range.end, views.length - 1) : views.length - 1;
+  let next = start;
   const worker = async () => {
     while (!isCancelled()) {
       const i = next;
       next += 1;
-      if (i >= views.length) return;
+      if (i > end) return;
       try {
         await render(views[i], i);
       } catch {
@@ -50,7 +53,9 @@ export async function renderInQueue(
       }
     }
   };
-  const workers = Array.from({ length: Math.min(CONCURRENCY, views.length) }, () => worker());
+  const workers = Array.from({ length: Math.min(CONCURRENCY, Math.max(0, end - start + 1)) }, () =>
+    worker(),
+  );
   await Promise.all(workers);
 }
 
@@ -353,6 +358,88 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   // Monotonic id of the current render run: bumping it cancels the
   // in-flight run (zoom changes must stop the old loop immediately).
   const renderRunRef = useRef(0);
+  // Virtualization window: only pages near the scroll viewport mount
+  // canvases. A 74-page paper at 125% display scale pins ~1.4GB of
+  // canvas memory in WebView2, and Chromium reclaims that by blanking
+  // canvases under pressure — pages "disappearing" while scrolling.
+  // Off-screen pages keep a same-height placeholder so the scrollbar
+  // never jumps; canvases mount (and render) as they approach.
+  const PAGE_MARGIN = 2; // pages kept rendered beyond the viewport
+  const [visibleRange, setVisibleRange] = useState<{ start: number; end: number } | null>(null);
+  const visibleRangeRef = useRef<{ start: number; end: number } | null>(null);
+  // Indices whose current render attempt is done (painted or failed):
+  // scroll-in renders only touch pages that still need paint.
+  const paintedRef = useRef(new Set<number>());
+  const rangeRafRef = useRef<number | null>(null);
+
+  const measureRange = useCallback(() => {
+    const el = containerRef.current;
+    const wraps = pageWrapRefs.current;
+    if (!el || wraps.length === 0) return;
+    const h = el.clientHeight;
+    // No layout metrics (jsdom, pre-mount): keep null = all pages
+    // visible, which is the conservative fallback for tests.
+    if (h <= 0) return;
+    const top = el.scrollTop;
+    const bottom = top + h;
+    let first = -1;
+    let last = -1;
+    for (let i = 0; i < wraps.length; i += 1) {
+      const w = wraps[i];
+      if (!w) continue;
+      const ot = w.offsetTop;
+      const ob = ot + w.offsetHeight;
+      if (ob <= top) continue;
+      if (ot >= bottom) break;
+      if (first < 0) first = i;
+      last = i;
+    }
+    const start = Math.max(0, (first < 0 ? 0 : first) - PAGE_MARGIN);
+    const end = Math.min(
+      wraps.length - 1,
+      (last < 0 ? Math.min(wraps.length - 1, PAGE_MARGIN) : last) + PAGE_MARGIN,
+    );
+    const next = { start, end };
+    const cur = visibleRangeRef.current;
+    if (!cur || cur.start !== next.start || cur.end !== next.end) {
+      visibleRangeRef.current = next;
+      setVisibleRange(next);
+    }
+  }, []);
+
+  // Paint pages as they scroll into the window; forget pages that left
+  // (their canvases unmount, so a later return must repaint them).
+  useEffect(() => {
+    const range = visibleRange;
+    if (!range) return;
+    for (const i of paintedRef.current) {
+      if (i < range.start || i > range.end) paintedRef.current.delete(i);
+    }
+    const run = renderRunRef.current;
+    const views = viewportsRef.current;
+    const need: number[] = [];
+    for (let i = range.start; i <= range.end; i += 1) {
+      if (paintedRef.current.has(i) || !views[i] || !canvasRefs.current[i]) continue;
+      // Do NOT mark painted here: the queue's paint-once guard does,
+      // right before renderPage. Marking first made the guard skip the
+      // page, leaving its fresh canvas blank forever — the
+      // disappearing-page bug.
+      need.push(i);
+    }
+    if (need.length === 0) return;
+    void renderInQueue(
+      views,
+      (view, index) => {
+        if (paintedRef.current.has(index)) return Promise.resolve();
+        paintedRef.current.add(index);
+        return renderPage(view, index, () => run !== renderRunRef.current);
+      },
+      () => run !== renderRunRef.current,
+      { start: need[0], end: need[need.length - 1] },
+    ).catch(() => {
+      // contained: the retry/repaint machinery owns failed pages
+    });
+  }, [visibleRange, renderPage]);
   // Monotonic id of the current canvas GENERATION: canvases are keyed by
   // it, so every render run mounts FRESH canvas elements. A canvas that
   // had a cancelled render keeps receiving the cancelled task's residual
@@ -378,16 +465,27 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
         viewportsRef.current = next;
         setPages(next);
         setPageStatus({});
+        paintedRef.current.clear();
         // Bump the canvas generation and wait one frame: React commits
         // the fresh canvas elements (and updates the refs) before the
         // queue starts painting.
         canvasGenRef.current += 1;
         setCanvasGen(canvasGenRef.current);
         await new Promise<void>((r) => requestAnimationFrame(() => r()));
+        // Only pages in the scroll window (plus the margin) paint in the
+        // main run; the rest paint as they scroll in. Without layout
+        // metrics the range is null and everything renders (tests).
+        measureRange();
+        const range = visibleRangeRef.current ?? { start: 0, end: next.length - 1 };
         await renderInQueue(
           next,
-          (view, index) => renderPage(view, index, () => run !== renderRunRef.current),
+          (view, index) => {
+            if (paintedRef.current.has(index)) return Promise.resolve();
+            paintedRef.current.add(index);
+            return renderPage(view, index, () => run !== renderRunRef.current);
+          },
           () => run !== renderRunRef.current,
+          range,
         );
         // Pages whose final render attempt failed are repainted on the
         // next frame at the current scale, so a transient busy-canvas
@@ -531,6 +629,13 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
         break;
       }
     }
+    // Keep the virtualization window in step with the scroll, one rAF
+    // at a time (a burst of scroll events must not schedule a pile).
+    if (rangeRafRef.current !== null) return;
+    rangeRafRef.current = requestAnimationFrame(() => {
+      rangeRafRef.current = null;
+      measureRange();
+    });
   };
 
   const onMouseUp = () => {
@@ -794,48 +899,61 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
         dir="ltr"
       >
         <div className="pdfViewer mx-auto flex w-fit flex-col gap-4">
-          {pages.map(({ page, viewport }, i) => (
-            <div
-              key={page.pageNumber}
-              ref={(el) => {
-                pageWrapRefs.current[i] = el;
-              }}
-              /* The surface behind the canvas is always paper-white,
-                 regardless of the app theme: a PDF is a light document,
-                 and a dark wrapper would read as a black hole in
-                 dark/sepia mode while the page paints (or fails). */
-              className="relative bg-white shadow-sm"
-              style={{ width: viewport.width }}
-            >
-              <canvas
-                key={`${canvasGen}-${page.pageNumber}`}
-                ref={(el) => {
-                  canvasRefs.current[i] = el;
-                }}
-                width={viewport.width}
-                height={viewport.height}
-                aria-hidden="true"
-              />
+          {pages.map(({ page, viewport }, i) => {
+            const inRange =
+              visibleRange === null || (i >= visibleRange.start && i <= visibleRange.end);
+            return (
               <div
+                key={page.pageNumber}
                 ref={(el) => {
-                  layerRefs.current[i] = el;
+                  pageWrapRefs.current[i] = el;
                 }}
-                className="textLayer absolute inset-0"
-              />
-              {pageStatus[i] === "failed" && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white">
-                  <button
-                    type="button"
-                    onClick={() => retryPage(i)}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <RotateCcw className="size-3.5" />
-                    {t("reader.retryPage")}
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+                /* The surface behind the canvas is always paper-white,
+                   regardless of the app theme: a PDF is a light document,
+                   and a dark wrapper would read as a black hole in
+                   dark/sepia mode while the page paints (or fails). The
+                   wrapper keeps the page's exact height at all times so
+                   the scrollbar never jumps when canvases mount/unmount
+                   (virtualization). */
+                className="relative bg-white shadow-sm"
+                style={{ width: viewport.width, height: viewport.height }}
+              >
+                {inRange ? (
+                  <>
+                    <canvas
+                      key={`${canvasGen}-${page.pageNumber}`}
+                      ref={(el) => {
+                        canvasRefs.current[i] = el;
+                      }}
+                      width={viewport.width}
+                      height={viewport.height}
+                      aria-hidden="true"
+                    />
+                    <div
+                      ref={(el) => {
+                        layerRefs.current[i] = el;
+                      }}
+                      className="textLayer absolute inset-0"
+                    />
+                  </>
+                ) : (
+                  <div className="h-full w-full" aria-hidden="true" />
+                )}
+                {pageStatus[i] === "failed" && inRange && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white">
+                    <button
+                      type="button"
+                      onClick={() => retryPage(i)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <RotateCcw className="size-3.5" />
+                      {t("reader.retryPage")}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

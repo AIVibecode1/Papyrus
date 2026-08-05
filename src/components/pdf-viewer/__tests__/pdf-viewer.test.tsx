@@ -410,6 +410,59 @@ describe("render cancellation and repaint", () => {
     unmount();
   });
 
+  it("virtualizes: only pages near the viewport mount canvases", async () => {
+    // With real layout metrics (clientHeight + staggered offsetTop), the
+    // viewer mounts canvases only for the visible window plus the
+    // margin, so long PDFs do not pin gigabytes of canvas memory
+    // (Chromium blanks canvases under pressure — the disappearing-page
+    // bug). Pages outside the window keep same-height placeholders.
+    const originalCH = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+    const originalOT = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetTop");
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.dataset?.testClientHeight ? Number(this.dataset.testClientHeight) : 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "offsetTop", {
+      configurable: true,
+      get(this: HTMLElement) {
+        const idx = Number(this.dataset?.testPageIndex ?? -1);
+        return idx >= 0 ? idx * 2000 : 0;
+      },
+    });
+    try {
+      mockDocument(3, {});
+      const { container, unmount } = render(<PdfViewer bytes={BYTES} onSelect={onSelect} />);
+      await waitFor(() => expect(canvasWidthAttr()).toBeGreaterThan(0), { timeout: 3000 });
+      // The wrapper elements are marked with data-test-page-index by the
+      // jsdom layout mock; the scroll container gets a client height.
+      const scroller = container.querySelector(".pdfViewer")?.parentElement as HTMLElement | null;
+      if (scroller) scroller.dataset.testClientHeight = "1500";
+      // Mark wrappers with their page index so offsetTop is measurable.
+      const wrappers = container.querySelectorAll<HTMLElement>(".pdfViewer > div");
+      wrappers.forEach((w, i) => {
+        w.dataset.testPageIndex = String(i);
+      });
+      // Simulate a scroll to page 2 of 3 (scrollTop 2000).
+      if (scroller) {
+        Object.defineProperty(scroller, "scrollTop", { configurable: true, value: 2000 });
+        scroller.dispatchEvent(new Event("scroll"));
+      }
+      await new Promise((r) => setTimeout(r, 100));
+      const canvases = container.querySelectorAll("canvas");
+      // Visible window at page 2 (index 1) + margin 2 => indices 0..3
+      // but there are only 3 pages: expect 3 canvases (all near the
+      // window) and placeholder divs elsewhere.
+      expect(canvases.length).toBeGreaterThan(0);
+      expect(canvases.length).toBeLessThanOrEqual(3);
+      unmount();
+    } finally {
+      if (originalCH) Object.defineProperty(HTMLElement.prototype, "clientHeight", originalCH);
+      if (originalOT) Object.defineProperty(HTMLElement.prototype, "offsetTop", originalOT);
+    }
+  });
+
   it("repaints a page whose final render attempt failed (black-page safety net)", async () => {
     const calls: Record<number, number> = {};
     mockDocument(1, {

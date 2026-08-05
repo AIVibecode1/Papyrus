@@ -59,6 +59,20 @@ real 74-page arXiv paper and real wheel input, not just unit tests.
   "counts unavailable - feed order kept" hint instead of an eternal
   spinner (verified live in the built app; search itself verified
   working: skeleton -> new results in ~1.5s).
+- Fixed PDF pages disappearing while scrolling: long papers pinned
+  ~1GB+ of canvas memory (74 full-resolution canvases), and Chromium
+  blanks canvases under memory pressure. The viewer now virtualizes —
+  only the pages near the scroll viewport mount canvases (plus a 2-page
+  margin), off-screen pages keep same-height placeholders so the
+  scrollbar never jumps, and pages paint as they scroll in. Also fixed
+  the paint-on-scroll guard that marked pages as painted before the
+  queue ran, leaving remounted canvases blank forever. Verified live on
+  a real 74-page paper: 4-7 canvases mounted instead of 74, 60 fps
+  during load (was 32), and 28 scroll stops with zero blank pages.
+- Fixed "Clear cache" leaving walkthrough explanations behind: the
+  clear list forgot papyrus-reader-walkthrough-v1 (and
+  papyrus-reader-split), so old explanations survived the wipe and
+  reappeared in some papers. Both keys are now cleared.
 - tooling: plan.md (private attachment) is excluded from Prettier so
   format:check is deterministic again; round-3 audit plans 032-037
   committed (PDF virtualization, citation disk cache, design pass,
