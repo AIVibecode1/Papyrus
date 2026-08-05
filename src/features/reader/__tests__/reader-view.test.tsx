@@ -162,14 +162,19 @@ describe("ReaderView", () => {
     useReaderStore.setState({ selection: "The encoder maps tokens to vectors." });
     render(<ReaderView />);
 
-    expect(screen.getByText(/The encoder maps tokens to vectors\./)).toBeInTheDocument();
+    // The selection preview appears in both the floating bar (plan 052)
+    // and the AI panel strip.
+    expect(screen.getAllByText(/The encoder maps tokens to vectors\./).length).toBeGreaterThan(0);
 
-    const copy = screen.getByRole("button", { name: "Copy selection" });
+    // The floating bar (plan 052) carries the Copy action; the AI panel
+    // strip keeps its own icon copy control.
+    const copy = screen.getAllByRole("button", { name: "Copy selection" })[0];
     fireEvent.click(copy);
-    // The copied state flips after the clipboard promise settles.
-    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+    // The copied state flips after the clipboard promise settles (both
+    // the floating bar and the AI panel strip show it).
+    expect((await screen.findAllByRole("button", { name: "Copied" })).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Clear selection" })[0]);
     expect(screen.queryByText(/The encoder maps tokens to vectors\./)).not.toBeInTheDocument();
   });
 

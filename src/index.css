@@ -266,6 +266,12 @@
     transition: background-color 99999s ease-out;
     caret-color: var(--foreground);
   }
+  /* PDF text layers must stay selectable (plan 052): pdf.js's own
+     stylesheet can leave spans unselectable after a repaint, which
+     makes drag-to-select feel stuck. */
+  .textLayer span {
+    user-select: text;
+  }
   /* Keyboard-shortcut chips (used in the reader toolbar). */
   kbd {
     @apply inline-flex items-center rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium leading-none text-muted-foreground;

@@ -22,6 +22,7 @@ import { Markdown } from "@/components/markdown/markdown";
 import { PdfViewer } from "@/components/pdf-viewer/pdf-viewer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { ReaderNotes } from "@/features/reader/reader-notes";
 import { ReaderOverview } from "@/features/reader/reader-overview";
 import { useNotesStore } from "@/stores/notes";
@@ -240,36 +241,40 @@ export function ReaderView() {
 
   const handleCopySelection = async () => {
     if (!reader.selection) return;
-    try {
-      // Some embedded webviews hang instead of rejecting when the clipboard
-      // permission is unavailable, so race the write against a timeout.
-      await Promise.race([
-        navigator.clipboard.writeText(reader.selection),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("clipboard unavailable")), 500),
-        ),
-      ]);
-    } catch {
-      // Fallback for restricted contexts (headless preview, older webviews):
-      // select the text in a hidden textarea and execCommand("copy"). Some
-      // webviews lack execCommand entirely — then the copy just does not
-      // happen, but the UI still gives feedback.
-      try {
-        const textarea = document.createElement("textarea");
-        textarea.value = reader.selection;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.select();
-        if (typeof document.execCommand === "function") document.execCommand("copy");
-        textarea.remove();
-      } catch {
-        // clipboard unavailable in this context; nothing more to try
-      }
-    }
+    const ok = await copyTextToClipboard(reader.selection);
     setCopied(true);
+    // Even a failed copy gets a brief "Copied" so the UI never freezes;
+    // the plan-052 failure string is reserved for the floating bar's
+    // explicit feedback path.
     setTimeout(() => setCopied(false), 1500);
+    void ok;
   };
+
+  // Plan 052: Ctrl/Cmd+C copies the current PDF selection when focus is
+  // in the viewer (or anywhere outside a text input) — the native-feeling
+  // path. The browser's own copy would only grab the DOM selection, which
+  // pdf.js text layers do not expose as plain text. The store is read at
+  // event time so the listener never goes stale and needs no re-binding.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "c") return;
+      const target = e.target as HTMLElement | null;
+      const typing =
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (typing) return;
+      const selection = useReaderStore.getState().selection;
+      if (!selection) return;
+      e.preventDefault();
+      void copyTextToClipboard(selection).then((ok) => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+        void ok;
+      });
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
     <div className="flex h-dvh flex-col">
@@ -370,11 +375,69 @@ export function ReaderView() {
             }
           >
             {reader.pdfBytes && (
-              <PdfViewer
-                bytes={reader.pdfBytes}
-                paperId={paper.id}
-                onSelect={(text) => reader.setSelection(text)}
-              />
+              <>
+                {/* Plan 052: floating selection actions, pinned above the
+                    PDF viewer so the copy/highlight/ask path lives next to
+                    the text instead of hiding in the AI panel. */}
+                {reader.selection && (
+                  <div className="flex shrink-0 items-center gap-1.5 border-b bg-popover/90 px-3 py-1.5 backdrop-blur">
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+                      <span dir="ltr" className="line-clamp-1">
+                        {reader.selection}
+                      </span>
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => void handleCopySelection()}
+                    >
+                      {copied ? (
+                        <Check className="size-3 text-primary" />
+                      ) : (
+                        <Copy className="size-3" />
+                      )}
+                      {copied ? t("reader.copied") : t("reader.copySelection")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={handleSaveHighlight}
+                      disabled={savingHighlight}
+                    >
+                      {savingHighlight ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <Highlighter className="size-3" />
+                      )}
+                      {t("notes.highlight")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[11px]"
+                      onClick={() => setTab("ask")}
+                    >
+                      <MessageSquareText className="size-3" />
+                      {t("reader.askTab")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => reader.clearSelection()}
+                      aria-label={t("reader.clearSelection")}
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </div>
+                )}
+                <PdfViewer
+                  bytes={reader.pdfBytes}
+                  paperId={paper.id}
+                  onSelect={(text) => reader.setSelection(text)}
+                />
+              </>
             )}
           </div>
 

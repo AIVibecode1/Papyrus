@@ -240,7 +240,10 @@ describe("render state transitions", () => {
     mockDocument(2);
     render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
     await waitFor(() => expect(screen.getByText("1 / 2")).toBeInTheDocument());
-    expect(roElement).not.toBeNull();
+    // The observer attaches in an effect keyed on pages.length; under
+    // full-suite load the effect can land a tick after the indicator, so
+    // wait for the attachment instead of asserting it synchronously.
+    await waitFor(() => expect(roElement).not.toBeNull());
   });
 
   it("re-fits the zoom to the container width after a resize", async () => {
