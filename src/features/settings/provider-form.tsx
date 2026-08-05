@@ -236,9 +236,9 @@ export function ProviderForm({
             <KeyRound className="size-3" />
             {t("settings.keyHint")}
           </p>
-          {preset === "codex" && (
+          {preset === "openai" && (
             <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
-              <p>{t("settings.codexHelp")}</p>
+              <p>{t("settings.openaiHelp")}</p>
               <Button
                 type="button"
                 variant="outline"

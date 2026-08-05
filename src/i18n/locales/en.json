@@ -29,6 +29,7 @@
     "overviewAbstract": "Abstract",
     "overviewExplain": "Explain this paper",
     "overviewSearchScholar": "Search title on Semantic Scholar",
+    "openPaperPage": "Open paper page",
     "overviewHint": "The mentor reads the paper section by section; the chat answers grounded questions; notes capture your own thoughts.",
     "askTab": "Chat",
     "explainWhole": "Explain the whole paper",
@@ -171,8 +172,7 @@
     "deepseek": "DeepSeek",
     "groq": "Groq",
     "ollama": "Ollama (local)",
-    "opencode": "OpenCode Go",
-    "codex": "OpenAI Codex"
+    "opencode": "OpenCode Go"
   },
   "settings": {
     "title": "Settings",
@@ -247,7 +247,7 @@
     "themeSepia": "Sepia",
     "themeDark": "Dark",
     "urlLocked": "This URL is fixed by the preset. Choose Custom to set your own.",
-    "codexHelp": "API key from platform.openai.com; stored only in your OS keychain. No account sign-in or OAuth is used.",
+    "openaiHelp": "Use an API key from platform.openai.com. This is separate from a ChatGPT Plus login: an account subscription does not give you an API key. Papyrus stores the key only in your system keychain.",
     "codexOpenKeys": "Open the API keys page",
     "codexChecklistTitle": "Connection checklist",
     "codexChecklistKey": "Key created on platform.openai.com/api-keys",

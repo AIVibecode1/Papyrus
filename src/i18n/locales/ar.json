@@ -29,6 +29,7 @@
     "overviewAbstract": "الملخص",
     "overviewExplain": "اشرح هذه الورقة",
     "overviewSearchScholar": "ابحث عن العنوان في Semantic Scholar",
+    "openPaperPage": "فتح صفحة الورقة",
     "overviewHint": "يقرأ المرشد الورقة قسمًا قسمًا؛ والمحادثة تجيب عن أسئلة مبنية على النص؛ والملاحظات تحفظ أفكارك الخاصة.",
     "askTab": "المحادثة",
     "explainWhole": "اشرح الورقة كاملة",
@@ -171,8 +172,7 @@
     "deepseek": "DeepSeek",
     "groq": "Groq",
     "ollama": "Ollama (محلي)",
-    "opencode": "OpenCode Go",
-    "codex": "OpenAI Codex"
+    "opencode": "OpenCode Go"
   },
   "settings": {
     "title": "الإعدادات",
@@ -247,7 +247,7 @@
     "themeSepia": "سيبيا",
     "themeDark": "داكن",
     "urlLocked": "هذا الرابط ثابت من القالب. اختر «مخصص» لتعيين رابطك الخاص.",
-    "codexHelp": "مفتاح API من platform.openai.com؛ يُخزَّن فقط في سلسلة مفاتيح نظامك. لا يُستخدم تسجيل دخول أو OAuth.",
+    "openaiHelp": "استخدم مفتاح API من platform.openai.com. هذا منفصل عن تسجيل دخول ChatGPT Plus: اشتراك الحساب لا يمنحك مفتاح API. يخزّن بابيروس المفتاح في سلسلة مفاتيح نظامك فقط.",
     "codexOpenKeys": "فتح صفحة مفاتيح API",
     "codexChecklistTitle": "قائمة فحص الاتصال",
     "codexChecklistKey": "تم إنشاء المفتاح في platform.openai.com/api-keys",
