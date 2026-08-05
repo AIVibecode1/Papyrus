@@ -63,6 +63,20 @@ describe("buildExportPayload", () => {
     expect(payload.notes).toEqual([note]);
   });
 
+  it("never exports key-shaped fields (security regression)", () => {
+    useFavoritesStore.getState().toggle(paper);
+    useNotesStore.setState({ notes: [note], loaded: true });
+
+    const json = JSON.stringify(buildExportPayload());
+
+    // API keys live only in the OS keychain: no provider config, no
+    // apiKey field and no secret-shaped tokens may ever reach an export.
+    expect(json).not.toMatch(/"apiKey"/);
+    expect(json).not.toMatch(/"api_key"/);
+    expect(json).not.toMatch(/sk-[A-Za-z0-9_-]{8,}/);
+    expect(json).not.toMatch(/"baseUrl"/);
+  });
+
   it("drops malformed chat entries and empty transcripts", () => {
     useFavoritesStore.setState({ loaded: true });
     localStorage.setItem(
