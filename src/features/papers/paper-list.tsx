@@ -101,6 +101,7 @@ export function PaperList() {
   const sortMode = usePapersStore((s) => s.sortMode);
   const setSortMode = usePapersStore((s) => s.setSortMode);
   const citations = usePapersStore((s) => s.citations);
+  const citationsLoading = usePapersStore((s) => s.citationsLoading);
   const loadCitations = usePapersStore((s) => s.loadCitations);
   // "Most cited" reorders the loaded list by the citation counts already
   // fetched (they arrive a moment after the list, and the list re-sorts
@@ -111,8 +112,14 @@ export function PaperList() {
   );
   // While in cited mode with no counts yet, tell the user the counts are
   // on their way instead of looking like the sort did nothing.
+  const hasAnyCount = papers.some((p) => (citations[p.id] ?? 0) > 0);
   const countsPending =
-    sortMode === "cited" && papers.length > 0 && !papers.some((p) => (citations[p.id] ?? 0) > 0);
+    sortMode === "cited" && papers.length > 0 && !hasAnyCount && citationsLoading;
+  // The batch attempt finished and no counts exist (Semantic Scholar's
+  // keyless pool 429s often): say so instead of spinning "loading…"
+  // forever — the sort keeps the feed order, which is the honest state.
+  const countsUnavailable =
+    sortMode === "cited" && papers.length > 0 && !hasAnyCount && !citationsLoading;
 
   const handleSortChange = (v: string) => {
     setSortMode(v as PaperSortMode);
@@ -210,6 +217,11 @@ export function PaperList() {
             {countsPending && (
               <span className="text-[11px] text-muted-foreground">
                 {t("papers.citationsLoading")}
+              </span>
+            )}
+            {countsUnavailable && (
+              <span className="text-[11px] text-muted-foreground">
+                {t("papers.citationsUnavailable")}
               </span>
             )}
             <div className="flex items-center gap-2">

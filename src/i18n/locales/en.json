@@ -89,6 +89,7 @@
     "sortNewest": "Newest",
     "sortCited": "Most cited",
     "citationsLoading": "Citation counts are loading…",
+    "citationsUnavailable": "Citation counts are unavailable right now — the list stays in feed order.",
     "sourceArxiv": "arXiv",
     "sourceScholar": "Scholar",
     "tldrBadge": "TLDR",

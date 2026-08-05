@@ -89,6 +89,7 @@
     "sortNewest": "الأحدث",
     "sortCited": "الأكثر استشهاداً",
     "citationsLoading": "يتم تحميل عدد الاستشهادات…",
+    "citationsUnavailable": "عدد الاستشهادات غير متاح حالياً — تبقى القائمة بترتيب الموجز.",
     "sourceArxiv": "arXiv",
     "sourceScholar": "Scholar",
     "tldrBadge": "TLDR",

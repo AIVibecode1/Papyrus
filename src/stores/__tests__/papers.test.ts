@@ -281,6 +281,36 @@ describe("papers store", () => {
     expect(fetchCitations).toHaveBeenCalledWith(["lg1"]);
   });
 
+  it("clears the citations-loading flag when the batch attempt completes empty", async () => {
+    // Semantic Scholar's keyless pool 429s: the batch resolves with an
+    // empty map. The UI must stop saying "loading…" and show the honest
+    // no-data state — the flag has to be cleared on completion.
+    vi.mocked(fetchCitations).mockResolvedValue({});
+    usePapersStore.setState({ papers: [aiPaper] });
+    usePapersStore.getState().loadCitations(["ai1"]);
+    expect(usePapersStore.getState().citationsLoading).toBe(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(usePapersStore.getState().citationsLoading).toBe(false);
+    expect(usePapersStore.getState().citations).toEqual({});
+  });
+
+  it("drops a stale citation batch's flag update", async () => {
+    // A slow first batch must not clear the flag a newer batch set.
+    let resolveFirst: ((v: Record<string, number>) => void) | null = null;
+    vi.mocked(fetchCitations)
+      .mockReturnValueOnce(new Promise((r) => (resolveFirst = r)))
+      .mockResolvedValueOnce({ ai2: 7 });
+    usePapersStore.setState({ papers: [aiPaper] });
+    usePapersStore.getState().loadCitations(["ai1"]);
+    usePapersStore.getState().loadCitations(["ai2"]);
+    await new Promise((r) => setTimeout(r, 0));
+    resolveFirst!({ ai1: 3 });
+    await new Promise((r) => setTimeout(r, 0));
+    // The newer batch completed: flag false, only its counts applied.
+    expect(usePapersStore.getState().citationsLoading).toBe(false);
+    expect(usePapersStore.getState().citations).toEqual({ ai2: 7 });
+  });
+
   it("refresh enriches the list with citation counts", async () => {
     vi.mocked(fetchPapers).mockResolvedValue({ papers: [aiPaper], fallbackNote: null });
     vi.mocked(fetchCitations).mockResolvedValue({ ai1: 7 });

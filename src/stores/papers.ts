@@ -17,6 +17,9 @@ export const SCHOLAR_SEARCH_REQUIRED = "__scholar_search_required__";
 // Monotonic token: a refresh() result is only applied if no newer refresh
 // has started since (guards against stale responses clobbering newer state).
 let requestSeq = 0;
+// Same token for the citation batch: only the newest attempt may flip the
+// loading flag (a slow stale batch must not clear a newer one's flag).
+let citationsSeq = 0;
 
 interface PapersState {
   category: string;
@@ -34,6 +37,8 @@ interface PapersState {
   lastUpdated: number | null;
   /** citation counts keyed by paper id (Semantic Scholar enrichment). */
   citations: Record<string, number>;
+  /** True while a citation batch lookup is in flight. */
+  citationsLoading: boolean;
   /** How the visible list is ordered: feed order or most cited first. */
   sortMode: PaperSortMode;
   setCategory: (category: string) => void;
@@ -62,29 +67,58 @@ export const usePapersStore = create<PapersState>((set, get) => ({
   fallbackNote: null,
   lastUpdated: null,
   citations: {},
+  citationsLoading: false,
   sortMode: "newest",
 
   setCategory: (category) => {
     if (category === get().category) return;
-    set({ category, papers: [], citations: {}, error: null, fallbackNote: null });
+    set({
+      category,
+      papers: [],
+      citations: {},
+      citationsLoading: false,
+      error: null,
+      fallbackNote: null,
+    });
     void get().refresh();
   },
 
   setQuery: (query) => {
     if (query === get().query) return;
-    set({ query, papers: [], citations: {}, error: null, fallbackNote: null });
+    set({
+      query,
+      papers: [],
+      citations: {},
+      citationsLoading: false,
+      error: null,
+      fallbackNote: null,
+    });
     void get().refresh();
   },
 
   setDate: (date) => {
     if (date === get().date) return;
-    set({ date, papers: [], citations: {}, error: null, fallbackNote: null });
+    set({
+      date,
+      papers: [],
+      citations: {},
+      citationsLoading: false,
+      error: null,
+      fallbackNote: null,
+    });
     void get().refresh();
   },
 
   setSource: (source) => {
     if (source === get().source) return;
-    set({ source, papers: [], citations: {}, error: null, fallbackNote: null });
+    set({
+      source,
+      papers: [],
+      citations: {},
+      citationsLoading: false,
+      error: null,
+      fallbackNote: null,
+    });
     void get().refresh();
   },
 
@@ -194,10 +228,19 @@ export const usePapersStore = create<PapersState>((set, get) => ({
     const known = new Set(Object.keys(get().citations));
     const needed = ids.filter((id) => !known.has(id));
     if (needed.length === 0) return;
+    const seq = ++citationsSeq;
+    set({ citationsLoading: true });
     void fetchCitations(needed).then((counts) => {
+      // A newer attempt superseded this one: never touch the flag.
+      if (seq !== citationsSeq) return;
       const entries = Object.entries(counts);
-      if (entries.length === 0) return;
-      set((s) => ({ citations: { ...s.citations, ...Object.fromEntries(entries) } }));
+      if (entries.length > 0) {
+        set((s) => ({ citations: { ...s.citations, ...Object.fromEntries(entries) } }));
+      }
+      // The attempt COMPLETED (with counts, empty, or after the retries
+      // gave up): clear the flag so the UI stops saying "loading…" and
+      // shows the honest no-data state instead of spinning forever.
+      set({ citationsLoading: false });
     });
   },
 }));
