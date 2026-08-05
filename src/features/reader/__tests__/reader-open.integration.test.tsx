@@ -14,6 +14,7 @@ import { ReaderView } from "@/features/reader/reader-view";
 import type { Paper, ProviderConfig } from "@/lib/types";
 import { usePapersStore } from "@/stores/papers";
 import { useReaderStore } from "@/stores/reader";
+import { useHistoryStore } from "@/stores/history";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
 
@@ -101,6 +102,7 @@ function chunkStream(chunks: string[]) {
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
+  useHistoryStore.setState({ entries: [], loaded: true });
   getDocumentCalls.mockReturnValue(loadingTask(2) as never);
   vi.mocked(getPdfBytes).mockResolvedValue(new Uint8Array([37, 80, 68, 70, 1, 2, 3]));
   Element.prototype.scrollIntoView = vi.fn();
@@ -129,6 +131,12 @@ describe("reader open boundary", () => {
     await useReaderStore.getState().open(paper);
     expect(useReaderStore.getState().loadStatus).toBe("ready");
     expect(getDocumentCalls).not.toHaveBeenCalled(); // no extraction at open
+    // Plan 060: a successful open records the paper in reading history.
+    expect(useHistoryStore.getState().entries[0]?.paperId).toBe(paper.id);
+
+    // Reopening refreshes the entry instead of duplicating it.
+    await useReaderStore.getState().open(paper);
+    expect(useHistoryStore.getState().entries).toHaveLength(1);
 
     render(<ReaderView />);
     await waitFor(() => expect(screen.getByText("1 / 2")).toBeInTheDocument());
