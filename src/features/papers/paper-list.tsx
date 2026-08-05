@@ -160,271 +160,270 @@ export function PaperList() {
   };
 
   return (
-    <div className="flex flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       {/* The filter row (status, search, saved/refresh, day navigation)
-          stays pinned while the list scrolls underneath. The bar's box
-          is fully opaque and extends BELOW its content (pb-4 + border):
-          the papers sliding under it disappear cleanly behind it — no
-          transparent gap can show them "floating" past the bar. */}
-      <div className="sticky top-0 z-10 -mx-4 -mt-4 border-b border-border bg-background px-4 pb-4 pt-4 lg:-mx-6 lg:px-6">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
-              {lastUpdated &&
-                t("papers.updated", {
-                  time: new Intl.DateTimeFormat(undefined, {
-                    timeStyle: "short",
-                  }).format(new Date(lastUpdated)),
-                })}
-            </div>
-            {/* Search box with the sort dropdown embedded at its end: the
+          sits OUTSIDE the scroll container: main's list area scrolls
+          below it, so the bar physically cannot move with the scroll —
+          no sticky, no z-index, no gap it can float through. */}
+      <div className="flex flex-col gap-4 pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+            {lastUpdated &&
+              t("papers.updated", {
+                time: new Intl.DateTimeFormat(undefined, {
+                  timeStyle: "short",
+                }).format(new Date(lastUpdated)),
+              })}
+          </div>
+          {/* Search box with the sort dropdown embedded at its end: the
             user picks Newest or Most cited without leaving the box. */}
-            <div className="flex h-9 w-full max-w-sm items-center gap-1.5 rounded-md border border-input bg-transparent px-2.5 transition-[box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
-              <Search className="size-3.5 shrink-0 text-muted-foreground" />
-              <Input
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder={t(
-                  source === "semanticscholar"
-                    ? "papers.searchScholarPlaceholder"
-                    : "papers.searchPlaceholder",
-                )}
-                aria-label={t(
-                  source === "semanticscholar"
-                    ? "papers.searchScholarPlaceholder"
-                    : "papers.searchPlaceholder",
-                )}
-                className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
-              />
-              {papers.length > 0 && (
-                <>
-                  <div className="h-4 w-px shrink-0 bg-border" />
-                  <Select value={sortMode} onValueChange={handleSortChange}>
-                    <SelectTrigger
-                      className="h-7 w-auto shrink-0 gap-1 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0"
-                      aria-label={t("papers.sortBy")}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="newest">{t("papers.sortNewest")}</SelectItem>
-                      <SelectItem value="cited">{t("papers.sortCited")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </>
+          <div className="flex h-9 w-full max-w-sm items-center gap-1.5 rounded-md border border-input bg-card px-2.5 transition-colors focus-within:border-ring">
+            <Search className="size-3.5 shrink-0 text-muted-foreground" />
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder={t(
+                source === "semanticscholar"
+                  ? "papers.searchScholarPlaceholder"
+                  : "papers.searchPlaceholder",
               )}
-            </div>
-            {countsPending && (
-              <span className="text-[11px] text-muted-foreground">
-                {t("papers.citationsLoading")}
-              </span>
+              aria-label={t(
+                source === "semanticscholar"
+                  ? "papers.searchScholarPlaceholder"
+                  : "papers.searchPlaceholder",
+              )}
+              className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
+            />
+            {papers.length > 0 && (
+              <>
+                <div className="h-4 w-px shrink-0 bg-border" />
+                <Select value={sortMode} onValueChange={handleSortChange}>
+                  <SelectTrigger
+                    className="h-7 w-auto shrink-0 gap-1 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0"
+                    aria-label={t("papers.sortBy")}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">{t("papers.sortNewest")}</SelectItem>
+                    <SelectItem value="cited">{t("papers.sortCited")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
             )}
-            {countsUnavailable && (
-              <span className="text-[11px] text-muted-foreground">
-                {t("papers.citationsUnavailable")}
-              </span>
-            )}
-            <div className="flex items-center gap-2">
-              <Button
-                variant={savedOnly ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setSavedOnly((v) => !v)}
-                aria-pressed={savedOnly}
-              >
-                <Bookmark className="size-4" />
-                {t("papers.savedOnly")}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={loading}>
-                <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
-                {t("papers.refresh")}
-              </Button>
-            </div>
           </div>
+          {countsPending && (
+            <span className="text-[11px] text-muted-foreground">
+              {t("papers.citationsLoading")}
+            </span>
+          )}
+          {countsUnavailable && (
+            <span className="text-[11px] text-muted-foreground">
+              {t("papers.citationsUnavailable")}
+            </span>
+          )}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={savedOnly ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setSavedOnly((v) => !v)}
+              aria-pressed={savedOnly}
+            >
+              <Bookmark className="size-4" />
+              {t("papers.savedOnly")}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={loading}>
+              <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
+              {t("papers.refresh")}
+            </Button>
+          </div>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={goPrevDay}
-              aria-label={t("papers.prevDay")}
-              className="rtl:rotate-180"
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={goPrevDay}
+            aria-label={t("papers.prevDay")}
+            className="rtl:rotate-180"
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <Select
+            value={date ?? "latest"}
+            onValueChange={(v) => setDate(v === "latest" ? null : v)}
+          >
+            <SelectTrigger
+              className="h-8 w-auto gap-2 text-xs"
+              aria-label={t("papers.browseByDay")}
             >
-              <ChevronLeft className="size-4" />
+              <CalendarDays className="size-3.5" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="latest">{t("papers.latest")}</SelectItem>
+              {digestDays.slice(0, 14).map((d) => (
+                <SelectItem key={d} value={d}>
+                  {formatDay(d, i18n.language)} ({dayCount(d)})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={goNextDay}
+            disabled={!date || date >= today}
+            aria-label={t("papers.nextDay")}
+            className="rtl:rotate-180"
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+          {date && (
+            <Button variant="ghost" size="sm" onClick={() => setDate(null)}>
+              {t("papers.today")}
             </Button>
-            <Select
-              value={date ?? "latest"}
-              onValueChange={(v) => setDate(v === "latest" ? null : v)}
-            >
-              <SelectTrigger
-                className="h-8 w-auto gap-2 text-xs"
-                aria-label={t("papers.browseByDay")}
-              >
-                <CalendarDays className="size-3.5" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="latest">{t("papers.latest")}</SelectItem>
-                {digestDays.slice(0, 14).map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {formatDay(d, i18n.language)} ({dayCount(d)})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={goNextDay}
-              disabled={!date || date >= today}
-              aria-label={t("papers.nextDay")}
-              className="rtl:rotate-180"
-            >
-              <ChevronRight className="size-4" />
-            </Button>
-            {date && (
-              <Button variant="ghost" size="sm" onClick={() => setDate(null)}>
-                {t("papers.today")}
-              </Button>
-            )}
-            {backfillActive && (
-              <span className="text-xs text-muted-foreground">
-                {t("papers.historyLoading", {
-                  done: progress.done,
-                  total: progress.total,
-                })}
-              </span>
-            )}
-          </div>
+          )}
+          {backfillActive && (
+            <span className="text-xs text-muted-foreground">
+              {t("papers.historyLoading", {
+                done: progress.done,
+                total: progress.total,
+              })}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Everything below the pinned bar scrolls with its own spacing. */}
-      <div className="flex flex-col gap-4">
-        {!loading && fallbackNote && (
-          <div
-            role="status"
-            className="flex items-start justify-between gap-3 rounded-md border border-border bg-secondary p-3 text-xs text-secondary-foreground"
-          >
-            <span className="flex items-start gap-2">
-              <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-              {t("papers.sourceFallback")}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={clearFallbackNote}
-              aria-label={t("papers.dismiss")}
+      {/* Everything below the pinned bar scrolls in its own container. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-4">
+          {!loading && fallbackNote && (
+            <div
+              role="status"
+              className="flex items-start justify-between gap-3 rounded-md border border-border bg-secondary p-3 text-xs text-secondary-foreground"
             >
-              <X className="size-3.5" />
-            </Button>
-          </div>
-        )}
-
-        {/* Today's picks: heuristic strip on the latest view only (hidden
-          while browsing a specific day or the saved list). */}
-        {!loading &&
-          !error &&
-          !savedOnly &&
-          !date &&
-          picks.papers.length > 0 &&
-          !picksDismissed && (
-            <TodayPicks
-              papers={picks.papers}
-              date={picks.date}
-              onDismiss={dismissPicks}
-              onOpen={(p) => {
-                void openReader(p);
-                setView("reader");
-              }}
-            />
+              <span className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                {t("papers.sourceFallback")}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={clearFallbackNote}
+                aria-label={t("papers.dismiss")}
+              >
+                <X className="size-3.5" />
+              </Button>
+            </div>
           )}
 
-        {loading && (
-          <div className="flex flex-col gap-4" aria-label={t("papers.loading")}>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <PaperSkeleton key={i} />
+          {/* Today's picks: heuristic strip on the latest view only (hidden
+          while browsing a specific day or the saved list). */}
+          {!loading &&
+            !error &&
+            !savedOnly &&
+            !date &&
+            picks.papers.length > 0 &&
+            !picksDismissed && (
+              <TodayPicks
+                papers={picks.papers}
+                date={picks.date}
+                onDismiss={dismissPicks}
+                onOpen={(p) => {
+                  void openReader(p);
+                  setView("reader");
+                }}
+              />
+            )}
+
+          {loading && (
+            <div className="flex flex-col gap-4" aria-label={t("papers.loading")}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <PaperSkeleton key={i} />
+              ))}
+            </div>
+          )}
+
+          {!loading && error === SCHOLAR_SEARCH_REQUIRED && (
+            <Card className="border-border">
+              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                <Search className="size-8 text-muted-foreground" />
+                <p className="text-sm font-medium">{t("papers.scholarNeedsQuery")}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {!loading && error && error !== SCHOLAR_SEARCH_REQUIRED && (
+            <Card className="border-destructive/40">
+              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                <AlertCircle className="size-8 text-destructive" />
+                <p className="text-sm font-medium">{t("papers.error")}</p>
+                <p className="max-w-md text-xs text-muted-foreground">{error}</p>
+                <Button size="sm" variant="outline" onClick={() => void refresh()}>
+                  {t("papers.retry")}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {!loading &&
+            !error &&
+            savedOnly &&
+            (savedIds.length === 0 ? (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                  <Bookmark className="size-8 text-muted-foreground" />
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {t("papers.noFavorites")}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {savedIds.map((id, i) => (
+                  <PaperCard key={id} paper={savedBy[id]} index={i} />
+                ))}
+              </div>
             ))}
-          </div>
-        )}
 
-        {!loading && error === SCHOLAR_SEARCH_REQUIRED && (
-          <Card className="border-border">
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <Search className="size-8 text-muted-foreground" />
-              <p className="text-sm font-medium">{t("papers.scholarNeedsQuery")}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {!loading && error && error !== SCHOLAR_SEARCH_REQUIRED && (
-          <Card className="border-destructive/40">
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <AlertCircle className="size-8 text-destructive" />
-              <p className="text-sm font-medium">{t("papers.error")}</p>
-              <p className="max-w-md text-xs text-muted-foreground">{error}</p>
-              <Button size="sm" variant="outline" onClick={() => void refresh()}>
-                {t("papers.retry")}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {!loading &&
-          !error &&
-          savedOnly &&
-          (savedIds.length === 0 ? (
+          {!loading && !error && !savedOnly && papers.length === 0 && (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-                <Bookmark className="size-8 text-muted-foreground" />
+                <BookOpenText className="size-8 text-muted-foreground" />
                 <p className="text-sm font-medium text-muted-foreground">
-                  {t("papers.noFavorites")}
+                  {date ? t("papers.noPapersOnDay") : t("papers.empty")}
                 </p>
               </CardContent>
             </Card>
-          ) : (
+          )}
+
+          {!loading && !error && !savedOnly && papers.length > 0 && (
             <div className="flex flex-col gap-4">
-              {savedIds.map((id, i) => (
-                <PaperCard key={id} paper={savedBy[id]} index={i} />
+              {visiblePapers.map((paper, i) => (
+                <PaperCard key={paper.id} paper={paper} index={i} />
               ))}
+              {papers.length >= 20 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="self-center"
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      {t("papers.loadingMore")}
+                    </>
+                  ) : (
+                    t("papers.loadMore")
+                  )}
+                </Button>
+              )}
             </div>
-          ))}
-
-        {!loading && !error && !savedOnly && papers.length === 0 && (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <BookOpenText className="size-8 text-muted-foreground" />
-              <p className="text-sm font-medium text-muted-foreground">
-                {date ? t("papers.noPapersOnDay") : t("papers.empty")}
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {!loading && !error && !savedOnly && papers.length > 0 && (
-          <div className="flex flex-col gap-4">
-            {visiblePapers.map((paper, i) => (
-              <PaperCard key={paper.id} paper={paper} index={i} />
-            ))}
-            {papers.length >= 20 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="self-center"
-                onClick={() => void loadMore()}
-                disabled={loadingMore}
-              >
-                {loadingMore ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" />
-                    {t("papers.loadingMore")}
-                  </>
-                ) : (
-                  t("papers.loadMore")
-                )}
-              </Button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

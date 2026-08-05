@@ -41,18 +41,17 @@ real 74-page arXiv paper and real wheel input, not just unit tests.
   residual paint lands on the detached old element, invisible. Verified:
   73/73 pages painted after load, resize, and two zoom steps — zero
   black pages.
-- Fixed the filter bar "floating" over the papers: the sticky bar left a
-  transparent 16px gap below its box and paper cards showed through it
-  while scrolling, reading as a bar floating over the list. The bar's
-  box is now fully opaque and extends below its content (pb-4 +
-  border-b), and the list sits in its own wrapper directly under the
-  bar. Verified with real wheel input: the list scrolls 736px while the
-  bar's position stays pixel-identical.
-- Fixed the search box's ghost rectangle: in dark mode the box had a
-  translucent background (dark:bg-input/30) that rendered as a faint
-  transparent rectangle over the sort option. The box is now fully
-  transparent with a clean border, and the sort dropdown keeps the
-  opaque background-matching popover surface.
+- Fixed the filter bar "floating" over the papers (and any build where
+  sticky misbehaved): the bar no longer uses position:sticky at all —
+  it sits OUTSIDE the scroll container as a fixed sibling, and the list
+  scrolls in its own container below it. The bar physically cannot move
+  with the scroll in any environment, window size, or display scale.
+  Verified live: the list scrolls while the bar's position stays
+  pixel-identical.
+- Fixed the search box's ghost rectangle: the box is now a clean solid
+  field (solid card background + border, no translucent dark-mode fill,
+  no focus ring shadow), and the sort dropdown keeps the opaque
+  background-matching popover surface.
 - Fixed "Most cited" appearing dead after a search: the citation batch
   (Semantic Scholar's shared pool 429s often) resolved empty and the UI
   spun "Citation counts are loading..." forever. The store now tracks
