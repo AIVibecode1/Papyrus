@@ -196,7 +196,13 @@ fn build_search_url(
         // the safe id charset) and never AND a category onto them.
         format!("id:{}", normalize_id_query(query)?)
     } else {
-        format!("{prefix}:{}", validate_query(query)?)
+        // Parenthesize the fielded term: arXiv silently DROPS trailing
+        // AND clauses (year range, cat:) when a fielded query has more
+        // than one word (verified live 2026-08). The parentheses make
+        // the whole expression one group so the ANDs are honored. The
+        // term itself is sanitized first, so the parens are server-
+        // generated, never user-injected.
+        format!("({prefix}:{})", validate_query(query)?)
     };
 
     if let Some(date) = date {
@@ -1064,10 +1070,10 @@ mod tests {
     #[test]
     fn search_url_maps_each_field_to_arxiv_prefix() {
         let cases = [
-            ("all", "search_query=all%3Atransformer"),
-            ("title", "search_query=ti%3Atransformer"),
-            ("author", "search_query=au%3Atransformer"),
-            ("abstract", "search_query=abs%3Atransformer"),
+            ("all", "search_query=%28all%3Atransformer%29"),
+            ("title", "search_query=%28ti%3Atransformer%29"),
+            ("author", "search_query=%28au%3Atransformer%29"),
+            ("abstract", "search_query=%28abs%3Atransformer%29"),
             ("id", "search_query=id%3A1706.03762"),
         ];
         for (field, expected) in cases {
