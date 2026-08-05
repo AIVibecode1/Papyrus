@@ -68,7 +68,10 @@ export function PaperList() {
     .reverse();
   const dayCount = (d: string) => byCategory[category]?.[d]?.length ?? 0;
   const [savedOnly, setSavedOnly] = useState(false);
-  const [searchInput, setSearchInput] = useState("");
+  // Seed the input from the store so external prefills (e.g. the reader's
+  // "Search this title" action) are visible in the box; the effect below
+  // keeps them in sync without fighting the debounce.
+  const [searchInput, setSearchInput] = useState(() => usePapersStore.getState().query);
   const openReader = useReaderStore((s) => s.open);
   const setView = useUiStore((s) => s.setView);
   // Per-category session dismissal for the picks strip: sessionStorage
@@ -131,6 +134,13 @@ export function PaperList() {
     const handle = setTimeout(() => setQuery(searchInput), 400);
     return () => clearTimeout(handle);
   }, [searchInput, setQuery]);
+
+  // One-way store -> input sync for external prefills (search-this-title,
+  // future deep links). Safe with the debounce: the store only changes
+  // after the debounce has already applied the same text.
+  useEffect(() => {
+    setSearchInput(query);
+  }, [query]);
 
   const today = todayStr();
   const backfillActive = progress !== null && progress.category === category;

@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ReaderView } from "@/features/reader/reader-view";
 import type { Paper, ProviderConfig } from "@/lib/types";
+import { usePapersStore } from "@/stores/papers";
 import { useReaderStore } from "@/stores/reader";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
@@ -175,5 +176,60 @@ describe("reader open boundary", () => {
 
     expect(await screen.findByText(/No readable text could be extracted/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("reopens with chat history intact and prefills the papers search from the overview (continuity)", async () => {
+    // A previous session left a chat for this paper (localStorage); the
+    // notes store hydrates independently and never blocks the reader.
+    localStorage.setItem(
+      "papyrus-reader-chat-v1",
+      JSON.stringify({
+        [paper.id]: [
+          {
+            id: 1,
+            role: "user",
+            text: "What is an encoder?",
+            status: "done",
+            error: null,
+            selection: null,
+          },
+          {
+            id: 2,
+            role: "assistant",
+            text: "It maps tokens to vectors.",
+            status: "done",
+            error: null,
+            selection: null,
+          },
+        ],
+      }),
+    );
+
+    await useReaderStore.getState().open(paper);
+    render(<ReaderView />);
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
+    );
+
+    // The overview is the landing tab and shows the abstract.
+    expect(screen.getByText(paper.summary)).toBeInTheDocument();
+
+    // Chat history for this paper restored on the Chat tab.
+    fireEvent.click(screen.getByRole("tab", { name: "Chat" }));
+    expect(screen.getByText("What is an encoder?")).toBeInTheDocument();
+
+    // Search-this-title jumps to the papers view with the title field
+    // preselected on Semantic Scholar (plan 045 WU4).
+    fireEvent.click(screen.getByRole("tab", { name: "Overview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Search title on Semantic Scholar" }));
+
+    const papers = usePapersStore.getState();
+    expect(useUiStore.getState().view).toBe("papers");
+    expect(papers.source).toBe("semanticscholar");
+    expect(papers.searchField).toBe("title");
+    expect(papers.query).toBe(paper.title);
   });
 });
