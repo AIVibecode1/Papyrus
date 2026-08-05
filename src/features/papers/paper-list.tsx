@@ -295,8 +295,10 @@ export function PaperList() {
         </div>
       </div>
 
-      {/* Everything below the pinned bar scrolls in its own container. */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* Everything below the pinned bar scrolls in its own container.
+          pe-2 keeps the paper cards clear of the scrollbar (logical
+          edge: left in RTL, right in LTR). */}
+      <div className="min-h-0 flex-1 overflow-y-auto pe-2">
         <div className="flex flex-col gap-4">
           {!loading && fallbackNote && (
             <div
