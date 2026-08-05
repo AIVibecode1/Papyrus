@@ -37,13 +37,21 @@ function PaperSkeleton() {
 
 export function PaperList() {
   const { t } = useTranslation();
-  const { papers, loading, error, refresh, lastUpdated, fallbackNote, clearFallbackNote } =
+  const { papers, loading, error, refresh, lastUpdated, fallbackNote, clearFallbackNote, query } =
     usePapersStore();
   const category = usePapersStore((s) => s.category);
   const source = usePapersStore((s) => s.source);
   const date = usePapersStore((s) => s.date);
   const setDate = usePapersStore((s) => s.setDate);
   const setQuery = usePapersStore((s) => s.setQuery);
+  const clearSearch = usePapersStore((s) => s.clearSearch);
+  const searchField = usePapersStore((s) => s.searchField);
+  const setSearchField = usePapersStore((s) => s.setSearchField);
+  const yearFrom = usePapersStore((s) => s.yearFrom);
+  const yearTo = usePapersStore((s) => s.yearTo);
+  const setYearRange = usePapersStore((s) => s.setYearRange);
+  const limitToCategory = usePapersStore((s) => s.limitToCategory);
+  const setLimitToCategory = usePapersStore((s) => s.setLimitToCategory);
   const loadMore = usePapersStore((s) => s.loadMore);
   const loadingMore = usePapersStore((s) => s.loadingMore);
   const savedIds = useFavoritesStore((s) => s.ids);
@@ -148,13 +156,26 @@ export function PaperList() {
           no sticky, no z-index, no gap it can float through. */}
       <PapersToolbar
         lastUpdated={lastUpdated}
+        query={query}
         searchValue={searchInput}
         onSearchChange={setSearchInput}
+        onClearSearch={() => {
+          setSearchInput("");
+          clearSearch();
+        }}
         searchPlaceholder={t(
           source === "semanticscholar"
             ? "papers.searchScholarPlaceholder"
             : "papers.searchPlaceholder",
         )}
+        searchField={searchField}
+        onFieldChange={setSearchField}
+        yearFrom={yearFrom}
+        yearTo={yearTo}
+        onYearRange={setYearRange}
+        limitToCategory={limitToCategory}
+        onLimitToCategory={setLimitToCategory}
+        source={source}
         sortVisible={papers.length > 0}
         sortMode={sortMode}
         onSortChange={handleSortChange}
@@ -276,10 +297,30 @@ export function PaperList() {
           {!loading && !error && !savedOnly && papers.length === 0 && (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-                <BookOpenText className="size-8 text-muted-foreground" />
+                {query.trim() ? (
+                  <Search className="size-8 text-muted-foreground" />
+                ) : (
+                  <BookOpenText className="size-8 text-muted-foreground" />
+                )}
                 <p className="text-sm font-medium text-muted-foreground">
-                  {date ? t("papers.noPapersOnDay") : t("papers.empty")}
+                  {query.trim()
+                    ? t("papers.noSearchResults", { query: query.trim() })
+                    : date
+                      ? t("papers.noPapersOnDay")
+                      : t("papers.empty")}
                 </p>
+                {query.trim() && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setSearchInput("");
+                      clearSearch();
+                    }}
+                  >
+                    {t("papers.clearSearch")}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           )}
