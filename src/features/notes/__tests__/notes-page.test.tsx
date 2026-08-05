@@ -91,4 +91,22 @@ describe("NotesPage", () => {
 
     expect(useNotesStore.getState().notes).toEqual([]);
   });
+
+  it("keeps quotes LTR and chrome logical inside the RTL layout", () => {
+    useNotesStore.setState({
+      notes: [makeNote({ kind: "highlight", quote: "we call it attention", body: "" })],
+      loaded: true,
+    });
+
+    const { container } = render(
+      <div dir="rtl">
+        <NotesPage />
+      </div>,
+    );
+
+    // The quote is Latin paper text: pinned LTR even in Arabic mode.
+    expect(screen.getByText(/“we call it attention”/)).toHaveAttribute("dir", "ltr");
+    // No physical edge utilities anywhere in the rendered hub.
+    expect(container.innerHTML).not.toMatch(/\b(ml|mr|pl|pr|left|right)-/);
+  });
 });

@@ -46,7 +46,10 @@ function SelectContent({
   className,
   children,
   position = "item-aligned",
-  align = "center",
+  // Align the popover with the trigger's start edge (logical: left in
+  // LTR, right in RTL) — plan 044 WU2 — so dropdowns never straddle
+  // their triggers in either direction.
+  align = "start",
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (
