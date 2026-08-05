@@ -38,6 +38,7 @@ react-i18next. Backend logic is written in Rust.
 | Second paper source | Semantic Scholar search (citation counts, TLDRs, venues) with automatic fallback to arXiv and a dismissible notice when it happens                                                                                                                                                                                            |
 | Provider failover   | If the active AI provider fails, the next one in your list answers automatically ("Explained by ..." note)                                                                                                                                                                                                                    |
 | Export your data    | One click exports your saved papers and chat transcripts to a timestamped JSON file in Documents                                                                                                                                                                                                                              |
+| Advanced search     | Search any era of papers with fielded modes (All, Title, Author, Abstract, exact arXiv ID), year-range presets (last 5 years, 2010-2016, before 2010), optional scoping to the current field, one-click clear or Escape to restore the feed, and a status line that always says what you are looking at                       |
 
 ## Screenshots
 
