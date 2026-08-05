@@ -19,6 +19,38 @@ Rules:
 
 ---
 
+## v1.1.2 - 2026-08-06
+
+Status: installers built, not yet published on GitHub.
+Built from: <filled after the release commit>
+Quality gates: 320 frontend tests, 128 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker, CI on
+Windows and macOS (artifacts uploaded on every run; tag v1.1.2
+triggers a draft release with both installers).
+
+- Reading history: every paper whose PDF loads successfully in the
+  reader is recorded automatically (failed opens never pollute the
+  list), so a paper you forgot to favorite is still findable later.
+  History is local and capped at 200 entries; reopening a paper moves
+  it back to the top with a fresh timestamp. It is stored by the Rust
+  backend in history.json (app data dir, atomic writes, corrupt-file
+  recovery) and included in exports/imports (merge by paper id, newer
+  open wins).
+- A History mode on the papers toolbar (clock icon, next to Saved)
+  lists the entries with relative "Opened 2 hours ago" labels in the
+  current UI language (EN + AR), each with Open (same reader path, so
+  page-position restore still works), Save to favorites (favorites
+  stay explicit) and Remove actions.
+- Settings > Data gains a dedicated "Clear reading history" action
+  with an inline confirm that never touches favorites or notes; the
+  big "Clear cache and saved data" action also wipes history.json.
+- Release automation fixes (infra, no user-facing change): the release
+  workflow now declares contents: write so the draft release is
+  created reliably, and the CI actions were bumped from node20 to
+  node24 majors (checkout v5, setup-node v5, upload-artifact v5,
+  pnpm/action-setup v6). The prettier gate ignores the generated
+  lockfile and the plans/ docs.
+
 ## v1.1.1 - 2026-08-05
 
 Status: installers built, not yet published on GitHub.
