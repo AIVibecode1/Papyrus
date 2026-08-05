@@ -29,10 +29,16 @@ jobs:
           - platform: macos-latest
             args: ""
     runs-on: ${{ matrix.platform }}
+    # Creating the draft release and attaching installers needs write
+    # access to contents; the repo default token is read-only unless the
+    # workflow asks for more (fixes "Resource not accessible by
+    # integration" on POST /releases).
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
