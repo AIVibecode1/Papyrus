@@ -146,17 +146,20 @@ export function PapersToolbar({
 
   return (
     <div className="flex flex-col gap-4 pb-4">
-      {/* Plan 063: optically centered search. From md up: a 3-column grid
-          with equal 1fr side tracks keeps the search dead-center in both
-          directions regardless of side content; the action buttons are
-          icon-only (aria-labels + tooltips) because the content column is
-          capped at ~1152px (the grid is ~880px even maximized at 1920)
-          and text labels would always collide with the centered field.
-          Below md the row is a plain flex: the field grows/shrinks to
-          fill, so search and actions share one line with zero overlap at
-          every width. The status line is hidden below md. */}
-      <div className="flex items-center gap-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_minmax(0,1fr)]">
-        <div className="hidden min-w-0 items-center gap-x-3 md:flex md:justify-self-start">
+      {/* Plan 063: optically centered search. From lg (1024) up: a
+          3-column grid with equal 1fr side tracks keeps the search
+          dead-center in both directions regardless of side content; the
+          action buttons are icon-only (aria-labels + tooltips) because
+          the content column is capped at ~1152px (the grid is ~880px
+          even maximized at 1920) and text labels would always collide
+          with the centered field. Below lg the row is a plain flex: the
+          field grows/shrinks to fill, so search and actions share one
+          line with zero overlap at every width (the sidebar leaves only
+          ~600px of column at 768-1023, too narrow for a centered 448px
+          field beside any buttons). The status line is hidden below
+          lg. */}
+      <div className="flex items-center gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_minmax(0,1fr)]">
+        <div className="hidden min-w-0 items-center gap-x-3 lg:flex lg:justify-self-start">
           <div className="truncate font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
             {searchActive
               ? years
@@ -199,7 +202,7 @@ export function PapersToolbar({
           dropdown embedded at its end: the user picks All/Title/Author/
           Abstract/ID and Newest/Most cited without leaving the box. The
           parent owns the max width; the field just fills it. */}
-        <div className="w-full min-w-0 justify-self-center md:max-w-md">
+        <div className="w-full min-w-0 justify-self-center lg:max-w-md">
           <PapersSearchField
             value={searchValue}
             onChange={onSearchChange}
