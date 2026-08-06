@@ -22,7 +22,7 @@ Rules:
 ## v1.1.4 - 2026-08-06
 
 Status: installers built, not yet published on GitHub.
-Built from: <filled after the release commit>
+Built from: 76ad640 (release commit; fix 0cd3791 and plan 88e4b3e precede it)
 Quality gates: 320 frontend tests, 128 Rust tests, clippy, rustfmt,
 ESLint, Prettier, strict typecheck, release-integrity checker, CI on
 Windows and macOS (artifacts uploaded on every run; tag v1.1.4
