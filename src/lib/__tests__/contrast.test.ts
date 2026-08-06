@@ -36,17 +36,20 @@ function contrastRatio(a: Rgb, b: Rgb): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-/** Theme tokens duplicated from src/index.css (oklch -> sRGB hex). */
+/** Theme tokens duplicated from src/index.css (oklch -> sRGB hex).
+ * Plan 062 retune: light and sepia deepened their surfaces and muted
+ * ink for a comfortable AA margin (5.87:1 / 5.27:1 light, 5.96:1 /
+ * 5.21:1 sepia). Dark unchanged. */
 const THEMES = {
   light: {
-    mutedForeground: "#736E67",
-    card: "#FCFBF8",
-    background: "#F6F4F1",
+    mutedForeground: "#68625B",
+    card: "#FEFCF9",
+    background: "#F3F0EA",
   },
   sepia: {
-    mutedForeground: "#756657",
-    card: "#F8F1E5",
-    background: "#F1E9DD",
+    mutedForeground: "#6F5947",
+    card: "#FBF2E5",
+    background: "#EDE3D5",
   },
   dark: {
     mutedForeground: "#9B9893",
