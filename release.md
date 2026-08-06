@@ -19,6 +19,23 @@ Rules:
 
 ---
 
+## v1.1.4 - 2026-08-06
+
+Status: installers built, not yet published on GitHub.
+Built from: <filled after the release commit>
+Quality gates: 320 frontend tests, 128 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker, CI on
+Windows and macOS (artifacts uploaded on every run; tag v1.1.4
+triggers a draft release with both installers).
+
+- The papers search bar now stays optically centered in Arabic (RTL)
+  when the window is maximized (plan 063). The toolbar's top row is a
+  direction-aware 3-column grid (status on the inline-start, search in
+  a fixed 28rem middle track, Saved/History/Refresh on the inline-end);
+  the equal side tracks keep the search centered no matter how long
+  the status or action labels are, and narrow windows stack cleanly.
+  Layout only - no theme, token or search-behavior changes.
+
 ## v1.1.3 - 2026-08-06
 
 Status: installers built, not yet published on GitHub.
