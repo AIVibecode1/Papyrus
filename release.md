@@ -19,6 +19,32 @@ Rules:
 
 ---
 
+## v1.1.8 - 2026-08-06
+
+Status: installers built, not yet published on GitHub.
+Built from: <filled after the release commit>
+Quality gates: 329 frontend tests, 128 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker, CI on
+Windows and macOS (artifacts uploaded on every run; tag v1.1.8
+triggers a draft release with both installers).
+
+- Removed the "Search title on Semantic Scholar" button from the
+  reader overview. It was dead weight: the unauthenticated Semantic
+  Scholar search API answers HTTP 429 under its shared rate limits
+  (verified live, 2026-08), so the button could not work reliably
+  and this was true since the early versions. The papers list keeps
+  Semantic Scholar as a search source (with its arXiv fallback), and
+  citation-count enrichment (batch endpoint) is unaffected.
+- Fixed: the search status line ("Best matches for … · Title") could
+  grow wider than its grid track and paint over the centered search
+  bar for long queries (the status cluster was content-sized instead
+  of filling its track). It now stays in its track and truncates on
+  one line in both languages.
+- The papers search input sets autocomplete="off", so the WebView2
+  native autofill dropdown never appears while typing.
+
+---
+
 ## v1.1.7 - 2026-08-06
 
 Status: installers built, not yet published on GitHub.
