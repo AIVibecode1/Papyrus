@@ -146,14 +146,18 @@ export function PapersToolbar({
 
   return (
     <div className="flex flex-col gap-4 pb-4">
-      {/* Plan 063: direction-aware 3-column grid. The middle track is a
-          fixed max (28rem = max-w-md) so the search field keeps its size,
-          and the two 1fr side tracks stay equal, which keeps the search
-          optically centered in BOTH directions (RTL included) no matter
-          how long the status or actions are. Narrow windows stack. */}
-      <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 sm:justify-self-start">
-          <div className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+      {/* Plan 063: optically centered search. From md up: a 3-column grid
+          with equal 1fr side tracks keeps the search dead-center in both
+          directions regardless of side content; the action buttons are
+          icon-only (aria-labels + tooltips) because the content column is
+          capped at ~1152px (the grid is ~880px even maximized at 1920)
+          and text labels would always collide with the centered field.
+          Below md the row is a plain flex: the field grows/shrinks to
+          fill, so search and actions share one line with zero overlap at
+          every width. The status line is hidden below md. */}
+      <div className="flex items-center gap-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_minmax(0,1fr)]">
+        <div className="hidden min-w-0 items-center gap-x-3 md:flex md:justify-self-start">
+          <div className="truncate font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
             {searchActive
               ? years
                 ? t("papers.searchStatusYears", {
@@ -195,7 +199,7 @@ export function PapersToolbar({
           dropdown embedded at its end: the user picks All/Title/Author/
           Abstract/ID and Newest/Most cited without leaving the box. The
           parent owns the max width; the field just fills it. */}
-        <div className="w-full justify-self-center">
+        <div className="w-full min-w-0 justify-self-center md:max-w-md">
           <PapersSearchField
             value={searchValue}
             onChange={onSearchChange}
@@ -209,28 +213,42 @@ export function PapersToolbar({
             onSortChange={onSortChange}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-self-end">
+        <div className="flex items-center justify-end gap-1 whitespace-nowrap sm:justify-self-end">
           <Button
             variant={savedOnly ? "secondary" : "ghost"}
             size="sm"
+            className="px-2"
             onClick={onToggleSavedOnly}
             aria-pressed={savedOnly}
+            aria-label={t("papers.savedOnly")}
+            title={t("papers.savedOnly")}
           >
             <Bookmark className="size-4" />
-            {t("papers.savedOnly")}
+            <span className="sr-only">{t("papers.savedOnly")}</span>
           </Button>
           <Button
             variant={historyMode ? "secondary" : "ghost"}
             size="sm"
+            className="px-2"
             onClick={onToggleHistory}
             aria-pressed={historyMode}
+            aria-label={t("history.title")}
+            title={t("history.title")}
           >
             <Clock className="size-4" />
-            {t("history.title")}
+            <span className="sr-only">{t("history.title")}</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-2"
+            onClick={onRefresh}
+            disabled={loading}
+            aria-label={t("papers.refresh")}
+            title={t("papers.refresh")}
+          >
             <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
-            {t("papers.refresh")}
+            <span className="sr-only">{t("papers.refresh")}</span>
           </Button>
         </div>
       </div>
