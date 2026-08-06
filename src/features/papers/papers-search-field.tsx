@@ -86,6 +86,10 @@ export function PapersSearchField({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         aria-label={ariaLabel}
+        // v1.1.8: without this, WebView2's native autofill draws a
+        // suggestion dropdown next to the field while typing (left in
+        // LTR, right in RTL) that grows under the bar for long queries.
+        autoComplete="off"
         className="h-7 min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
       {onClear && value.length > 0 && (

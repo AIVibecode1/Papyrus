@@ -12,7 +12,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ReaderView } from "@/features/reader/reader-view";
 import type { Paper, ProviderConfig } from "@/lib/types";
-import { usePapersStore } from "@/stores/papers";
 import { useReaderStore } from "@/stores/reader";
 import { useHistoryStore } from "@/stores/history";
 import { useSettingsStore } from "@/stores/settings";
@@ -228,16 +227,5 @@ describe("reader open boundary", () => {
     // Chat history for this paper restored on the Chat tab.
     fireEvent.click(screen.getByRole("tab", { name: "Chat" }));
     expect(screen.getByText("What is an encoder?")).toBeInTheDocument();
-
-    // Search-this-title jumps to the papers view with the title field
-    // preselected on Semantic Scholar (plan 045 WU4).
-    fireEvent.click(screen.getByRole("tab", { name: "Overview" }));
-    fireEvent.click(screen.getByRole("button", { name: "Search title on Semantic Scholar" }));
-
-    const papers = usePapersStore.getState();
-    expect(useUiStore.getState().view).toBe("papers");
-    expect(papers.source).toBe("semanticscholar");
-    expect(papers.searchField).toBe("title");
-    expect(papers.query).toBe(paper.title);
   });
 });

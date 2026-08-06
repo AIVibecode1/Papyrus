@@ -47,6 +47,11 @@ describe("PapersSearchField", () => {
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 
+  it("disables the WebView2 native autofill dropdown (v1.1.8)", () => {
+    render(<PapersSearchField {...baseProps} />);
+    expect(screen.getByRole("textbox")).toHaveAttribute("autocomplete", "off");
+  });
+
   it("does not clear on Escape when the field is empty", () => {
     const onClear = vi.fn();
     render(<PapersSearchField {...baseProps} onClear={onClear} />);

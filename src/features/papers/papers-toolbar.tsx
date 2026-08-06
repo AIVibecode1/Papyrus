@@ -159,7 +159,7 @@ export function PapersToolbar({
           field beside any buttons). The status line is hidden below
           lg. */}
       <div className="flex items-center gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_minmax(0,1fr)]">
-        <div className="hidden min-w-0 items-center gap-x-3 lg:flex lg:justify-self-start">
+        <div className="hidden min-w-0 items-center gap-x-3 lg:flex lg:w-full">
           <div className="truncate font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
             {searchActive
               ? years

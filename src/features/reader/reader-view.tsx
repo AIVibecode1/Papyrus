@@ -609,15 +609,6 @@ export function ReaderView() {
                   setTab("walkthrough");
                   if (provider) void reader.startWalkthrough(provider, i18n.language);
                 }}
-                onSearchScholar={() => {
-                  // Plan 045 WU4: reopen the paper's title in the papers
-                  // view with the title field preselected on Scholar.
-                  const store = usePapersStore.getState();
-                  store.setSource("semanticscholar");
-                  store.setSearchField("title");
-                  store.setQuery(paper.title);
-                  setView("papers");
-                }}
               />
             ) : providers.length === 0 ? (
               <div

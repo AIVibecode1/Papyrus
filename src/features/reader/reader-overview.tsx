@@ -17,8 +17,6 @@ interface ReaderOverviewProps {
   onOpenSettings: () => void;
   /** Switches to the walkthrough tab and starts the section mentor. */
   onExplain: () => void;
-  /** Jumps to the papers view with the title prefilled (plan 045 WU4). */
-  onSearchScholar: () => void;
 }
 
 /** The reader's Overview tab (plan 045 WU1): paper metadata, abstract and
@@ -31,7 +29,6 @@ export function ReaderOverview({
   noProvider,
   onOpenSettings,
   onExplain,
-  onSearchScholar,
 }: ReaderOverviewProps) {
   const { t, i18n } = useTranslation();
   const published = formatUiDate(new Date(paper.published), i18n.language, {
@@ -102,10 +99,6 @@ export function ReaderOverview({
               </Button>
             </div>
           )}
-          <Button size="sm" variant="outline" onClick={onSearchScholar}>
-            <ExternalLink className="size-3.5" />
-            {t("reader.overviewSearchScholar")}
-          </Button>
           <Button
             size="sm"
             variant="outline"
