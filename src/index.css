@@ -113,6 +113,12 @@
 :root {
   color-scheme: light;
   --radius: 0.625rem;
+  /* Plan 062 WU1: theme-aware scrollbars. One definition serves every
+     theme because custom properties resolve at used-value time: inside
+     .dark the mix recomputes against the dark foreground/background,
+     so the thumb is soft charcoal there, never pure black. */
+  --scrollbar-thumb: color-mix(in oklch, var(--foreground) 20%, var(--background));
+  --scrollbar-thumb-hover: color-mix(in oklch, var(--foreground) 32%, var(--background));
   /* Density tokens (plan 040 WU4): card vertical rhythm and the two
      card text sizes live here so every card scales from one place. */
   --space-card-y: 1rem;
@@ -239,6 +245,30 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  /* Plan 062 WU1: theme-aware scrollbars. Without these, WebView2 paints
+     the system dark scrollbar even on light/sepia themes. The thumb is a
+     soft mix of foreground into background (warm bone on light/sepia,
+     charcoal on dark) — never pure black, never pure white. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--background);
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: var(--background);
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 999px;
+    /* Soft inset so the thumb reads as a rounded pill, not a bar. */
+    border: 2px solid var(--background);
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
   }
   body {
     @apply bg-background text-foreground;
