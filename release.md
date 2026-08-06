@@ -19,6 +19,32 @@ Rules:
 
 ---
 
+## v1.1.7 - 2026-08-06
+
+Status: installers built, not yet published on GitHub.
+Built from: <filled after the release commit>
+Quality gates: 329 frontend tests, 128 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker, CI on
+Windows and macOS (artifacts uploaded on every run; tag v1.1.7
+triggers a draft release with both installers).
+
+- User-selectable Arabic font in Settings > Appearance: IBM Plex Sans
+  Arabic (default) or Amiri, the classic Naskh serif. Amiri is bundled
+  locally under the OFL license (400/700 only; intermediate weights
+  resolve to the nearest real face, no fake bold).
+- A- / A+ stepper in the reader header controls the size of the AI
+  explanation text (guided walkthrough, chat, synthesis and the
+  overview summary): three sizes (sm / md / lg), remembered between
+  sessions. The PDF pages keep their own zoom.
+- Fix: generated explanation text was not following the text-size
+  stepper because the shared markdown wrapper pinned text-sm; the
+  scale now applies to every level of the explanation (body,
+  headings, code, tables) with the default sizes unchanged.
+- Dev: Rust prompt-contract tests synced to the v1.1.6 prompt wording
+  (mirrors the updated ai-contract tests).
+
+---
+
 ## v1.1.6 - 2026-08-06
 
 Status: installers built, not yet published on GitHub.
