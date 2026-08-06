@@ -19,6 +19,35 @@ Rules:
 
 ---
 
+## v1.1.3 - 2026-08-06
+
+Status: installers built, not yet published on GitHub.
+Built from: <filled after the release commit>
+Quality gates: 320 frontend tests, 128 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker, CI on
+Windows and macOS (artifacts uploaded on every run; tag v1.1.3
+triggers a draft release with both installers).
+
+- Scrollbars are now part of the theme (plan 062): light and sepia
+  get a soft warm-bone thumb on the canvas instead of WebView2's
+  black system bar, and dark gets a soft charcoal pill. The thumb is
+  a token mix of foreground into background (20%, 32% on hover) with
+  a rounded inset, applied via scrollbar-color and webkit rules; one
+  definition serves all three themes.
+- Light mode surfaces were retuned: a gentle elevation ladder (bone
+  canvas, near-white cards) so cards sit on the background instead of
+  dissolving into it, warm hairlines that read on both surfaces,
+  muted wells in the same warm hue family, and muted text deepened
+  to 5.87:1 on cards and 5.27:1 on the background (WCAG AA).
+- Sepia is now real aged paper: brown-ink text and primary, a warm
+  hue family (~55-78) across every surface, warm brown-gray borders
+  instead of cool gray, and muted text at 5.96:1 on cards and 5.21:1
+  on the background.
+- Chrome hygiene: destructive buttons and badges use a
+  --destructive-foreground token instead of literal white; the only
+  remaining hard-coded white is the pdf.js page canvas (kept
+  paper-white on purpose). Dark mode is untouched.
+
 ## v1.1.2 - 2026-08-06
 
 Status: installers built, not yet published on GitHub.
