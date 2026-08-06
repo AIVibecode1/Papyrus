@@ -132,9 +132,14 @@ mod tests {
     #[test]
     fn messages_follow_ui_language() {
         let en = build_messages(&sample_paper(), "en");
-        assert!(en[0]["content"].as_str().unwrap().contains("English"));
+        assert!(
+            en[0]["content"]
+                .as_str()
+                .unwrap()
+                .contains("smart colleague")
+        );
         let ar = build_messages(&sample_paper(), "ar");
-        assert!(ar[0]["content"].as_str().unwrap().contains("بالعربية"));
+        assert!(ar[0]["content"].as_str().unwrap().contains("واتساب"));
         let user_content = en[1]["content"].as_str().unwrap();
         assert!(user_content.contains("A Test Paper"));
         assert!(user_content.contains("A summary of the test paper."));
@@ -899,8 +904,8 @@ mod tests {
         );
         let system = messages[0]["content"].as_str().unwrap();
         let user = messages[1]["content"].as_str().unwrap();
-        assert!(system.contains("ONE section of the paper at a time"));
-        assert!(system.contains("research mentor"));
+        assert!(system.contains("journal club"));
+        assert!(system.contains("colleague"));
         assert!(user.contains("Paper title: A Sample Paper"));
         assert!(user.contains("Section 2 of 5:"));
         assert!(user.contains("The method uses a transformer."));
