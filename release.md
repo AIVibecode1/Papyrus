@@ -19,6 +19,30 @@ Rules:
 
 ---
 
+## v1.1.6 - 2026-08-06
+
+Status: installers built, not yet published on GitHub.
+Built from: <filled after the release commit>
+Quality gates: 320 frontend tests, 128 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker, CI on
+Windows and macOS (artifacts uploaded on every run; tag v1.1.6
+triggers a draft release with both installers).
+
+- All eight AI prompts rewritten (user-authored v2): the system
+  prompts now use a labmate voice with a concrete aim/avoid example
+  pair (Slack message / WhatsApp register in Arabic), call out vague
+  or overstated abstracts instead of smoothing them over, and target
+  ~300 words with no headers. The reader walkthrough prompts move
+  from a mentor checklist to a journal-club interrogation (what the
+  authors are actually doing, unstated assumptions, weakly supported
+  claims, how to read figures and whether the data supports the
+  conclusion) and deliver the wrap-up without being asked. The QA
+  prompts answer what is genuinely confusing the reader, and the
+  synthesis prompts ask for "five ideas worth keeping, not the five
+  main sections" with a skeptical-reviewer framing. The ai-contract
+  tests now pin the new wording; the source file papyrus_prompts_v2.md
+  is removed (prompts.json is the single source).
+
 ## v1.1.5 - 2026-08-06
 
 Status: installers built, not yet published on GitHub.

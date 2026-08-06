@@ -32,8 +32,8 @@ const provider: ProviderConfig = {
 describe("shared AI resource (src-tauri/prompts.json)", () => {
   it("loads both system prompts", () => {
     // Mirrors the Rust messages_follow_ui_language assertions.
-    expect(prompts.systemPromptEn).toContain("English");
-    expect(prompts.systemPromptAr).toContain("بالعربية");
+    expect(prompts.systemPromptEn).toContain("smart colleague");
+    expect(prompts.systemPromptAr).toContain("واتساب");
     expect(prompts.systemPromptEn.length).toBeGreaterThan(0);
     expect(prompts.systemPromptAr.length).toBeGreaterThan(0);
   });
@@ -43,37 +43,37 @@ describe("shared AI resource (src-tauri/prompts.json)", () => {
     expect(CANCELLED_MARKER).toBe("\u{1F6D1}PAPYRUS_CANCELLED");
   });
 
-  it("system prompts follow the research-mentor methodology", () => {
-    // Mentor persona, natural-language style and researcher thinking must
-    // be present in both languages (user mandate). Assertions track the
-    // CURRENT prompts wording (the user rewrote them — shorter and
-    // sharper), not the original long versions.
+  it("system prompts follow the labmate-voice methodology", () => {
+    // Labmate voice, vagueness-calling and the ~300-word shape must be
+    // present in both languages (user mandate). Assertions track the
+    // CURRENT prompts wording (the user rewrote them in v2 — Slack/WhatsApp
+    // register with aim/avoid examples), not the original versions.
     const en = prompts.systemPromptEn;
     const ar = prompts.systemPromptAr;
-    expect(en).toContain("research mentor");
-    expect(en).toContain("delve");
-    expect(en).toContain("250");
-    expect(en).toContain("exclamation marks");
-    expect(ar).toContain("مرشد بحثي");
-    expect(ar).toContain("مقدمات إنشائية");
-    expect(ar).toContain("250");
+    expect(en).toContain("smart colleague");
+    expect(en).toContain("Slack");
+    expect(en).toContain("300");
+    expect(en).toContain("call that out");
+    expect(ar).toContain("لزميل ذكي");
+    expect(ar).toContain("واتساب");
+    expect(ar).toContain("٣٠٠");
     expect(ar).toContain("لاتكس");
   });
 
-  it("provides the full-paper mentor structure for the reader feature", () => {
-    // Saved now as the single source for the upcoming whole-PDF reader.
-    expect(prompts.fullPaperStructureEn).toContain("research mentor");
+  it("provides the full-paper journal-club structure for the reader feature", () => {
+    // Saved as the single source for the whole-PDF reader walkthrough.
+    expect(prompts.fullPaperStructureEn).toContain("journal club");
     expect(prompts.fullPaperStructureEn).toContain("equation");
     expect(prompts.fullPaperStructureAr).toContain("المعادلات");
-    expect(prompts.fullPaperStructureAr).toContain("مرشدي البحثي");
+    expect(prompts.fullPaperStructureAr).toContain("نقاش مقال بحثي");
   });
 
   it("provides qa and synthesis prompts in both languages", () => {
-    expect(prompts.qaPromptEn).toContain("research mentor");
+    expect(prompts.qaPromptEn).toContain("hallway");
     expect(prompts.qaPromptEn).toContain("question");
-    expect(prompts.qaPromptAr).toContain("مرشدي البحثي");
-    expect(prompts.synthesisPromptEn).toContain("important ideas");
-    expect(prompts.synthesisPromptAr).toContain("أهم 5 أفكار");
+    expect(prompts.qaPromptAr).toContain("الممر");
+    expect(prompts.synthesisPromptEn).toContain("ideas worth keeping");
+    expect(prompts.synthesisPromptAr).toContain("أهم خمس أفكار");
   });
 
   it("reader message builders match the Rust format strings", () => {
