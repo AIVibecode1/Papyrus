@@ -84,6 +84,24 @@
   font-style: normal;
   font-display: swap;
 }
+/* Amiri (user-selectable Arabic font, plan 064): classic Naskh serif.
+   Only 400 and 700 exist; weights 500/600 resolve to the nearest face
+   (400/700) because body sets font-synthesis: style, so the browser
+   never fakes an intermediate weight. OFL licensed, bundled locally. */
+@font-face {
+  font-family: "Amiri";
+  src: url("./assets/fonts/amiri-arabic-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Amiri";
+  src: url("./assets/fonts/amiri-arabic-700-normal.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 @font-face {
   font-family: "Instrument Serif";
   src: url("./assets/fonts/instrument-serif-latin-400-normal.woff2") format("woff2");
@@ -241,10 +259,65 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --font-sans:
-    "Geist Sans", "IBM Plex Sans Arabic", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    "Geist Sans", var(--font-arabic), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
   --font-serif: "Instrument Serif", "Times New Roman", serif;
+}
+
+/* Plan 064: the Arabic font is a runtime-swappable variable. The
+   settings page writes data-arabic-font on <html>; the stack flips
+   between the bundled Naskh serif (Amiri) and the sans (IBM Plex). */
+:root {
+  --font-arabic:
+    "IBM Plex Sans Arabic", "Amiri", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+[data-arabic-font="amiri"] {
+  --font-arabic:
+    "Amiri", "IBM Plex Sans Arabic", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Plan 064b: the reader's AI explanation text scale (A- / A+ stepper in
+   the reader header). Inherited prose (walkthrough, chat, synthesis)
+   scales through the root font-size; the overview summary box carries
+   its own explicit text-sm and is scaled by the same knob. Chrome stays
+   fixed. */
+.reader-ai-panel {
+  --reader-text-scale: 1;
+  font-size: calc(1rem * var(--reader-text-scale));
+}
+.reader-ai-panel[data-reader-scale="sm"] {
+  --reader-text-scale: 0.875;
+}
+.reader-ai-panel[data-reader-scale="lg"] {
+  --reader-text-scale: 1.125;
+}
+.reader-ai-panel [data-ai-summary] {
+  font-size: calc(0.875rem * var(--reader-text-scale));
+}
+/* Plan 064b: AI prose renders through the Markdown component, whose
+   wrapper pins text-sm. These rules make every level follow the
+   stepper: body text and code at their normal sizes when the scale
+   is md, scaled up or down otherwise. Headings and tables scale too,
+   so the whole explanation grows together. */
+.reader-ai-panel .markdown-root {
+  font-size: calc(0.875rem * var(--reader-text-scale));
+}
+.reader-ai-panel .markdown-root h1 {
+  font-size: calc(1.25rem * var(--reader-text-scale));
+}
+.reader-ai-panel .markdown-root h2 {
+  font-size: calc(1.125rem * var(--reader-text-scale));
+}
+.reader-ai-panel .markdown-root h3,
+.reader-ai-panel .markdown-root h4 {
+  font-size: calc(0.875rem * var(--reader-text-scale));
+}
+.reader-ai-panel .markdown-root pre code {
+  font-size: calc(0.75rem * var(--reader-text-scale));
+}
+.reader-ai-panel .markdown-root table {
+  font-size: calc(0.875rem * var(--reader-text-scale));
 }
 
 @layer base {
@@ -278,6 +351,9 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
+    /* Plan 064: never fake weights (Amiri has only 400/700; 500/600 must
+       resolve to the nearest real face). Italic synthesis stays allowed. */
+    font-synthesis: style;
     /* Dates, counts and page numbers stay aligned. */
     font-variant-numeric: tabular-nums;
   }

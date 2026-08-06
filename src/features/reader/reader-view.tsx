@@ -27,6 +27,7 @@ import { ReaderNotes } from "@/features/reader/reader-notes";
 import { ReaderOverview } from "@/features/reader/reader-overview";
 import { useNotesStore } from "@/stores/notes";
 import { usePapersStore } from "@/stores/papers";
+import { useReaderTextScale } from "@/hooks/use-reader-text-scale";
 import { useReaderStore, type ChatMessage, type SectionEntry } from "@/stores/reader";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
@@ -129,6 +130,7 @@ function SectionCard({
 export function ReaderView() {
   const { t, i18n } = useTranslation();
   const setView = useUiStore((s) => s.setView);
+  const { scale, scaleUp, scaleDown } = useReaderTextScale();
   const { providers, activeProviderId } = useSettingsStore();
   const reader = useReaderStore();
   const [tab, setTab] = useState<Tab>("overview");
@@ -277,7 +279,7 @@ export function ReaderView() {
   }, []);
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="reader-ai-panel flex h-dvh flex-col" data-reader-scale={scale}>
       {/* header */}
       <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur">
         <Button
@@ -301,6 +303,30 @@ export function ReaderView() {
             {t("explain.stop")}
           </Button>
         )}
+        {/* Plan 064b: explanation text size stepper (A- / A+). Applies to
+          the AI prose only; the PDF pages keep their own zoom. */}
+        <div className="flex items-center gap-1" role="group" aria-label={t("reader.textScale")}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={scaleDown}
+            disabled={scale === "sm"}
+            aria-label={t("reader.textSmaller")}
+            title={t("reader.textSmaller")}
+          >
+            <span className="text-xs font-semibold">A−</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={scaleUp}
+            disabled={scale === "lg"}
+            aria-label={t("reader.textLarger")}
+            title={t("reader.textLarger")}
+          >
+            <span className="text-sm font-semibold">A+</span>
+          </Button>
+        </div>
       </header>
 
       {/* Reader context row: current mode, walkthrough progress, and the

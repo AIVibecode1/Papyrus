@@ -82,7 +82,8 @@ export function ReaderOverview({
           <p className="text-xs font-semibold text-foreground">{t("reader.overviewAbstract")}</p>
           <p
             dir="ltr"
-            className="rounded-lg border bg-card p-3 text-sm leading-relaxed text-muted-foreground"
+            className="rounded-lg border bg-card p-3 leading-relaxed text-muted-foreground"
+            data-ai-summary
           >
             {paper.summary || paper.tldr || t("papers.noAbstract")}
           </p>

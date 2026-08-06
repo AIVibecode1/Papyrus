@@ -22,7 +22,7 @@ import {
 import type { PaperSource } from "@/lib/arxiv";
 import { exportSavedData, importSavedData } from "@/lib/export";
 import type { ProviderConfig } from "@/lib/types";
-import { useTheme, type Theme } from "@/hooks/use-theme";
+import { useTheme, type ArabicFont, type Theme } from "@/hooks/use-theme";
 import { useHistoryStore } from "@/stores/history";
 import { usePapersStore } from "@/stores/papers";
 import { useSettingsStore } from "@/stores/settings";
@@ -36,7 +36,7 @@ const emptyForm = { baseUrl: "", model: "", key: "" };
 export function SettingsPage() {
   const { t } = useTranslation();
   const setView = useUiStore((s) => s.setView);
-  const { theme, setThemeTo } = useTheme();
+  const { theme, setThemeTo, arabicFont, setArabicFontTo } = useTheme();
   const source = usePapersStore((s) => s.source);
   const setSource = usePapersStore((s) => s.setSource);
   const { providers, activeProviderId, removeProvider, setActiveProvider, deleteKey, hasKey } =
@@ -205,18 +205,32 @@ export function SettingsPage() {
           <h2 id="appearance-heading" className="text-base font-semibold">
             {t("settings.appearance")}
           </h2>
-          <Select
-            value={theme}
-            onValueChange={(v) => setThemeTo(v as Theme)}
-            aria-label={t("settings.appearance")}
-          >
-            <SelectTrigger className="h-8 w-40 text-xs">
+          <Select value={theme} onValueChange={(v) => setThemeTo(v as Theme)}>
+            <SelectTrigger className="h-8 w-40 text-xs" aria-label={t("settings.appearance")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="light">{t("settings.themeLight")}</SelectItem>
               <SelectItem value="sepia">{t("settings.themeSepia")}</SelectItem>
               <SelectItem value="dark">{t("settings.themeDark")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {/* Plan 064: user-selectable Arabic font. Amiri ships 400/700
+          only; intermediate weights resolve to the nearest real face
+          (body sets font-synthesis: style). */}
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">{t("settings.arabicFont")}</p>
+            <p className="text-xs text-muted-foreground">{t("settings.arabicFontHint")}</p>
+          </div>
+          <Select value={arabicFont} onValueChange={(v) => setArabicFontTo(v as ArabicFont)}>
+            <SelectTrigger className="h-8 w-44 text-xs" aria-label={t("settings.arabicFont")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="plex">{t("settings.fontPlex")}</SelectItem>
+              <SelectItem value="amiri">{t("settings.fontAmiri")}</SelectItem>
             </SelectContent>
           </Select>
         </div>

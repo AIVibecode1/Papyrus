@@ -92,6 +92,23 @@ describe("ReaderView", () => {
     expect(useUiStore.getState().view).toBe("papers");
   });
 
+  it("scales the explanation text with the A- / A+ stepper (plan 064b)", () => {
+    render(<ReaderView />);
+    const root = document.querySelector(".reader-ai-panel") as HTMLElement;
+    expect(root.dataset.readerScale).toBe("md");
+
+    fireEvent.click(screen.getByRole("button", { name: "Larger text" }));
+    expect(root.dataset.readerScale).toBe("lg");
+    expect(localStorage.getItem("papyrus-reader-text-scale")).toBe("lg");
+    // The stepper disables at the top of the range.
+    expect(screen.getByRole("button", { name: "Larger text" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Smaller text" }));
+    fireEvent.click(screen.getByRole("button", { name: "Smaller text" }));
+    expect(root.dataset.readerScale).toBe("sm");
+    expect(screen.getByRole("button", { name: "Smaller text" })).toBeDisabled();
+  });
+
   it("offers a settings shortcut when no AI provider is configured", () => {
     useSettingsStore.setState({ providers: [], activeProviderId: null });
     render(<ReaderView />);

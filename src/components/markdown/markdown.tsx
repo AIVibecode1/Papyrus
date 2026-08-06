@@ -153,7 +153,10 @@ export const Markdown = memo(function Markdown({ children, className }: Markdown
   return (
     // break-words: long tokens (URLs, equations) wrap instead of forcing
     // the panel wider than its share of the reader split.
-    <div className={cn("break-words text-sm", className)}>
+    // markdown-root: the A- / A+ stepper (plan 064b) scales AI prose via
+    // .reader-ai-panel .markdown-root rules in index.css; without this
+    // the explicit text-sm here would pin the size and ignore the scale.
+    <div className={cn("markdown-root break-words text-sm", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}

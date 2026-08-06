@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   setSource: vi.fn(),
   setActiveProvider: vi.fn(),
   removeProvider: vi.fn(),
+  setArabicFontTo: vi.fn(),
   deleteKey: vi.fn(async () => {}),
   hasKey: vi.fn(async () => true),
   exportSavedData: vi.fn(async () => "/tmp/papyrus-export.json"),
@@ -32,7 +33,12 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
 
 vi.mock("@/stores/ui", () => ({ useUiStore: () => ({ setView: mocks.setView }) }));
 vi.mock("@/hooks/use-theme", () => ({
-  useTheme: () => ({ theme: "light", setThemeTo: mocks.setThemeTo }),
+  useTheme: () => ({
+    theme: "light",
+    setThemeTo: mocks.setThemeTo,
+    arabicFont: "plex",
+    setArabicFontTo: mocks.setArabicFontTo,
+  }),
 }));
 vi.mock("@/stores/papers", () => ({
   usePapersStore: () => ({ source: "arxiv", setSource: mocks.setSource }),
@@ -61,6 +67,7 @@ const provider: ProviderConfig = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  Element.prototype.scrollIntoView = vi.fn(); // Radix Select in jsdom
   mocks.providers = [];
   mocks.activeProviderId = null;
 });
@@ -177,5 +184,15 @@ describe("settings page", () => {
   it("shows the version line", () => {
     render(<SettingsPage />);
     expect(screen.getByText(/Papyrus/)).toBeInTheDocument();
+  });
+
+  it("offers the Arabic font choice in the appearance section (plan 064)", () => {
+    render(<SettingsPage />);
+    expect(screen.getByText("Arabic font")).toBeInTheDocument();
+    // The select shows the default and both options are listed.
+    const trigger = screen.getByRole("combobox", { name: "Arabic font" });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("option", { name: "Amiri (Naskh serif)" }));
+    expect(mocks.setArabicFontTo).toHaveBeenCalledWith("amiri");
   });
 });

@@ -60,6 +60,13 @@ describe("Markdown renderer", () => {
     expect(items[1]).toHaveTextContent("second item");
   });
 
+  it("marks the wrapper for the reader text-scale rules (plan 064b)", () => {
+    render(<Markdown>{"Some **bold** text."}</Markdown>);
+    const wrapper = document.querySelector(".markdown-root");
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.textContent).toContain("bold");
+  });
+
   it("renders GFM tables", () => {
     render(
       <Markdown>
