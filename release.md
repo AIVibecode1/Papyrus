@@ -19,6 +19,27 @@ Rules:
 
 ---
 
+## v1.1.5 - 2026-08-06
+
+Status: installers built, not yet published on GitHub.
+Built from: <filled after the release commit>
+Quality gates: 320 frontend tests, 128 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker, CI on
+Windows and macOS (artifacts uploaded on every run; tag v1.1.5
+triggers a draft release with both installers).
+
+- Follow-up to the 1.1.4 search-centering fix: on a maximized window
+  the centered search bar could still overlap the Saved button when
+  the text labels were visible (the content column is capped at
+  ~1152px, so the toolbar grid is ~880px wide even at 1920 and the
+  labeled actions never fit beside a 448px field). The action buttons
+  are now icon-only at every width with tooltips and aria-labels, the
+  centered grid applies from md up (plain flex below, where the field
+  grows and shrinks to fill), and the status line hides below md. All
+  widths from 640 to 1920 verified on the built exe via CDP: search
+  centered in EN and AR, actions on the same line, zero overlap, zero
+  overflow.
+
 ## v1.1.4 - 2026-08-06
 
 Status: installers built, not yet published on GitHub.
