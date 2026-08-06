@@ -124,28 +124,28 @@
   --space-card-y: 1rem;
   --text-card-title: 0.9375rem; /* 15px card titles (plan 034) */
   --text-card-meta: 0.75rem;
-  /* Softened day palette: lower text contrast, warm off-white cards. */
-  --background: oklch(0.968 0.005 85);
-  --foreground: oklch(0.3 0.01 70);
-  --card: oklch(0.988 0.004 85);
-  --card-foreground: oklch(0.3 0.01 70);
-  --popover: oklch(0.988 0.004 85);
-  --popover-foreground: oklch(0.3 0.01 70);
-  --primary: oklch(0.28 0.008 70);
-  --primary-foreground: oklch(0.98 0.003 85);
-  --secondary: oklch(0.945 0.006 85);
-  --secondary-foreground: oklch(0.36 0.01 70);
-  --muted: oklch(0.948 0.006 85);
-  /* Contrast-adjusted for WCAG AA (plan 044 WU5): 0.54 light gives
-     4.90:1 on --card and 4.62:1 on --background (0.55 was 4.43:1 on
-     the background surface). */
-  --muted-foreground: oklch(0.54 0.012 75);
-  --accent: oklch(0.955 0.02 240);
-  --accent-foreground: oklch(0.44 0.07 240);
+  /* Softened day palette (plan 062 retune): bone canvas, near-white
+     cards with a clear-but-gentle elevation gap, visible warm hairlines.
+     Muted-foreground recomputed: 5.87:1 on card, 5.27:1 on background. */
+  --background: oklch(0.955 0.008 85);
+  --foreground: oklch(0.29 0.012 70);
+  --card: oklch(0.992 0.004 85);
+  --card-foreground: oklch(0.29 0.012 70);
+  --popover: oklch(0.992 0.004 85);
+  --popover-foreground: oklch(0.29 0.012 70);
+  --primary: oklch(0.27 0.01 70);
+  --primary-foreground: oklch(0.985 0.004 85);
+  --secondary: oklch(0.935 0.008 85);
+  --secondary-foreground: oklch(0.33 0.012 70);
+  --muted: oklch(0.94 0.008 85);
+  --muted-foreground: oklch(0.5 0.014 75);
+  --accent: oklch(0.95 0.022 240);
+  --accent-foreground: oklch(0.42 0.07 240);
   --destructive: oklch(0.52 0.12 25);
-  --border: oklch(0.918 0.006 85);
-  --input: oklch(0.918 0.006 85);
-  --ring: oklch(0.55 0.06 240);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.885 0.01 85);
+  --input: oklch(0.885 0.01 85);
+  --ring: oklch(0.5 0.06 240);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -153,27 +153,31 @@
   --chart-5: oklch(0.769 0.188 70.08);
 }
 
-/* Warm paper reading theme: sepia ink on aged-paper tones. */
+/* Warm paper reading theme (plan 062 retune): aged-paper canvas with
+   brown-ink text; every surface shares the hue ~75 family and the
+   hairlines are warm brown-gray, never cool gray. Muted-foreground
+   recomputed: 5.96:1 on card, 5.21:1 on background. */
 [data-theme="sepia"] {
   color-scheme: light;
-  --background: oklch(0.938 0.018 80);
-  --foreground: oklch(0.33 0.03 60);
-  --card: oklch(0.96 0.017 82);
-  --card-foreground: oklch(0.33 0.03 60);
-  --popover: oklch(0.96 0.017 82);
-  --popover-foreground: oklch(0.33 0.03 60);
-  --primary: oklch(0.4 0.045 55);
-  --primary-foreground: oklch(0.97 0.012 85);
-  --secondary: oklch(0.915 0.016 80);
-  --secondary-foreground: oklch(0.4 0.03 60);
-  --muted: oklch(0.92 0.016 80);
-  --muted-foreground: oklch(0.52 0.03 65);
+  --background: oklch(0.92 0.022 75);
+  --foreground: oklch(0.32 0.035 55);
+  --card: oklch(0.965 0.02 78);
+  --card-foreground: oklch(0.32 0.035 55);
+  --popover: oklch(0.965 0.02 78);
+  --popover-foreground: oklch(0.32 0.035 55);
+  --primary: oklch(0.38 0.05 50);
+  --primary-foreground: oklch(0.97 0.015 80);
+  --secondary: oklch(0.895 0.02 75);
+  --secondary-foreground: oklch(0.37 0.035 55);
+  --muted: oklch(0.9 0.02 75);
+  --muted-foreground: oklch(0.48 0.04 60);
   --accent: oklch(0.93 0.025 240);
-  --accent-foreground: oklch(0.44 0.06 240);
-  --destructive: oklch(0.5 0.13 30);
-  --border: oklch(0.875 0.016 80);
-  --input: oklch(0.875 0.016 80);
-  --ring: oklch(0.55 0.06 240);
+  --accent-foreground: oklch(0.4 0.06 240);
+  --destructive: oklch(0.52 0.12 30);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.83 0.022 70);
+  --input: oklch(0.83 0.022 70);
+  --ring: oklch(0.5 0.06 240);
 }
 
 .dark {
@@ -197,6 +201,7 @@
   --accent: oklch(0.3 0.045 240);
   --accent-foreground: oklch(0.85 0.05 240);
   --destructive: oklch(0.66 0.13 25);
+  --destructive-foreground: oklch(0.98 0 0);
   --border: oklch(0.32 0.012 60);
   --input: oklch(0.32 0.012 60);
   --ring: oklch(0.72 0.06 240);
