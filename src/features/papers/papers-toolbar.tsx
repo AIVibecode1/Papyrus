@@ -146,58 +146,70 @@ export function PapersToolbar({
 
   return (
     <div className="flex flex-col gap-4 pb-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
-          {searchActive
-            ? years
-              ? t("papers.searchStatusYears", {
-                  query,
-                  field: t(fieldKey),
-                  years,
-                }) + (limitToCategory ? t("papers.searchStatusLimitOn") : "")
-              : t("papers.searchStatus", { query, field: t(fieldKey) }) +
-                (limitToCategory ? t("papers.searchStatusLimitOn") : "")
-            : lastUpdated &&
-              t("papers.updated", {
-                time: new Intl.DateTimeFormat(undefined, {
-                  timeStyle: "short",
-                }).format(new Date(lastUpdated)),
-              })}
+      {/* Plan 063: direction-aware 3-column grid. The middle track is a
+          fixed max (28rem = max-w-md) so the search field keeps its size,
+          and the two 1fr side tracks stay equal, which keeps the search
+          optically centered in BOTH directions (RTL included) no matter
+          how long the status or actions are. Narrow windows stack. */}
+      <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 sm:justify-self-start">
+          <div className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+            {searchActive
+              ? years
+                ? t("papers.searchStatusYears", {
+                    query,
+                    field: t(fieldKey),
+                    years,
+                  }) + (limitToCategory ? t("papers.searchStatusLimitOn") : "")
+                : t("papers.searchStatus", { query, field: t(fieldKey) }) +
+                  (limitToCategory ? t("papers.searchStatusLimitOn") : "")
+              : lastUpdated &&
+                t("papers.updated", {
+                  time: new Intl.DateTimeFormat(undefined, {
+                    timeStyle: "short",
+                  }).format(new Date(lastUpdated)),
+                })}
+          </div>
+          {countsPending && (
+            <span className="text-[11px] text-muted-foreground">
+              {t("papers.citationsLoading")}
+            </span>
+          )}
+          {countsUnreachable && (
+            <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              {t("papers.citationsUnreachable")}
+              <button
+                type="button"
+                onClick={onRetryCitations}
+                className="rounded border border-input px-1.5 py-0.5 text-[11px] text-foreground transition-colors hover:bg-accent"
+              >
+                {t("papers.citationsRetry")}
+              </button>
+            </span>
+          )}
+          {countsFresh && (
+            <span className="text-[11px] text-muted-foreground">{t("papers.citationsFresh")}</span>
+          )}
         </div>
         {/* Search box with the field-mode select at its start and the sort
           dropdown embedded at its end: the user picks All/Title/Author/
-          Abstract/ID and Newest/Most cited without leaving the box. */}
-        <PapersSearchField
-          value={searchValue}
-          onChange={onSearchChange}
-          onClear={onClearSearch}
-          placeholder={searchPlaceholder}
-          ariaLabel={searchPlaceholder}
-          field={searchField}
-          onFieldChange={onFieldChange}
-          sortVisible={sortVisible}
-          sortMode={sortMode}
-          onSortChange={onSortChange}
-        />
-        {countsPending && (
-          <span className="text-[11px] text-muted-foreground">{t("papers.citationsLoading")}</span>
-        )}
-        {countsUnreachable && (
-          <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            {t("papers.citationsUnreachable")}
-            <button
-              type="button"
-              onClick={onRetryCitations}
-              className="rounded border border-input px-1.5 py-0.5 text-[11px] text-foreground transition-colors hover:bg-accent"
-            >
-              {t("papers.citationsRetry")}
-            </button>
-          </span>
-        )}
-        {countsFresh && (
-          <span className="text-[11px] text-muted-foreground">{t("papers.citationsFresh")}</span>
-        )}
-        <div className="flex items-center gap-2">
+          Abstract/ID and Newest/Most cited without leaving the box. The
+          parent owns the max width; the field just fills it. */}
+        <div className="w-full justify-self-center">
+          <PapersSearchField
+            value={searchValue}
+            onChange={onSearchChange}
+            onClear={onClearSearch}
+            placeholder={searchPlaceholder}
+            ariaLabel={searchPlaceholder}
+            field={searchField}
+            onFieldChange={onFieldChange}
+            sortVisible={sortVisible}
+            sortMode={sortMode}
+            onSortChange={onSortChange}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:justify-self-end">
           <Button
             variant={savedOnly ? "secondary" : "ghost"}
             size="sm"

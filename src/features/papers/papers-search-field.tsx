@@ -56,7 +56,13 @@ export function PapersSearchField({
   };
 
   return (
-    <div className="flex h-9 w-full max-w-md items-center gap-1.5 rounded-md border border-input bg-background px-2.5 transition-colors focus-within:border-ring">
+    <div
+      /* Plan 063: the parent toolbar owns the max width (28rem middle
+         grid track); the field fills whatever width it is given, so it
+         cannot force a full-row width or wrap to the direction start
+         edge. */
+      className="flex h-9 w-full items-center gap-1.5 rounded-md border border-input bg-background px-2.5 transition-colors focus-within:border-ring"
+    >
       <Search className="size-3.5 shrink-0 text-muted-foreground" />
       <Select value={field} onValueChange={(v) => onFieldChange(v as SearchField)}>
         <SelectTrigger
