@@ -78,6 +78,24 @@ describe("useHistoryStore", () => {
     expect(stored[0].paperId).toBe("p1");
   });
 
+  it("carries lastPage when the reader position is known (plan 073)", () => {
+    useHistoryStore.getState().recordOpen(paper, 4);
+    expect(useHistoryStore.getState().entries[0].lastPage).toBe(4);
+
+    // Without a position the field stays absent, not null.
+    useHistoryStore.getState().recordOpen(paper);
+    expect(useHistoryStore.getState().entries[0].lastPage).toBeUndefined();
+  });
+
+  it("reopening with a new page updates it and keeps the entry on top", async () => {
+    useHistoryStore.getState().recordOpen(paper, 2);
+    await new Promise((r) => setTimeout(r, 5));
+    useHistoryStore.getState().recordOpen(paper, 9);
+    const entries = useHistoryStore.getState().entries;
+    expect(entries).toHaveLength(1);
+    expect(entries[0].lastPage).toBe(9);
+  });
+
   it("reopening the same paper refreshes lastOpenedAt and stays at top", async () => {
     useHistoryStore.getState().recordOpen(paper);
     await new Promise((r) => setTimeout(r, 5));

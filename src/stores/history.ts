@@ -90,7 +90,10 @@ interface HistoryState {
   load: () => Promise<void>;
   /** Records a successful open; sync and never throws (fire-and-forget
    * from the reader so history can never block opening a paper). */
-  recordOpen: (paper: Paper) => void;
+  /** Records (or refreshes) the entry for a successfully opened paper.
+   * Plan 073: `lastPage` rides along from the reader position memory
+   * when known, so the Continue-reading strip can show where to resume. */
+  recordOpen: (paper: Paper, lastPage?: number) => void;
   remove: (paperId: string) => Promise<void>;
   clear: () => Promise<void>;
   /** Merges imported history; same paperId -> the newer lastOpenedAt
@@ -131,8 +134,11 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     });
   },
 
-  recordOpen: (paper) => {
-    const entry = entryFromPaper(paper);
+  recordOpen: (paper, lastPage) => {
+    const entry = {
+      ...entryFromPaper(paper),
+      ...(lastPage !== undefined ? { lastPage } : {}),
+    };
     set((s) => ({ entries: upsertHistory(s.entries, entry) }));
     // Persistence is best-effort and fire-and-forget: a storage failure
     // must never surface in the reader flow.

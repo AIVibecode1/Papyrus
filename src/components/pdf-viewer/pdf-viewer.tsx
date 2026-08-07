@@ -18,6 +18,7 @@ import "pdfjs-dist/web/pdf_viewer.css";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { readPdfPosition, savePdfPosition } from "@/lib/pdf-position";
 
 // Platform detection for shortcut hints (macOS uses the Command key).
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform ?? "");
@@ -66,29 +67,13 @@ interface PdfViewerProps {
   onSelect: (text: string) => void;
 }
 
-// Reading position memory, keyed by paper id.
-const POS_KEY = "papyrus-reader-pos";
+// Reading position memory, keyed by paper id (shared with history
+// recording via src/lib/pdf-position.ts).
 function readPosition(paperId?: string): number | null {
-  if (!paperId) return null;
-  try {
-    const raw = localStorage.getItem(POS_KEY);
-    if (!raw) return null;
-    const map = JSON.parse(raw) as Record<string, number>;
-    return typeof map[paperId] === "number" ? map[paperId] : null;
-  } catch {
-    return null;
-  }
+  return readPdfPosition(paperId);
 }
 function savePosition(paperId: string | undefined, page: number) {
-  if (!paperId) return;
-  try {
-    const raw = localStorage.getItem(POS_KEY);
-    const map = (raw ? JSON.parse(raw) : {}) as Record<string, number>;
-    map[paperId] = page;
-    localStorage.setItem(POS_KEY, JSON.stringify(map));
-  } catch {
-    // memory is best-effort
-  }
+  savePdfPosition(paperId, page);
 }
 
 interface PageView {

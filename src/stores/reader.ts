@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import { CANCELLED_MARKER, newOperationId, stopExplanation } from "@/lib/ai";
 import { getPdfBytes } from "@/lib/pdf";
+import { readPdfPosition } from "@/lib/pdf-position";
 import { extractTextFromPdf } from "@/lib/pdf-text";
 import { capTotal, findContextSection, splitIntoSections } from "@/lib/paper-text";
 import { streamAsk, streamSectionExplanation, streamSynthesis } from "@/lib/reader-ai";
@@ -228,8 +229,9 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         });
         // Plan 060: a successful PDF load records (or refreshes) the
         // reading-history entry. Fire-and-forget: history persistence is
-        // best-effort and must never block the reader.
-        useHistoryStore.getState().recordOpen(paper);
+        // best-effort and must never block the reader. Plan 073: the
+        // saved reader position rides along as lastPage.
+        useHistoryStore.getState().recordOpen(paper, readPdfPosition(paper.id) ?? undefined);
         // Restore a previous walkthrough of this paper (best-effort):
         // reopening a favorited paper must not re-stream ~10 sections.
         const { sectionEntries, synthesis } = loadWalkthrough(paper.id);
