@@ -487,6 +487,51 @@ describe("reader store", () => {
     localStorage.removeItem("papyrus-reader-chat-v1");
   });
 
+  it("caps persisted chat transcripts by paper count (plan 074)", async () => {
+    // Seed 41 older papers, then ask on the open paper: 42 keys -> 2 evicted.
+    const seed: Record<string, unknown[]> = {};
+    for (let i = 0; i < 41; i++) seed[`x${i}`] = [{ role: "user", content: "old" }];
+    localStorage.setItem("papyrus-reader-chat-v1", JSON.stringify(seed));
+
+    await useReaderStore.getState().open(paper);
+    vi.mocked(streamAsk).mockImplementation(chunkStream(["capped"]));
+    await useReaderStore.getState().ask("Q?", provider, "en");
+
+    const raw = JSON.parse(localStorage.getItem("papyrus-reader-chat-v1") ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    const keys = Object.keys(raw);
+    expect(keys.length).toBeLessThanOrEqual(40);
+    // The active paper survives its own write; the oldest seeds went.
+    expect(raw[paper.id]).toBeDefined();
+    expect(raw.x0).toBeUndefined();
+    expect(raw.x1).toBeUndefined();
+  });
+
+  it("evicts the oldest paper, never the just-touched active one (plan 074)", async () => {
+    // The active paper is the OLDEST key: its own write must touch it to
+    // the end of the LRU order so it survives while a newer key is evicted.
+    const seed: Record<string, unknown[]> = {
+      [paper.id]: [{ role: "user", content: "oldest" }],
+    };
+    for (let i = 0; i < 40; i++) seed[`x${i}`] = [{ role: "user", content: "old" }];
+    localStorage.setItem("papyrus-reader-chat-v1", JSON.stringify(seed));
+
+    await useReaderStore.getState().open(paper);
+    vi.mocked(streamAsk).mockImplementation(chunkStream(["kept"]));
+    await useReaderStore.getState().ask("Q?", provider, "en");
+
+    const raw = JSON.parse(localStorage.getItem("papyrus-reader-chat-v1") ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(raw).length).toBeLessThanOrEqual(40);
+    expect(raw[paper.id]).toBeDefined();
+    expect(raw.x0).toBeUndefined();
+    localStorage.removeItem("papyrus-reader-chat-v1");
+  });
+
   it("close resets everything", async () => {
     await useReaderStore.getState().open(paper);
     useReaderStore.getState().close();

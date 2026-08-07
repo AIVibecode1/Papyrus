@@ -13,7 +13,7 @@ Generated from a **deep** `/improve` pass on Papyrus **v1.1.8** (code dump; no l
 | 071 | Allowlist markdown link schemes before openUrl | P0 | S | — | DONE |
 | 072 | Cap import payload size + deepen schema validation | P0 | M | — | DONE |
 | 073 | Wire history lastPage + Continue-reading strip | P1 | M | — | DONE |
-| 074 | Cap chat localStorage by paper-key count | P2 | S | — | TODO |
+| 074 | Cap chat localStorage by paper-key count | P2 | S | — | DONE |
 | 075 | Virtualize long paper / history / saved lists | P2 | M | — | TODO |
 | 076 | CSP hardening spike (Tauri webview) | P2 | M | — | TODO |
 | 077 | Add dependency audit gates to CI | P2 | S | — | TODO |

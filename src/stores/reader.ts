@@ -32,6 +32,10 @@ export interface ChatMessage {
 
 const CHAT_STORAGE_KEY = "papyrus-reader-chat-v1";
 const CHAT_PERSIST_LIMIT = 30;
+/** Papers whose chat transcripts are kept (oldest evicted first). 40
+ * papers x up to 30 turns keeps the localStorage blob bounded for heavy
+ * users; the walkthrough cap is 5 for comparison. */
+const CHAT_PAPER_LIMIT = 40;
 interface ReaderState {
   paper: Paper | null;
   pdfBytes: Uint8Array | null;
@@ -97,7 +101,20 @@ function persistChat(paperId: string, messages: ChatMessage[]) {
       string,
       ChatMessage[]
     >;
+    // Plan 074: touch the active paper (delete + re-set) so the JSON
+    // insertion order doubles as LRU order, then evict the oldest keys
+    // beyond CHAT_PAPER_LIMIT. The active paper is always last after the
+    // touch, so it can never be evicted by its own write. (JS orders
+    // integer-like keys first; paper ids always contain dots or letters,
+    // so insertion order is reliable here.)
+    if (raw[paperId] !== undefined) delete raw[paperId];
     raw[paperId] = messages.slice(-CHAT_PERSIST_LIMIT);
+    const keys = Object.keys(raw);
+    if (keys.length > CHAT_PAPER_LIMIT) {
+      for (const stale of keys.slice(0, keys.length - CHAT_PAPER_LIMIT)) {
+        delete raw[stale];
+      }
+    }
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(raw));
   } catch {
     // Storage full or unavailable: chat history is best-effort.
