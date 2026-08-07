@@ -2,7 +2,7 @@
 // Plan 075: windowed rendering. A long list must not mount every row.
 import "@testing-library/jest-dom/vitest";
 import "@/i18n";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { VirtualList } from "@/features/papers/virtual-paper-list";
@@ -46,5 +46,32 @@ describe("VirtualList", () => {
     const rows = screen.getAllByRole("listitem").length;
     expect(top + bottom + rows * 120).toBe(60 * 120);
     expect(bottom).toBeGreaterThan(0);
+  });
+
+  it("advances the window when a scrollable ancestor scrolls (regression)", () => {
+    // The papers shell scrolls PaperList's own wrapper, NOT #main-content:
+    // the window must track the real scroll container.
+    const scroller = document.createElement("div");
+    scroller.style.overflowY = "auto";
+    Object.defineProperty(scroller, "scrollHeight", { value: 60 * 120, configurable: true });
+    Object.defineProperty(scroller, "clientHeight", { value: 400, configurable: true });
+    document.body.appendChild(scroller);
+
+    render(
+      <VirtualList
+        items={items}
+        estimateSize={120}
+        ariaLabel="Papers"
+        renderItem={(item) => <div>{item.title}</div>}
+      />,
+      { container: scroller },
+    );
+    expect(screen.queryByText("Paper 30")).not.toBeInTheDocument();
+
+    scroller.scrollTop = 30 * 120; // middle of the list
+    fireEvent.scroll(scroller);
+    expect(screen.getByText("Paper 30")).toBeInTheDocument();
+
+    scroller.remove();
   });
 });

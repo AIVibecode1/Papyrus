@@ -317,7 +317,7 @@ export function PaperList() {
               <div className="flex flex-col gap-4">
                 <VirtualList
                   items={savedIds.map((id) => savedBy[id])}
-                  estimateSize={240}
+                  estimateSize={320}
                   ariaLabel={t("papers.savedList")}
                   renderItem={(p, i) => <PaperCard paper={p} index={i} />}
                 />
@@ -358,7 +358,7 @@ export function PaperList() {
             <div className="flex flex-col gap-4">
               <VirtualList
                 items={visiblePapers}
-                estimateSize={240}
+                estimateSize={320}
                 ariaLabel={t("papers.paperList")}
                 renderItem={(p, i) => <PaperCard paper={p} index={i} />}
               />

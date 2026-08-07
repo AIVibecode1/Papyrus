@@ -10,14 +10,29 @@ interface VirtualListProps<T> {
   ariaLabel: string;
 }
 
+/** Finds the real scroll container by walking up from the list: the
+ * papers shell scrolls PaperList's own `overflow-y-auto` wrapper (the
+ * #main-content ancestor is NOT the scroller), and history/saved lists
+ * live under the same wrapper. Falls back to the list wrapper itself
+ * when no scrollable ancestor exists (standalone tests). */
+function findScrollParent(start: HTMLElement | null): HTMLElement | null {
+  let node = start?.parentElement ?? null;
+  while (node) {
+    const overflowY = getComputedStyle(node).overflowY;
+    if (/(auto|scroll|overlay)/.test(overflowY) && node.scrollHeight > node.clientHeight + 4) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
 /** Plan 075: windowed rendering for long paper / history / saved lists.
- * The app shell scrolls `#main-content`; this component observes that
- * element (falling back to its own wrapper in tests) and mounts only the
- * visible slice plus overscan, so a 200-entry history or a large search
- * result never builds hundreds of DOM cards. Rows use estimated heights
- * (uniform enough for paper cards); variable-height rows re-flow within
- * the window while scrolling, which is acceptable for the feed and noted
- * as a follow-up if jumpiness ever matters. */
+ * Mounts only the visible slice plus overscan, so a 200-entry history
+ * or a large search result never builds hundreds of DOM cards. Rows use
+ * estimated heights (uniform enough for paper cards); variable-height
+ * rows re-flow within the window while scrolling, which is acceptable
+ * for the feed and noted as a follow-up if jumpiness ever matters. */
 export function VirtualList<T>({
   items,
   estimateSize = 96,
@@ -28,7 +43,7 @@ export function VirtualList<T>({
   const [window, setWindow] = useState({ start: 0, end: Math.min(items.length, 14) });
 
   useEffect(() => {
-    const el = (listRef.current?.closest("#main-content") as HTMLElement | null) ?? listRef.current;
+    const el = findScrollParent(listRef.current) ?? listRef.current;
     if (!el) return;
     const update = () => {
       const scrollTop = el.scrollTop;

@@ -319,6 +319,18 @@
 .reader-ai-panel .markdown-root table {
   font-size: calc(0.875rem * var(--reader-text-scale));
 }
+/* Equations are almost always English/Latin: inside RTL Arabic prose the
+   formula must stay left-to-right and direction-isolated (otherwise the
+   rendered math mirrors), and display equations center instead of
+   hugging the right edge. */
+.katex {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.katex-display {
+  direction: ltr;
+  text-align: center;
+}
 
 @layer base {
   * {
