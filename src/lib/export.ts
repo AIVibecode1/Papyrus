@@ -104,16 +104,91 @@ export interface ImportSummary {
   readingHistory: number;
 }
 
+/** Plan 072: same hard cap as the Rust import_data (5 MiB) so the
+ * browser preview path cannot be fed an unbounded payload either. */
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+
+function requireString(
+  obj: Record<string, unknown>,
+  key: string,
+  section: string,
+): asserts obj is Record<string, string> {
+  if (typeof obj[key] !== "string") {
+    throw new Error(`Invalid import payload: ${section}.${key} must be a string`);
+  }
+}
+
+/** Plan 072: the import policy is fail-whole-file — a malformed section
+ * rejects the entire import with a message naming the offending field.
+ * Missing sections are treated as empty so older exports still import. */
+function validateImportSection(value: unknown, section: string): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) {
+    throw new Error(`Invalid import payload: ${section} must be an array`);
+  }
+  for (const item of value) {
+    if (typeof item !== "object" || item === null) {
+      throw new Error(`Invalid import payload: ${section} entries must be objects`);
+    }
+    const obj = item as Record<string, unknown>;
+    if (section === "favorites") {
+      requireString(obj, "id", section);
+      requireString(obj, "title", section);
+    } else if (section === "notes") {
+      requireString(obj, "id", section);
+      requireString(obj, "paperId", section);
+      requireString(obj, "updatedAt", section);
+    } else if (section === "readingHistory") {
+      requireString(obj, "paperId", section);
+      requireString(obj, "title", section);
+      requireString(obj, "lastOpenedAt", section);
+    }
+  }
+}
+
+function validateChatSection(value: unknown): void {
+  if (value === undefined) return;
+  if (typeof value !== "object" || value === null) {
+    throw new Error("Invalid import payload: chat must be an object");
+  }
+  for (const [paperId, turns] of Object.entries(value as Record<string, unknown>)) {
+    if (!Array.isArray(turns)) {
+      throw new Error(`Invalid import payload: chat[${paperId}] must be an array`);
+    }
+    for (const turn of turns) {
+      if (typeof turn !== "object" || turn === null) {
+        throw new Error(`Invalid import payload: chat[${paperId}] entries must be objects`);
+      }
+      const t = turn as Record<string, unknown>;
+      requireString(t, "role", `chat[${paperId}]`);
+      if (t.role !== "user" && t.role !== "assistant") {
+        throw new Error(`Invalid import payload: chat[${paperId}] role must be user or assistant`);
+      }
+      requireString(t, "content", `chat[${paperId}]`);
+    }
+  }
+}
+
 /** Structural validation for the browser path (the Tauri path validates
  * server-side in import_data; the same rules apply here). */
 function parseExportPayload(raw: string): ExportPayload {
+  if (raw.length > MAX_IMPORT_BYTES) {
+    throw new Error("Import payload is too large (max 5 MB)");
+  }
   const value = JSON.parse(raw) as Partial<ExportPayload>;
   if (value.app !== "papyrus") throw new Error("Not a Papyrus export file");
-  if (!Array.isArray(value.favorites)) value.favorites = [];
-  if (!value.chat || typeof value.chat !== "object") value.chat = {};
-  if (!Array.isArray(value.notes)) value.notes = [];
-  if (!Array.isArray(value.readingHistory)) value.readingHistory = [];
-  return value as ExportPayload;
+  validateImportSection(value.favorites, "favorites");
+  validateChatSection(value.chat);
+  validateImportSection(value.notes, "notes");
+  validateImportSection(value.readingHistory, "readingHistory");
+  return {
+    app: "papyrus",
+    exportedAt: value.exportedAt ?? new Date().toISOString(),
+    favorites: value.favorites ?? [],
+    chat: value.chat ?? {},
+    notes: value.notes ?? [],
+    readingHistory: value.readingHistory ?? [],
+  };
 }
 
 /**

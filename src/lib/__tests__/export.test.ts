@@ -193,4 +193,35 @@ describe("importSavedData", () => {
   it("rejects invalid JSON", async () => {
     await expect(importSavedData("not json {{")).rejects.toThrow();
   });
+
+  it("rejects oversize payloads (plan 072)", async () => {
+    const big = '{"app":"papyrus","favorites":[' + '"x",'.repeat(5 * 1024 * 1024) + "]}";
+    await expect(importSavedData(big)).rejects.toThrow("too large");
+  });
+
+  it("rejects malformed favorites entries (plan 072)", async () => {
+    const bad = JSON.stringify({ app: "papyrus", favorites: [{ id: "a1" }] });
+    await expect(importSavedData(bad)).rejects.toThrow("favorites.title must be a string");
+  });
+
+  it("rejects non-array sections (plan 072)", async () => {
+    const bad = JSON.stringify({ app: "papyrus", readingHistory: {} });
+    await expect(importSavedData(bad)).rejects.toThrow("readingHistory must be an array");
+  });
+
+  it("rejects bad chat roles and shapes (plan 072)", async () => {
+    const badRole = JSON.stringify({
+      app: "papyrus",
+      chat: { p1: [{ role: "system", content: "x" }] },
+    });
+    await expect(importSavedData(badRole)).rejects.toThrow("role must be user or assistant");
+
+    const badShape = JSON.stringify({ app: "papyrus", chat: { p1: {} } });
+    await expect(importSavedData(badShape)).rejects.toThrow("chat[p1] must be an array");
+  });
+
+  it("accepts a minimal export with no sections (plan 072)", async () => {
+    const summary = await importSavedData('{"app":"papyrus"}');
+    expect(summary).toMatchObject({ favorites: 0, chats: 0, notes: 0, readingHistory: 0 });
+  });
 });

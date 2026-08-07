@@ -11,7 +11,7 @@ Generated from a **deep** `/improve` pass on Papyrus **v1.1.8** (code dump; no l
 |------|-------|----------|--------|------------|--------|
 | 070 | Reconcile plans index + AGENTS.md to shipped 1.1.8 | P0 | S | — | DONE |
 | 071 | Allowlist markdown link schemes before openUrl | P0 | S | — | DONE |
-| 072 | Cap import payload size + deepen schema validation | P0 | M | — | TODO |
+| 072 | Cap import payload size + deepen schema validation | P0 | M | — | DONE |
 | 073 | Wire history lastPage + Continue-reading strip | P1 | M | — | TODO |
 | 074 | Cap chat localStorage by paper-key count | P2 | S | — | TODO |
 | 075 | Virtualize long paper / history / saved lists | P2 | M | — | TODO |
