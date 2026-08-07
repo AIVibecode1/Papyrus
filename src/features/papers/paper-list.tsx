@@ -13,6 +13,7 @@ import { useDigestStore, addDays, todayStr } from "@/stores/digest";
 import { useReaderStore } from "@/stores/reader";
 import { useUiStore } from "@/stores/ui";
 import { PaperCard } from "@/features/papers/paper-card";
+import { ContinueReading } from "@/features/papers/continue-reading";
 import { PapersToolbar } from "@/features/papers/papers-toolbar";
 import { HistoryList } from "@/features/papers/history-list";
 import { TodayPicks } from "@/features/papers/today-picks";
@@ -240,6 +241,12 @@ export function PaperList() {
                 <X className="size-3.5" />
               </Button>
             </div>
+          )}
+
+          {/* Plan 073: Continue-reading strip on the main feed (hidden
+          while browsing saved / history / search / day views). */}
+          {!loading && !error && !savedOnly && !historyMode && !date && !query.trim() && (
+            <ContinueReading />
           )}
 
           {/* Today's picks: heuristic strip on the latest view only (hidden
