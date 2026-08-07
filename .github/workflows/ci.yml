@@ -21,6 +21,22 @@ jobs:
       - run: pnpm test
       - run: pnpm exec prettier --check .
       - run: node dev/check-release-integrity.mjs
+      # Plan 077: dependency audit gate (fails only on high/critical; the
+      # local baseline is 1 low + 5 moderate, none high).
+      - run: pnpm audit --audit-level=high
+
+  # Plan 077: Rust advisory audit on linux only (cargo-audit recompiles
+  # per run; windows/macos matrix legs would triple the cost for nothing).
+  audit-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-audit --locked
+      # cargo-audit auto-detects Cargo.lock from the working directory
+      # (no --manifest-path flag in 0.22); run from the crate root.
+      - working-directory: src-tauri
+        run: cargo audit
 
   desktop:
     strategy:

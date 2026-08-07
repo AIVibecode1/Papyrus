@@ -16,7 +16,7 @@ Generated from a **deep** `/improve` pass on Papyrus **v1.1.8** (code dump; no l
 | 074 | Cap chat localStorage by paper-key count | P2 | S | — | DONE |
 | 075 | Virtualize long paper / history / saved lists | P2 | M | — | DONE |
 | 076 | CSP hardening spike (Tauri webview) | P2 | M | — | TODO |
-| 077 | Add dependency audit gates to CI | P2 | S | — | TODO |
+| 077 | Add dependency audit gates to CI | P2 | S | — | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED | REJECTED
 

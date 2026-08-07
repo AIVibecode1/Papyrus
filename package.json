@@ -14,6 +14,7 @@
     "check:release": "node dev/check-release-integrity.mjs",
     "tauri": "tauri",
     "lint": "pnpm exec eslint .",
+    "audit": "pnpm audit --audit-level=high",
     "typecheck": "pnpm exec tsc --noEmit",
     "format": "pnpm exec prettier --write .",
     "format:check": "pnpm exec prettier --check ."
