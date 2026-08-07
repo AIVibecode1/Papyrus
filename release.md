@@ -19,6 +19,42 @@ Rules:
 
 ---
 
+## v1.1.9 - 2026-08-07
+
+Status: installers built, not yet published on GitHub.
+Built from: TBD (release commit; fixes precede it)
+Quality gates: 352 frontend tests, 134 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker, CI on
+Windows and macOS (artifacts uploaded on every run; tag v1.1.9
+triggers a draft release with both installers).
+
+- Fixed: scrolling the papers feed left a long empty gap before the
+  "Load more" button. The virtualized list was listening to the wrong
+  scroll container (the shell's #main-content never scrolls; the
+  feed's own wrapper does), so the visible window never advanced.
+  The list now detects the real scrollable ancestor, and the window
+  tracks scrolling with a row estimate that matches the card height.
+- Fixed: equations in Arabic explanations rendered mirrored. KaTeX
+  inherited the RTL direction of the surrounding prose; formulas are
+  now forced left-to-right and direction-isolated, and display
+  equations are centered instead of hugging the right edge.
+- Security: the webview now ships with a restrictive Content-Security-
+  Policy (default-src 'self', no unsafe-eval, IPC channel allowlisted).
+  Verified on the built app: pdf.js, KaTeX, mermaid, AI streaming and
+  the virtualized feed all work with zero CSP violations. The spike
+  notes live in docs/spikes/csp.md.
+- Hardened imports: export payloads over 5 MiB are rejected, and
+  favorites/notes/history sections are validated item-by-item before
+  anything is merged (a malformed file is refused whole, with a
+  message naming the section).
+- New: a "Continue reading" strip on the papers feed shows the three
+  most recent papers with their last page, and the reading-history
+  entries now carry the last page a paper was open at.
+- Perf: long paper lists, saved lists and history are now virtualized
+  (only the visible window of rows is mounted).
+- Chore: CI runs pnpm audit and cargo audit on every PR; both gates
+  pass on the current dependency tree.
+
 ## v1.1.8 - 2026-08-06
 
 Status: installers built, not yet published on GitHub.
