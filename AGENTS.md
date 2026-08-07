@@ -8,6 +8,7 @@ This is an open-source cross-platform desktop application (Windows + macOS) buil
 
 - Fetch the latest research papers (primarily from arXiv) in user-selected fields (AI, ML, CS, etc.)
 - Explain selected papers using the user's own AI providers / API keys
+- Local-first features: per-paper notes, favorites, and reading history
 - Fully bilingual: English + Arabic with proper RTL support
 - Simple, clean, and modern UI/UX
 - Privacy-first (user provides their own API keys)
@@ -59,7 +60,9 @@ The app prioritizes **simplicity**, **security**, **bilingual experience**, and 
 - **Frontend**: React + TypeScript + Tailwind CSS + shadcn/ui
 - **State Management**: Prefer Zustand (keep it simple)
 - **Internationalization**: react-i18next with full RTL support
-- **Paper Source**: arXiv API (primary). Semantic Scholar / OpenAlex can be added later
+- **Paper Sources**: arXiv API (primary) and Semantic Scholar (search
+  source with automatic arXiv fallback; citation counts via batch
+  endpoint with OpenAlex fallback)
 - **AI Layer**: OpenAI-compatible client (supports OpenRouter, DeepSeek, OpenCode, Ollama, custom base URLs, etc.)
 - **Backend Logic**: Rust commands (pure Rust preferred over Python sidecar: one toolchain, simpler packaging)
 - **Secure Storage**: OS keychain via the `keyring` crate (Windows Credential Manager / macOS Keychain)

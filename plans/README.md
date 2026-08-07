@@ -1,86 +1,76 @@
-# Papyrus audit plans — Round 4
+# Papyrus plans index
 
-Round-based audit log. Every round replaces the previous round's DONE
-set with fresh numbering. Old plans stay in this directory as audit
-history.
+Round-based audit log. Old plans stay in this directory as history; this
+index is the single source of truth for what is open, shipped, or
+superseded.
 
-**Current round: 4** (plans 040–047).  
-**Previous round: 3** (plans 032–037 — still TODO unless shipped).
+**Current product version: 1.1.8** (package.json / tauri.conf.json /
+Cargo.toml are kept in sync; `node dev/check-release-integrity.mjs`
+verifies).
 
-## Goal of this round
+## Active / next
 
-Turn Papyrus from “latest arXiv digest + AI explainer” into a durable
-**research assistant** closer to alphaXiv: search any era of papers,
-take notes, connect a coding model (Codex) safely, and keep a polished
-bilingual RTL/LTR experience on a maintainable architecture.
+The current batch is the 2026-08-07 deep improve audit. See
+`plans/AUDIT-IMPROVE-README.md` for the full index and findings; the
+table below mirrors its status column.
 
-This round does **not** replace Round 3 work. If 032–036 are still open,
-finish or deliberately defer them before 047 (release). Prefer:
+| Plan | Title | Priority | Effort | Status |
+|------|-------|----------|--------|--------|
+| 070 | Reconcile plans index + AGENTS.md to shipped 1.1.8 | P0 | S | IN PROGRESS |
+| 071 | Allowlist markdown link schemes before openUrl | P0 | S | TODO |
+| 072 | Cap import payload size + deepen schema validation | P0 | M | TODO |
+| 073 | Wire history lastPage + Continue-reading strip | P1 | M | TODO |
+| 074 | Cap chat localStorage by paper-key count | P2 | S | TODO |
+| 075 | Virtualize long paper / history / saved lists | P2 | M | TODO |
+| 076 | CSP hardening spike (Tauri webview) | P2 | M | TODO |
+| 077 | Add dependency audit gates to CI | P2 | S | TODO |
 
-1. Ship any already-green Round-3 fixes first.
-2. Run Round-4 plans in the order below.
-3. Use 047 as the release vehicle.
+## Superseded / shipped
 
-## Execution order and status
+Round 4 (040–047) and Round 5 (050–063) were implemented across
+v1.0.x–v1.1.8. The rows below use **SUPERSEDED** where the code shipped
+without the plan file being checked off, **DONE** where the plan was
+formally completed. Do not re-implement any of these.
 
-| Plan | Title                                                         | Priority | Effort | Depends on      | Status |
-| ---- | ------------------------------------------------------------- | -------- | ------ | --------------- | ------ |
-| 040  | Architecture foundations (shell, modules, design tokens)      | P0       | L      | —               | TODO   |
-| 041  | Advanced search (old papers + search modes + filters)         | P0       | L      | 040             | TODO   |
-| 042  | Note-taking system (paper notes, highlights, free notes)      | P0       | L      | 040             | TODO   |
-| 043  | Codex safe auth + provider hardening                          | P1       | M      | 040             | TODO   |
-| 044  | RTL / LTR experience + UI/UX fine-tune                        | P1       | M      | 040, 041, 042   | TODO   |
-| 045  | Research-assistant depth (alphaXiv-style mentor features)     | P1       | M      | 041, 042, 043   | TODO   |
-| 046  | Deep logic review of new modules + i18n parity                | P1       | M      | 041–045         | TODO   |
-| 047  | Release vehicle (version bump + docs + gates)                 | P1       | M      | 040–046 subset  | TODO   |
-
-## How an LLM agent must use these plans
-
-Each plan file is written as an **implementation brief for an agent**:
-
-1. Read the **Non-negotiables** and **Out of scope** first.
-2. Follow **File map** and **Data models** exactly unless a plan revision is written.
-3. Implement in the **Work units** order; each unit ends with a commit when green.
-4. Run the **Verification gates** before moving to the next plan.
-5. Never invent API keys, OAuth client secrets, or network endpoints that are not documented in the plan.
-6. Preserve existing security contracts: OS keychain only, no key in webview, HTTPS for remote providers, markdown HTML escape, SSRF guards on PDF/fetch.
+| Plan | Title | Status | Landed in |
+|------|-------|--------|-----------|
+| 040 | Architecture foundations (shell, modules, design tokens) | DONE | v1.0.x |
+| 041 | Advanced search (old papers + search modes + filters) | SUPERSEDED | v1.0.x (fields, years, limit-to-category, relevance/sort) |
+| 042 | Note-taking system (paper notes, highlights, free notes) | SUPERSEDED | v1.0.x (`notes.rs`, notes store/UI) |
+| 043 | Codex safe auth + provider hardening | SUPERSEDED | v1.0.x (OpenAI-compatible provider system; OAuth never implemented by design) |
+| 044 | RTL / LTR experience + UI/UX fine-tune | DONE | v1.0.x |
+| 045 | Research-assistant depth (alphaXiv-style mentor features) | SUPERSEDED | v1.0.x (overview, walkthrough, ask, synthesis) |
+| 046 | Deep logic review of new modules + i18n parity | DONE | v1.0.x |
+| 047 | Release vehicle (version bump + docs + gates) | DONE | v1.0.x |
+| 050 | Search relevance and archive | DONE | v1.0.x |
+| 051 | Search chrome visual fix | DONE | v1.0.x |
+| 052 | Reader copy / paste UX | DONE | v1.0.x |
+| 053 | OpenAI account truth and auth | DONE | v1.0.x |
+| 054 | Design and dark theme push | DONE | v1.0.x |
+| 055 | Round 5 QA checklist | DONE | v1.0.x |
+| 056 | Round 5 release | DONE | v1.0.x |
+| 060 | Reading history | DONE | v1.1.2 (`history.rs`, history store/UI, settings clear, export/import) |
+| 062 | Light and sepia theme polish | DONE | v1.1.3 |
+| 063 | RTL search toolbar center | DONE | v1.1.4–1.1.5 (icon-only actions with tooltips; status cluster fills its track in v1.1.8) |
 
 ## Cross-cutting rules (apply to every plan)
 
-- **Token-only UI**: no raw Tailwind color utilities for theme surfaces; use CSS variables / design tokens from `src/index.css`.
-- **i18n**: every new user-visible string lands in `en.json` **and** `ar.json` in the same commit.
-- **RTL**: use logical properties (`ms`/`me`/`ps`/`pe`/`start`/`end`), not `left`/`right`. Paper titles and math stay `dir="ltr"`.
-- **Tests**: every new store/action and pure function gets unit tests; UI flows that can break RTL get component tests with `dir="rtl"`.
-- **Commits**: one logical concern per commit; message format matches repo history (`feat(search): …`, `fix(rtl): …`, `perf(pdf): …`).
-- **No scope creep**: if a nice idea is not in the plan, open a spike note under `docs/spikes/` instead of implementing it mid-plan.
+- **Security**: OS keychain only for keys, HTTPS for remote providers,
+  SSRF guards on PDF/fetch, markdown HTML escape.
+- **i18n**: every new user-visible string lands in `en.json` **and**
+  `ar.json` in the same commit.
+- **RTL**: logical properties (`ms`/`me`/`ps`/`pe`/`start`/`end`), not
+  `left`/`right`. Paper titles and math stay `dir="ltr"`.
+- **Tests**: new stores/actions/pure functions get unit tests; UI flows
+  that can break RTL get component tests with `dir="rtl"`.
+- **Commits**: one logical concern per commit; message format matches
+  repo history (`feat(search): …`, `fix(rtl): …`).
+- **No scope creep**: if a nice idea is not in a plan, open a spike note
+  instead of implementing it mid-plan.
 
-## Dependency graph (simplified)
+## Maintenance notes
 
-```
-040 Architecture
- ├── 041 Search
- ├── 042 Notes
- └── 043 Codex auth
-        │
-        ├── 044 RTL/UX (needs shell + search chrome + notes surfaces)
-        └── 045 Research depth (needs search + notes + auth)
-                │
-                └── 046 Logic review → 047 Release
-```
-
-## Already shipped context (do not re-do)
-
-From Round 3 evidence (see `plans/README.md` history and commits on `main`):
-
-- Black PDF pages fixed (fresh canvas per render run).
-- Floating filter bar opacity/sticky fixed.
-- Most-cited spinner honest completed/failed states.
-- Version files already show `1.0.11` in some snapshots — confirm on disk before any bump in 047.
-
-## Primary user outcomes after Round 4
-
-1. User can search **historical** papers with clear modes (keyword, author, title, category+range, Semantic Scholar relevance).
-2. User can attach **notes and highlights** to a paper and find them later.
-3. User can connect **Codex / OpenAI coding models** via the existing provider system with the same keychain safety model (optional OAuth only if implemented as documented in 043).
-4. Arabic and English both feel first-class; no layout breakage when switching direction.
-5. Codebase has clearer feature boundaries so future LLM agents touch fewer files per change.
+- After each release, update this index (shipped rows) in the same PR as
+  the version bump.
+- Product plan numbers (060+) and audit plan numbers (070+) coexist; the
+  Active table lists only truly open work.
