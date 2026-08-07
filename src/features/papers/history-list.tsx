@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { StatePanel } from "@/components/ui/state-panel";
+import { VirtualList } from "@/features/papers/virtual-paper-list";
 import type { ReadingHistoryEntry } from "@/lib/types";
 import { useFavoritesStore } from "@/stores/favorites";
 import { useHistoryStore, paperFromEntry } from "@/stores/history";
@@ -108,10 +109,13 @@ export function HistoryList() {
   }
 
   return (
-    <div className="flex flex-col gap-3" aria-label={t("history.title")}>
-      {entries.map((entry) => (
-        <HistoryRow key={entry.paperId} entry={entry} />
-      ))}
+    <div className="flex flex-col gap-3">
+      <VirtualList
+        items={entries}
+        estimateSize={72}
+        ariaLabel={t("history.title")}
+        renderItem={(entry) => <HistoryRow entry={entry} />}
+      />
     </div>
   );
 }

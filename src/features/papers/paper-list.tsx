@@ -15,6 +15,7 @@ import { useUiStore } from "@/stores/ui";
 import { PaperCard } from "@/features/papers/paper-card";
 import { ContinueReading } from "@/features/papers/continue-reading";
 import { PapersToolbar } from "@/features/papers/papers-toolbar";
+import { VirtualList } from "@/features/papers/virtual-paper-list";
 import { HistoryList } from "@/features/papers/history-list";
 import { TodayPicks } from "@/features/papers/today-picks";
 
@@ -314,9 +315,12 @@ export function PaperList() {
               />
             ) : (
               <div className="flex flex-col gap-4">
-                {savedIds.map((id, i) => (
-                  <PaperCard key={id} paper={savedBy[id]} index={i} />
-                ))}
+                <VirtualList
+                  items={savedIds.map((id) => savedBy[id])}
+                  estimateSize={240}
+                  ariaLabel={t("papers.savedList")}
+                  renderItem={(p, i) => <PaperCard paper={p} index={i} />}
+                />
               </div>
             ))}
 
@@ -352,9 +356,12 @@ export function PaperList() {
 
           {!historyMode && !loading && !error && !savedOnly && papers.length > 0 && (
             <div className="flex flex-col gap-4">
-              {visiblePapers.map((paper, i) => (
-                <PaperCard key={paper.id} paper={paper} index={i} />
-              ))}
+              <VirtualList
+                items={visiblePapers}
+                estimateSize={240}
+                ariaLabel={t("papers.paperList")}
+                renderItem={(p, i) => <PaperCard paper={p} index={i} />}
+              />
               {papers.length >= 20 && (
                 <Button
                   variant="outline"
