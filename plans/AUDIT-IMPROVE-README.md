@@ -10,7 +10,7 @@ Generated from a **deep** `/improve` pass on Papyrus **v1.1.8** (code dump; no l
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 070 | Reconcile plans index + AGENTS.md to shipped 1.1.8 | P0 | S | — | DONE |
-| 071 | Allowlist markdown link schemes before openUrl | P0 | S | — | TODO |
+| 071 | Allowlist markdown link schemes before openUrl | P0 | S | — | DONE |
 | 072 | Cap import payload size + deepen schema validation | P0 | M | — | TODO |
 | 073 | Wire history lastPage + Continue-reading strip | P1 | M | — | TODO |
 | 074 | Cap chat localStorage by paper-key count | P2 | S | — | TODO |

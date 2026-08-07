@@ -122,6 +122,26 @@ describe("Markdown renderer", () => {
     );
   });
 
+  it("never opens unsafe link schemes (plan 071)", () => {
+    const { container } = render(
+      <Markdown>
+        {[
+          "Click [here](javascript:alert(1)) or [there](data:text/html,hi) or [file](file:///etc/passwd).",
+        ].join("\n")}
+      </Markdown>,
+    );
+
+    // react-markdown's default urlTransform already blanks unsafe hrefs;
+    // our isSafeOpenUrl gate is the second line of defence on click.
+    const anchors = [...container.querySelectorAll("a")];
+    expect(anchors).toHaveLength(3);
+    for (const anchor of anchors) {
+      expect(anchor.getAttribute("href")).toBe("");
+      fireEvent.click(anchor);
+    }
+    expect(window.open).not.toHaveBeenCalled();
+  });
+
   it("renders mermaid code fences as diagrams", async () => {
     render(
       <Markdown>

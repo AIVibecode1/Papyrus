@@ -4,6 +4,7 @@ import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { useTranslation } from "react-i18next";
+import { isSafeOpenUrl } from "@/lib/safe-url";
 import "katex/dist/katex.min.css";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -39,7 +40,10 @@ export function normalizeMathDelimiters(text: string): string {
 
 export const Markdown = memo(function Markdown({ children, className }: MarkdownProps) {
   const handleLinkClick = (e: MouseEvent<HTMLAnchorElement>, href: string | undefined) => {
-    if (!href) {
+    if (!href || !isSafeOpenUrl(href)) {
+      // Plan 071: AI output and notes are untrusted. javascript:, data:,
+      // file: and friends must never reach the OS opener; silently
+      // ignore them (preventDefault stops the anchor's default jump).
       e.preventDefault();
       return;
     }
