@@ -21,7 +21,7 @@ Rules:
 
 ## v1.1.10 - 2026-09-03
 
-Status: pushed to origin/main, not yet tagged or published.
+Status: tagged v1.1.10, draft release building; not yet published.
 Built from: ec36e74 (CI audit-fix commit).
 Quality gates: 364 frontend tests, 134 Rust tests, clippy, rustfmt,
 ESLint, Prettier, strict typecheck, release-integrity checker, CI on
