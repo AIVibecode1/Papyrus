@@ -11,7 +11,9 @@ touching a feature so new code lands in the same place as existing code.
   the only place that persists user data (localStorage keys are
   domain-scoped constants at the top of each store file).
 - `src/lib/` — pure functions and Tauri invoke wrappers (no React):
-  `arxiv.ts` (fetch wrapper), `ai.ts`, `export.ts`, `paper-sort.ts`,
+  `arxiv.ts` (fetch wrapper), `ai.ts` (facade: Tauri dispatch +
+  re-exports; `ai-contract`, `ai-operations`, `ai-browser-keys`,
+  `ai-browser-chat` leaves), `export.ts`, `paper-sort.ts`,
   `paper-text.ts`, `pdf-text.ts`, `types.ts` (shared types + provider
   presets), `provider-errors.ts` (redaction), `stream.ts`, `dates.ts`.
 - `src/components/` — cross-cutting UI: `layout/` (top bar),
@@ -24,15 +26,15 @@ touching a feature so new code lands in the same place as existing code.
 
 One Rust module per IPC concern, registered in `lib.rs`:
 
-| Module         | IPC commands                                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------------ |
-| `papers.rs`    | `fetch_papers` (arXiv/S2 fetch, rate limits, query sanitization)                                       |
-| `citations.rs` | `fetch_citations` (S2 -> OpenAlex fallback)                                                            |
-| `ai/`          | explain/ask/stop, keychain (`save_api_key`, `get_key`, `has_api_key`, `delete_api_key`), provider test |
-| `pdf.rs`       | `fetch_pdf` (secure PDF download + cache)                                                              |
-| `cache.rs`     | `clear_app_cache`                                                                                      |
-| `export.rs`    | `export_data`, `import_data` (favorites + chats; never keys)                                           |
-| `notes.rs`     | `list_notes`, `upsert_note`, `delete_note` (app-data JSON, atomic write)                               |
+| Module       | IPC commands                                                                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `papers/`    | `fetch_papers` (`mod`: routing + rate limits; `arxiv`: query sanitization + feed; `semantic_scholar`: search)                                                                                                             |
+| `citations/` | `fetch_citations` (`mod`: S2 batch + OpenAlex fallback; `cache`: session + disk cache; `tests`: fetch-path suite)                                                                                                         |
+| `ai/`        | explain/ask/stop, keychain (`save_api_key`, `get_key`, `has_api_key`, `delete_api_key`), provider test (`mod`: `ProviderConfig` + module wiring; `commands`, `keychain`, `prompts`, `registry`, `stream`; `tests`: suite) |
+| `pdf/`       | `fetch_pdf` (`mod`: command + cache naming; `guard`: SSRF/DNS-pinning download pipeline)                                                                                                                                  |
+| `cache.rs`   | `clear_app_cache`                                                                                                                                                                                                         |
+| `export.rs`  | `export_data`, `import_data` (favorites + chats; never keys)                                                                                                                                                              |
+| `notes.rs`   | `list_notes`, `upsert_note`, `delete_note` (app-data JSON, atomic write)                                                                                                                                                  |
 
 Rules:
 
@@ -54,7 +56,7 @@ Rules:
 - Remote providers must be HTTPS (loopback HTTP allowed for local models).
 - The markdown pipeline escapes raw HTML; mermaid runs with
   `securityLevel: "strict"`.
-- arXiv/S2 query strings are sanitized in Rust (`papers.rs`), never
+- arXiv/S2 query strings are sanitized in Rust (`papers/`), never
   concatenated by the webview.
 - Exports never contain secrets (no API keys, no provider configs).
 - Tauri capabilities stay least-privilege (`capabilities/default.json`).

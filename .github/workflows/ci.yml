@@ -21,8 +21,12 @@ jobs:
       - run: pnpm test
       - run: pnpm exec prettier --check .
       - run: node dev/check-release-integrity.mjs
-      # Plan 077: dependency audit gate (fails only on high/critical; the
-      # local baseline is 1 low + 5 moderate, none high).
+      # Plan 077: dependency audit gate (fails only on high/critical;
+      # baseline 2026-09-03: 2 low + 10 moderate + 5 high, all
+      # unreachable in the shipped app — 4 fast-uri highs are dev-only
+      # (shadcn CLI chain), nanoid is build-time only (postcss, never
+      # called with size 0), mermaid lows/moderates are contained by
+      # securityLevel strict. No upgrades forced per plan 077.)
       - run: pnpm audit --audit-level=high
 
   # Plan 077: Rust advisory audit on linux only (cargo-audit recompiles

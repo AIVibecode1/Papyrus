@@ -16,6 +16,11 @@ import {
 import { listProviderPresets, PROVIDER_PRESETS, type ProviderConfig } from "@/lib/types";
 import { redactSecrets, truncateError } from "@/lib/provider-errors";
 import { useSettingsStore } from "@/stores/settings";
+import {
+  buildProviderConfig,
+  validateProviderForm,
+  type ProviderFormErrors,
+} from "./provider-form-logic";
 
 interface ProviderFormProps {
   editingId: string | null;
@@ -25,11 +30,6 @@ interface ProviderFormProps {
   onCancel: () => void;
   onSaved: () => void;
   onKeySaved: (id: string) => void;
-}
-
-interface FieldErrors {
-  baseUrl?: string;
-  model?: string;
 }
 
 export function ProviderForm({
@@ -54,7 +54,7 @@ export function ProviderForm({
   const [preset, setPreset] = useState<string>(initialPreset ?? "custom");
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [fieldErrors, setFieldErrors] = useState<ProviderFormErrors>({});
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // Preset base URLs are fixed; only Custom lets the user type one.
@@ -81,15 +81,7 @@ export function ProviderForm({
   };
 
   const validate = (): boolean => {
-    const errors: FieldErrors = {};
-    const url = form.baseUrl.trim();
-    const model = form.model.trim();
-    if (!url) {
-      errors.baseUrl = t("settings.urlRequired");
-    } else if (preset === "custom" && !/^https?:\/\//i.test(url)) {
-      errors.baseUrl = t("settings.urlInvalid");
-    }
-    if (!model) errors.model = t("settings.modelRequired");
+    const errors = validateProviderForm(form.baseUrl, form.model, preset, t);
     setFieldErrors(errors);
     return errors.baseUrl === undefined && errors.model === undefined;
   };
@@ -100,15 +92,12 @@ export function ProviderForm({
     setSaving(true);
     try {
       const id = editingId ?? crypto.randomUUID();
-      // The provider name is the model: the preset label when a picker
-      // is used (e.g. "DeepSeek V4 Flash"), otherwise the model id.
-      const label = presetModels?.find((m) => m.id === form.model)?.label;
-      const config: ProviderConfig = {
+      const config: ProviderConfig = buildProviderConfig(
         id,
-        name: (label ?? form.model).trim(),
-        baseUrl: form.baseUrl.trim().replace(/\/+$/, ""),
-        model: form.model.trim(),
-      };
+        form.baseUrl,
+        form.model,
+        presetModels,
+      );
       if (editingId) updateProvider(config);
       else addProvider(config);
       if (form.key.trim()) {

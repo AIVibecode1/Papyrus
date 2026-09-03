@@ -8,6 +8,7 @@ import type { ProviderConfig } from "@/lib/types";
 import { categorizeTestError, redactSecrets, truncateError } from "@/lib/provider-errors";
 import { useSettingsStore } from "@/stores/settings";
 import { cn } from "@/lib/utils";
+import { loadTestMemory, recordTestFailure, recordTestSuccess } from "./provider-test-memory";
 
 interface ProviderCardProps {
   provider: ProviderConfig;
@@ -16,31 +17,6 @@ interface ProviderCardProps {
   onSetActive: () => void;
   onEdit: () => void;
   onDelete: () => Promise<void>;
-}
-
-/**
- * Last test result per provider, persisted so the card can show "last
- * test: OK / failed (category)" across sessions. No secrets are ever
- * stored: the detail is truncated and redacted before saving.
- */
-type TestMemory = Record<string, { ok: boolean; category?: string; at: string; detail?: string }>;
-const TEST_MEMORY_KEY = "papyrus-provider-test-v1";
-
-function loadTestMemory(): TestMemory {
-  try {
-    const raw = JSON.parse(localStorage.getItem(TEST_MEMORY_KEY) ?? "{}") as TestMemory;
-    return raw && typeof raw === "object" ? raw : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveTestMemory(memory: TestMemory) {
-  try {
-    localStorage.setItem(TEST_MEMORY_KEY, JSON.stringify(memory));
-  } catch {
-    // best-effort, like every other localStorage write in the app
-  }
 }
 
 export function ProviderCard({
@@ -70,27 +46,11 @@ export function ProviderCard({
     try {
       const reply = await testProvider(provider);
       setTestResult({ ok: true, msg: reply });
-      // Persist the outcome (no secrets: the OK reply is provider text,
-      // truncated to a chip-friendly size).
-      const memory = loadTestMemory();
-      memory[provider.id] = {
-        ok: true,
-        at: new Date().toISOString(),
-        detail: truncateError(reply),
-      };
-      saveTestMemory(memory);
+      recordTestSuccess(provider.id, reply);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setTestResult({ ok: false, msg: message });
-      const category = categorizeTestError(message);
-      const memory = loadTestMemory();
-      memory[provider.id] = {
-        ok: false,
-        category,
-        at: new Date().toISOString(),
-        detail: truncateError(redactSecrets(message)),
-      };
-      saveTestMemory(memory);
+      recordTestFailure(provider.id, message);
     } finally {
       setTesting(false);
     }

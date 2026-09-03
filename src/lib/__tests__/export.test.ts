@@ -6,6 +6,7 @@ import type { Paper, PaperNote } from "@/lib/types";
 import { useFavoritesStore } from "@/stores/favorites";
 import { useHistoryStore } from "@/stores/history";
 import { useNotesStore } from "@/stores/notes";
+import { CHAT_STORAGE_KEY } from "@/stores/reader-persist";
 
 const paper: Paper = {
   id: "p1",
@@ -37,7 +38,7 @@ describe("buildExportPayload", () => {
   it("includes favorites and chat transcripts", () => {
     useFavoritesStore.getState().toggle(paper);
     localStorage.setItem(
-      "papyrus-reader-chat-v1",
+      CHAT_STORAGE_KEY,
       JSON.stringify({
         p1: [
           { id: 1, role: "user", content: "What is this?", status: "done" },
@@ -103,7 +104,7 @@ describe("buildExportPayload", () => {
   it("drops malformed chat entries and empty transcripts", () => {
     useFavoritesStore.setState({ loaded: true });
     localStorage.setItem(
-      "papyrus-reader-chat-v1",
+      CHAT_STORAGE_KEY,
       JSON.stringify({
         p1: [{ role: "user", content: "ok" }, { role: "assistant", content: 42 }, null],
         p2: [],
@@ -118,7 +119,7 @@ describe("buildExportPayload", () => {
 
   it("survives corrupted chat storage", () => {
     useFavoritesStore.setState({ loaded: true });
-    localStorage.setItem("papyrus-reader-chat-v1", "not json {{{");
+    localStorage.setItem(CHAT_STORAGE_KEY, "not json {{{");
 
     const payload = buildExportPayload();
 
@@ -148,7 +149,7 @@ describe("importSavedData", () => {
   it("merges favorites (existing entries win) and appends chats", async () => {
     useFavoritesStore.getState().toggle(paper); // p1 already saved locally
     localStorage.setItem(
-      "papyrus-reader-chat-v1",
+      CHAT_STORAGE_KEY,
       JSON.stringify({ p1: [{ role: "user", content: "local question" }] }),
     );
 
@@ -163,7 +164,7 @@ describe("importSavedData", () => {
     expect(byId.p2.title).toBe("Imported paper");
     expect(byId.p1).toEqual(paper);
     // Chat turns are appended, not replaced.
-    const raw = JSON.parse(localStorage.getItem("papyrus-reader-chat-v1") ?? "{}");
+    const raw = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) ?? "{}");
     expect(raw.p1.map((t: { content: string }) => t.content)).toEqual([
       "local question",
       "Imported question?",

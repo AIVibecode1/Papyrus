@@ -5,8 +5,7 @@ import type { Paper, PaperNote, ReadingHistoryEntry } from "@/lib/types";
 import { useFavoritesStore } from "@/stores/favorites";
 import { useHistoryStore } from "@/stores/history";
 import { useNotesStore } from "@/stores/notes";
-
-const CHAT_STORAGE_KEY = "papyrus-reader-chat-v1";
+import { CHAT_STORAGE_KEY } from "@/stores/reader-persist";
 
 export interface ExportChatTurn {
   role: string;

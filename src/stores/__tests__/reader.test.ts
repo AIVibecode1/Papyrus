@@ -46,6 +46,7 @@ import { extractTextFromPdf } from "@/lib/pdf-text";
 import { stopExplanation } from "@/lib/ai";
 import { streamAsk, streamSectionExplanation, streamSynthesis } from "@/lib/reader-ai";
 import { useReaderStore } from "@/stores/reader";
+import type { ChatMessage } from "@/stores/reader";
 
 const paper: Paper = {
   id: "2607.00001",
@@ -159,6 +160,37 @@ describe("reader store", () => {
     // Paper B's state must not contain paper A's sections.
     expect(useReaderStore.getState().sections).toHaveLength(0);
     expect(useReaderStore.getState().extractStatus).toBe("idle");
+  });
+
+  it("concurrent ensureExtracted calls share one extraction", async () => {
+    // Ask sent while the walkthrough parse is still running must join it,
+    // not fail with "could not read the paper text".
+    let resolveExtract!: (v: string) => void;
+    vi.mocked(extractTextFromPdf).mockReturnValue(new Promise((r) => (resolveExtract = r)));
+    await useReaderStore.getState().open(paper);
+    const first = useReaderStore.getState().ensureExtracted();
+    const second = useReaderStore.getState().ensureExtracted();
+    resolveExtract(PDF_TEXT);
+    expect(await first).toBe(true);
+    expect(await second).toBe(true);
+    expect(extractTextFromPdf).toHaveBeenCalledTimes(1);
+    expect(useReaderStore.getState().sections).toHaveLength(3);
+  });
+
+  it("ask waits for an in-flight extraction instead of failing", async () => {
+    let resolveExtract!: (v: string) => void;
+    vi.mocked(extractTextFromPdf).mockReturnValue(new Promise((r) => (resolveExtract = r)));
+    vi.mocked(streamAsk).mockImplementation(chunkStream(["answer!"]));
+    await useReaderStore.getState().open(paper);
+    const askPromise = useReaderStore.getState().ask("What is the method?", provider, "en");
+    // Still parsing: no instant error card, the ask simply waits.
+    await Promise.resolve();
+    expect(useReaderStore.getState().chat).toHaveLength(0);
+    resolveExtract(PDF_TEXT);
+    await askPromise;
+    const s = useReaderStore.getState();
+    expect(s.chat[1].status).toBe("done");
+    expect(s.chat[1].text).toBe("answer!");
   });
 
   it("walks through sections then synthesis on continue", async () => {
@@ -401,6 +433,30 @@ describe("reader store", () => {
     const s = useReaderStore.getState();
     expect(s.chat[1].status).toBe("done");
     expect(s.chat[1].text).toBe("First part then rest");
+  });
+
+  it("ask streaming never mutates stored messages in place", async () => {
+    // Regression test for the in-place mutation in the ask buffer's
+    // apply (msg.text += text on the live store object): each flush must
+    // replace the message reference, so snapshots and React renders see
+    // a new object rather than a silently mutated one.
+    await useReaderStore.getState().open(paper);
+    const seen: ChatMessage[] = [];
+    vi.mocked(streamAsk).mockImplementation(async (opts) => {
+      for (const c of ["one ", "two"]) {
+        await new Promise((r) => setTimeout(r, 20));
+        opts.onChunk(c);
+        // Give the 50ms flush interval a chance to run between chunks.
+        await new Promise((r) => setTimeout(r, 60));
+        seen.push(useReaderStore.getState().chat[1]);
+      }
+    });
+
+    await useReaderStore.getState().ask("Explain?", provider, "en");
+    expect(useReaderStore.getState().chat[1].text).toBe("one two");
+    expect(seen.length).toBe(2);
+    expect(seen[0]).not.toBe(seen[1]);
+    expect(seen[0].text).toBe("one ");
   });
 
   it("ask appends a user message and streams the answer", async () => {

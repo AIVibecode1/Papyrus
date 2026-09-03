@@ -19,6 +19,32 @@ Rules:
 
 ---
 
+## v1.1.10 - 2026-09-03
+
+Status: planned (working tree on main, not yet committed).
+Built from: uncommitted working tree (record the release-commit sha here at commit time).
+Quality gates: 364 frontend tests, 134 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker, CI on
+Windows and macOS.
+
+- Fixed: the reader Overview citation count could stay empty when the
+  counts arrived after the reader was already open. The Overview
+  snapshotted the citation store once instead of subscribing, so late
+  results never appeared; the count now refreshes live when the async
+  batch resolves.
+- Fixed: asking a question while the whole-paper parse was still
+  running failed instantly with "could not read the paper text", even
+  though the text arrived a moment later. Concurrent asks now join the
+  in-flight extraction and wait for it instead of failing.
+- New: switching views (papers, reader, notes, settings) now moves
+  keyboard and screen-reader focus to the top of the new view instead
+  of stranding it on the control that triggered the switch.
+- Chore: large internal reorganization with no behavior change — the
+  Rust backend is split into focused modules (papers, citations, pdf,
+  ai test suite) and the reader view, PDF viewer, paper list, toolbar,
+  notes page and settings sections are extracted into small
+  components, hooks and stores. All suites pass unchanged.
+
 ## v1.1.9 - 2026-08-07
 
 Status: installers built, not yet published on GitHub.

@@ -60,24 +60,26 @@ describe("digest store", () => {
   });
 
   it("storeDay caches a day and days() lists newest first", () => {
-    useDigestStore.getState().storeDay("cs.AI", "2026-08-01", [paperFor("2026-08-01")]);
-    useDigestStore.getState().storeDay("cs.AI", "2026-07-31", [paperFor("2026-07-31")]);
+    // Relative dates: the store prunes days older than its 30-day
+    // retention window on load, so fixed calendar dates rot as time passes.
+    useDigestStore.getState().storeDay("cs.AI", today, [paperFor(today)]);
+    useDigestStore.getState().storeDay("cs.AI", yesterday, [paperFor(yesterday)]);
 
     const state = useDigestStore.getState();
-    expect(state.days("cs.AI")).toEqual(["2026-08-01", "2026-07-31"]);
-    expect(state.dayCount("cs.AI", "2026-08-01")).toBe(1);
+    expect(state.days("cs.AI")).toEqual([today, yesterday]);
+    expect(state.dayCount("cs.AI", today)).toBe(1);
     expect(state.days("cs.LG")).toEqual([]);
   });
 
   it("persists and restores across loads", () => {
-    useDigestStore.getState().storeDay("cs.AI", "2026-08-01", [paperFor("2026-08-01")]);
+    useDigestStore.getState().storeDay("cs.AI", today, [paperFor(today)]);
 
     // Simulate a fresh session: unload, then load from the same storage.
     useDigestStore.setState({ loaded: false, byCategory: {}, lastChecked: {} });
     useDigestStore.getState().load();
 
-    expect(useDigestStore.getState().days("cs.AI")).toEqual(["2026-08-01"]);
-    expect(useDigestStore.getState().dayCount("cs.AI", "2026-08-01")).toBe(1);
+    expect(useDigestStore.getState().days("cs.AI")).toEqual([today]);
+    expect(useDigestStore.getState().dayCount("cs.AI", today)).toBe(1);
   });
 
   it("load with corrupted storage does not throw", () => {

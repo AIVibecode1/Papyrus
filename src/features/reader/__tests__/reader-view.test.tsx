@@ -50,6 +50,7 @@ const provider: ProviderConfig = {
 
 beforeEach(() => {
   localStorage.clear();
+  Element.prototype.scrollIntoView = vi.fn(); // Ask panel scrolls on mount (jsdom has no layout)
   useUiStore.setState({ view: "reader" });
   useSettingsStore.setState({ providers: [provider], activeProviderId: provider.id });
   useReaderStore.setState({

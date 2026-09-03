@@ -12,7 +12,7 @@ function fullPaperSystem(language: string): string {
   return `${base}\n\nThe user will send you ONE section of the paper at a time. Apply the section structure to that section only. Respond in the same language as the user's request.`;
 }
 
-// Format strings MUST match the Rust builders in src-tauri/src/ai.rs
+// Format strings MUST match the Rust builders in src-tauri/src/ai/
 // (build_section_messages / build_synthesis_messages / build_qa_messages).
 
 export function buildSectionUser(

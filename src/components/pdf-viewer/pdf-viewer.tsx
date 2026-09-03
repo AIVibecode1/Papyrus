@@ -1,13 +1,4 @@
-import {
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  Minus,
-  Plus,
-  RotateCcw,
-  Search,
-  X,
-} from "lucide-react";
+import { FileText, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as pdfjsLib from "pdfjs-dist";
@@ -17,48 +8,18 @@ import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "pdfjs-dist/web/pdf_viewer.css";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { readPdfPosition, savePdfPosition } from "@/lib/pdf-position";
+import { highlightSpan } from "./search-highlight";
+import { renderInQueue } from "./render-queue";
+import type { PageView } from "./render-queue";
+import { PdfToolbar } from "./pdf-toolbar";
+import { usePdfSearch } from "./use-pdf-search";
+import { useReadingPosition } from "./use-reading-position";
 
-// Platform detection for shortcut hints (macOS uses the Command key).
-const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform ?? "");
-
-/**
- * Renders pages one at a time, checking cancellation before each page so a
- * newer run (zoom change, reopen) stops the old loop immediately instead
- * of finishing every canvas. Exported for unit tests.
- */
-export async function renderInQueue(
-  views: PageView[],
-  render: (view: PageView, index: number) => Promise<void>,
-  isCancelled: () => boolean,
-  range?: { start: number; end: number },
-): Promise<void> {
-  // Render several pages concurrently: a strictly sequential queue paints
-  // slowly on long PDFs, leaving scrolled-to pages black for seconds.
-  // Each page takes a unique index before any await, so no page is
-  // rendered twice; per-page failures are contained (renderPage catches).
-  const CONCURRENCY = 4;
-  const start = range?.start ?? 0;
-  const end = range ? Math.min(range.end, views.length - 1) : views.length - 1;
-  let next = start;
-  const worker = async () => {
-    while (!isCancelled()) {
-      const i = next;
-      next += 1;
-      if (i > end) return;
-      try {
-        await render(views[i], i);
-      } catch {
-        // never let one page take down the run
-      }
-    }
-  };
-  const workers = Array.from({ length: Math.min(CONCURRENCY, Math.max(0, end - start + 1)) }, () =>
-    worker(),
-  );
-  await Promise.all(workers);
-}
+// Re-exported so existing import paths keep working (unit tests import
+// renderInQueue from the viewer module).
+export { highlightSpan, renderInQueue };
+export { escapeHtml } from "./search-highlight";
+export type { PageView };
 
 interface PdfViewerProps {
   bytes: Uint8Array;
@@ -67,58 +28,8 @@ interface PdfViewerProps {
   onSelect: (text: string) => void;
 }
 
-// Reading position memory, keyed by paper id (shared with history
-// recording via src/lib/pdf-position.ts).
-function readPosition(paperId?: string): number | null {
-  return readPdfPosition(paperId);
-}
-function savePosition(paperId: string | undefined, page: number) {
-  savePdfPosition(paperId, page);
-}
-
-interface PageView {
-  page: PDFPageProxy;
-  viewport: ReturnType<PDFPageProxy["getViewport"]>;
-}
-
 /** Surface lifecycle of one rendered page. */
 type PageStatus = "pending" | "painting" | "ready" | "failed";
-
-// ---------------------------------------------------------------------------
-// Search helpers (pure, exported for unit tests)
-// ---------------------------------------------------------------------------
-
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-/**
- * Wraps every case-insensitive occurrence of `query` in the span's text
- * with <mark> elements. Returns the number of matches found.
- */
-export function highlightSpan(span: HTMLElement, query: string): number {
-  const text = span.textContent ?? "";
-  if (!query.trim() || !text.toLowerCase().includes(query.toLowerCase())) return 0;
-  const lower = text.toLowerCase();
-  const needle = query.toLowerCase();
-  let count = 0;
-  let html = "";
-  let cursor = 0;
-  let idx = lower.indexOf(needle);
-  while (idx >= 0) {
-    html += `${escapeHtml(text.slice(cursor, idx))}<mark>${escapeHtml(text.slice(idx, idx + needle.length))}</mark>`;
-    count += 1;
-    cursor = idx + needle.length;
-    idx = lower.indexOf(needle, cursor);
-  }
-  html += escapeHtml(text.slice(cursor));
-  span.innerHTML = html;
-  return count;
-}
 
 // ---------------------------------------------------------------------------
 // Viewer
@@ -140,13 +51,22 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   const [error, setError] = useState<string | null>(null);
   // Bumping this re-runs the load effect (the error state's retry action).
   const [reloadKey, setReloadKey] = useState(0);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [matchCount, setMatchCount] = useState(0);
-  const marksRef = useRef<HTMLElement[]>([]);
+  // Stable accessors for the hooks below (inline arrows would re-create
+  // their callbacks every render and churn the paint effects).
+  const getLayers = useCallback(() => layerRefs.current, []);
+  const getWrap = useCallback((index: number) => pageWrapRefs.current[index] ?? null, []);
+  const {
+    searchOpen,
+    setSearchOpen,
+    searchQuery,
+    matchCount,
+    searchInputRef,
+    applyHighlights,
+    jumpToMatch,
+    clearSearch,
+    handleQueryChange,
+  } = usePdfSearch(getLayers);
   const loadingTaskRef = useRef<pdfjsLib.PDFDocumentLoadingTask | null>(null);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Current scale mirror + last auto-fit value: a manual zoom wins over
   // the resize re-fit (see the ResizeObserver effect below).
@@ -326,7 +246,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       if (searchQuery.trim()) applyHighlights(layer, searchQuery);
       setPageStatus((s) => ({ ...s, [index]: "ready" }));
     },
-    [searchQuery],
+    [searchQuery, applyHighlights],
   );
 
   /** Manual retry for a page whose final paint attempt failed. */
@@ -551,57 +471,6 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
     };
   }, [pages.length]);
 
-  // --- search --------------------------------------------------------------
-  const applyHighlights = (layer: HTMLElement, query: string) => {
-    layer.querySelectorAll("mark").forEach((m) => {
-      const span = m.parentElement;
-      if (span) {
-        span.innerHTML = escapeHtml(span.textContent ?? "");
-      }
-    });
-    if (!query.trim()) return;
-    const marks: HTMLElement[] = [];
-    layer.querySelectorAll<HTMLSpanElement>("span").forEach((span) => {
-      if (highlightSpan(span, query.trim()) > 0) {
-        span.querySelectorAll("mark").forEach((m) => marks.push(m as HTMLElement));
-      }
-    });
-    marksRef.current = [...marksRef.current, ...marks];
-  };
-
-  const runSearch = (query: string) => {
-    marksRef.current = [];
-    layerRefs.current.forEach((layer) => layer && applyHighlights(layer, query));
-    setMatchCount(marksRef.current.length);
-    if (marksRef.current.length > 0) {
-      marksRef.current[0].scrollIntoView({ block: "center" });
-    }
-  };
-
-  const jumpToMatch = (direction: 1 | -1) => {
-    const marks = marksRef.current;
-    if (marks.length === 0) return;
-    const current = marks.findIndex(
-      (m) =>
-        m.getBoundingClientRect().top >= -40 &&
-        m.getBoundingClientRect().top <= window.innerHeight * 0.6,
-    );
-    const target = current === -1 ? 0 : (current + direction + marks.length) % marks.length;
-    marks[target].scrollIntoView({ block: "center" });
-  };
-
-  const clearSearch = () => {
-    setSearchQuery("");
-    setMatchCount(0);
-    marksRef.current = [];
-    layerRefs.current.forEach((layer) => {
-      layer?.querySelectorAll("mark").forEach((m) => {
-        const span = m.parentElement;
-        if (span) span.innerHTML = escapeHtml(span.textContent ?? "");
-      });
-    });
-  };
-
   // --- page tracking + selection ------------------------------------------
   const onScroll = () => {
     const wraps = pageWrapRefs.current;
@@ -642,36 +511,8 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
     wrap?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  // Remember the reading position whenever the visible page changes. The
-  // guard prevents the mount-time save (page 1) from clobbering a stored
-  // position before the restore effect has read it.
-  const restoreDoneRef = useRef(false);
-  useEffect(() => {
-    if (!restoreDoneRef.current) return;
-    savePosition(paperId, currentPage);
-  }, [currentPage, paperId]);
-
-  // Restore the last reading position once the pages have real layout
-  // heights (the load effect alone is too early: canvases start at zero
-  // height, and a scroll to a zero-height page is a no-op that leaves the
-  // scroll tracker on page 1).
-  useEffect(() => {
-    if (pages.length === 0) return;
-    const saved = readPosition(paperId);
-    if (saved && saved >= 1 && saved <= pages.length) {
-      setCurrentPage(saved);
-      const timer = setTimeout(() => {
-        pageWrapRefs.current[saved - 1]?.scrollIntoView({ block: "start" });
-      }, 250);
-      return () => clearTimeout(timer);
-    }
-  }, [pages.length, paperId]);
-
-  // Enable position saves once the restore pass has run (whether or not a
-  // saved position existed).
-  useEffect(() => {
-    if (pages.length > 0) restoreDoneRef.current = true;
-  }, [pages.length]);
+  // Reading-position memory (restore once layout is real, then save).
+  useReadingPosition(paperId, pages.length, currentPage, setCurrentPage, getWrap);
 
   // Keyboard shortcuts: ArrowLeft/ArrowRight page navigation (ignored while
   // typing), Ctrl/Cmd+F opens the find bar, Escape closes it.
@@ -743,137 +584,26 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* toolbar */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/30 p-2">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => goToPage(Math.max(1, currentPage - 1))}
-          aria-label={t("reader.prevPage")}
-        >
-          {/* In RTL the previous page sits to the RIGHT (inline-start). */}
-          <ChevronLeft className="size-4 rtl:rotate-180" />
-        </Button>
-        <span className="font-mono text-[11px] text-muted-foreground" dir="ltr">
-          {currentPage} / {pages.length}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => goToPage(Math.min(pages.length, currentPage + 1))}
-          aria-label={t("reader.nextPage")}
-        >
-          <ChevronRight className="size-4 rtl:rotate-180" />
-        </Button>
-
-        <div className="mx-1 h-4 w-px bg-border" />
-
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => setScale((s) => Math.max(0.5, +(s - 0.2).toFixed(2)))}
-          aria-label={t("reader.zoomOut")}
-        >
-          <Minus className="size-4" />
-        </Button>
-        <span className="w-10 text-center font-mono text-[11px] text-muted-foreground" dir="ltr">
-          {Math.round(scale * 100)}%
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => setScale((s) => Math.min(2.5, +(s + 0.2).toFixed(2)))}
-          aria-label={t("reader.zoomIn")}
-        >
-          <Plus className="size-4" />
-        </Button>
-
-        <div className="mx-1 h-4 w-px bg-border" />
-
-        {!searchOpen ? (
-          <>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setSearchOpen(true)}
-              aria-label={t("reader.searchInPdf")}
-            >
-              <Search className="size-4" />
-            </Button>
-            <kbd>{IS_MAC ? "⌘F" : "Ctrl+F"}</kbd>
-          </>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <Input
-              ref={searchInputRef}
-              autoFocus
-              aria-label={t("reader.searchInPdf")}
-              value={searchQuery}
-              onChange={(e) => {
-                const value = e.target.value;
-                setSearchQuery(value);
-                // Live search, debounced: the Enter key only jumps between
-                // matches, so a stale state on Enter is not a problem.
-                if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                if (value.trim()) {
-                  searchTimerRef.current = setTimeout(() => runSearch(value), 250);
-                } else {
-                  marksRef.current = [];
-                  setMatchCount(0);
-                  layerRefs.current.forEach((layer) => {
-                    layer?.querySelectorAll("mark").forEach((m) => {
-                      const span = m.parentElement;
-                      if (span) span.innerHTML = escapeHtml(span.textContent ?? "");
-                    });
-                  });
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  if (e.shiftKey) jumpToMatch(-1);
-                  else jumpToMatch(1);
-                }
-                if (e.key === "Escape") {
-                  clearSearch();
-                  setSearchOpen(false);
-                }
-              }}
-              placeholder={`${t("reader.searchInPdf")}…`}
-              className="h-8 w-40 text-xs"
-              dir="auto"
-            />
-            <span
-              aria-live="polite"
-              className="min-w-14 text-center text-xs text-muted-foreground"
-              dir="ltr"
-            >
-              {matchCount > 0 ? `${matchCount} ${t("reader.matches")}` : t("reader.noMatches")}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => {
-                clearSearch();
-                setSearchOpen(false);
-              }}
-              aria-label={t("reader.closeSearch")}
-            >
-              <X className="size-4" />
-            </Button>
-          </div>
-        )}
-
-        {searchQuery.trim() && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => jumpToMatch(1)}
-            aria-label={t("reader.nextMatch")}
-          >
-            <ChevronRight className="size-4 rtl:rotate-180" />
-          </Button>
-        )}
-      </div>
+      <PdfToolbar
+        currentPage={currentPage}
+        totalPages={pages.length}
+        scale={scale}
+        onPrevPage={() => goToPage(Math.max(1, currentPage - 1))}
+        onNextPage={() => goToPage(Math.min(pages.length, currentPage + 1))}
+        onZoomOut={() => setScale((s) => Math.max(0.5, +(s - 0.2).toFixed(2)))}
+        onZoomIn={() => setScale((s) => Math.min(2.5, +(s + 0.2).toFixed(2)))}
+        searchOpen={searchOpen}
+        onOpenSearch={() => setSearchOpen(true)}
+        onCloseSearch={() => {
+          clearSearch();
+          setSearchOpen(false);
+        }}
+        searchQuery={searchQuery}
+        onQueryChange={handleQueryChange}
+        matchCount={matchCount}
+        onJumpMatch={jumpToMatch}
+        searchInputRef={searchInputRef}
+      />
 
       {/* pages */}
       <div

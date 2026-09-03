@@ -3,6 +3,9 @@ plan.md
 # Planning briefs are working docs (like plan.md), not source: they are
 # committed for the record but prettier does not own their formatting.
 plans/
+# Frozen records: superseded briefs kept for history; prettier does not
+# own their formatting (same rationale as plans/ above).
+docs/archive/
 # Generated lockfile: pnpm's own writer owns this format; prettier would
 # reflow it differently on every dependency change and break CI for no
 # source value. pnpm parses any valid YAML, so formatting stays pnpm's job.

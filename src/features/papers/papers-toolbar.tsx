@@ -1,18 +1,11 @@
-import { Bookmark, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw } from "lucide-react";
+import { Bookmark, Clock, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { SearchField } from "@/lib/arxiv";
-import { formatUiDate } from "@/lib/dates";
 import type { PaperSortMode } from "@/lib/paper-sort";
-import { todayStr } from "@/stores/digest";
 import { PapersSearchField } from "@/features/papers/papers-search-field";
+import { ToolbarBrowseRow } from "./toolbar-browse-row";
+import { yearsLabel } from "./toolbar-helpers";
 
 interface PapersToolbarProps {
   lastUpdated: number | null;
@@ -56,18 +49,6 @@ interface PapersToolbarProps {
   /** True while the digest auto-aggregator is backfilling this field. */
   backfillActive: boolean;
   backfillProgress: { done: number; total: number } | null;
-}
-
-function formatDay(date: string, language: string): string {
-  return formatUiDate(`${date}T00:00:00Z`, language, { month: "short", day: "numeric" });
-}
-
-/** Inclusive years label for the status line (e.g. "2010–2016"). */
-function yearsLabel(yearFrom: number | null, yearTo: number | null): string {
-  if (yearFrom != null && yearTo != null) return `${yearFrom}–${yearTo}`;
-  if (yearFrom != null) return `${yearFrom}–`;
-  if (yearTo != null) return `–${yearTo}`;
-  return "";
 }
 
 /**
@@ -115,8 +96,7 @@ export function PapersToolbar({
   backfillActive,
   backfillProgress,
 }: PapersToolbarProps) {
-  const { t, i18n } = useTranslation();
-  const today = todayStr();
+  const { t } = useTranslation();
   const searchActive = query.trim().length > 0;
   const fieldKey =
     searchField === "title"
@@ -129,20 +109,6 @@ export function PapersToolbar({
             ? "papers.fieldId"
             : "papers.fieldAll";
   const years = yearsLabel(yearFrom, yearTo);
-  const currentYear = new Date().getFullYear();
-
-  const yearChips: Array<{
-    key: string;
-    label: string;
-    from: number | null;
-    to: number | null;
-  }> = [
-    { key: "any", label: t("papers.yearAny"), from: null, to: null },
-    { key: "last5", label: t("papers.yearLast5"), from: currentYear - 5, to: currentYear },
-    { key: "2010-2016", label: t("papers.yearRange2010_2016"), from: 2010, to: 2016 },
-    { key: "before2010", label: t("papers.yearBefore2010"), from: null, to: 2009 },
-  ];
-  const activeChip = yearChips.find((c) => c.from === yearFrom && c.to === yearTo)?.key;
 
   return (
     <div className="flex flex-col gap-4 pb-4">
@@ -256,89 +222,25 @@ export function PapersToolbar({
         </div>
       </div>
 
-      {historyMode ? (
-        <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
-          {t("history.title")}
-        </span>
-      ) : searchActive ? (
-        /* Search chrome: year chips + category scoping. Day navigation is
-           hidden while a query is active (searches ignore dates). */
-        <div className="flex flex-wrap items-center gap-2">
-          {yearChips.map((chip) => (
-            <Button
-              key={chip.key}
-              variant={activeChip === chip.key ? "secondary" : "ghost"}
-              size="sm"
-              className="h-7 px-2.5 text-xs"
-              onClick={() => onYearRange(chip.from, chip.to)}
-              aria-pressed={activeChip === chip.key}
-            >
-              {chip.label}
-            </Button>
-          ))}
-          <label className="ms-2 flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={limitToCategory && source === "arxiv"}
-              onChange={(e) => onLimitToCategory(e.target.checked)}
-              className="size-3.5 accent-primary"
-            />
-            {t("papers.limitToCategory")}
-          </label>
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onPrevDay}
-            aria-label={t("papers.prevDay")}
-            className="rtl:rotate-180"
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Select value={date ?? "latest"} onValueChange={onSetDate}>
-            <SelectTrigger
-              className="h-8 w-auto gap-2 text-xs"
-              aria-label={t("papers.browseByDay")}
-            >
-              <CalendarDays className="size-3.5" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="latest">{t("papers.latest")}</SelectItem>
-              {digestDays.slice(0, 14).map((d) => (
-                <SelectItem key={d} value={d}>
-                  {formatDay(d, i18n.language)} ({dayCount(d)})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onNextDay}
-            disabled={!date || date >= today}
-            aria-label={t("papers.nextDay")}
-            className="rtl:rotate-180"
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-          {date && (
-            <Button variant="ghost" size="sm" onClick={onToday}>
-              {t("papers.today")}
-            </Button>
-          )}
-          {backfillActive && backfillProgress && (
-            <span className="text-xs text-muted-foreground">
-              {t("papers.historyLoading", {
-                done: backfillProgress.done,
-                total: backfillProgress.total,
-              })}
-            </span>
-          )}
-        </div>
-      )}
+      <ToolbarBrowseRow
+        historyMode={historyMode}
+        searchActive={searchActive}
+        yearFrom={yearFrom}
+        yearTo={yearTo}
+        onYearRange={onYearRange}
+        limitToCategory={limitToCategory}
+        onLimitToCategory={onLimitToCategory}
+        source={source}
+        date={date}
+        onPrevDay={onPrevDay}
+        onNextDay={onNextDay}
+        onSetDate={onSetDate}
+        onToday={onToday}
+        digestDays={digestDays}
+        dayCount={dayCount}
+        backfillActive={backfillActive}
+        backfillProgress={backfillProgress}
+      />
     </div>
   );
 }

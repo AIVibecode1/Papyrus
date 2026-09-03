@@ -13,6 +13,7 @@ import { useNotesStore } from "@/stores/notes";
 import { usePapersStore } from "@/stores/papers";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
+import { useViewFocus } from "@/hooks/use-view-focus";
 
 export default function App() {
   const { t } = useTranslation();
@@ -31,6 +32,11 @@ export default function App() {
     void refresh();
   }, [loadSettings, loadFavorites, loadNotes, loadHistory, refresh]);
 
+  // SPA route-change focus: keyboard/screen-reader users land at the top
+  // of the new view instead of being stranded on the control that
+  // triggered the switch. Each branch marks its root with data-view-root.
+  useViewFocus(view);
+
   return (
     <ErrorBoundary>
       <div className="flex h-dvh flex-col overflow-hidden bg-background">
@@ -47,7 +53,12 @@ export default function App() {
               <Sidebar />
               {/* Only the content column scrolls; the window, the top bar
                   and the sidebar stay fixed. */}
-              <main id="main-content" className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
+              <main
+                id="main-content"
+                data-view-root
+                tabIndex={-1}
+                className="min-h-0 flex-1 overflow-y-auto p-4 focus:outline-none lg:p-6"
+              >
                 <PaperList />
               </main>
             </div>
@@ -60,7 +71,12 @@ export default function App() {
         ) : view === "notes" ? (
           <>
             <TopBar />
-            <main id="main-content" className="min-h-0 flex-1 overflow-y-auto">
+            <main
+              id="main-content"
+              data-view-root
+              tabIndex={-1}
+              className="min-h-0 flex-1 overflow-y-auto focus:outline-none"
+            >
               {/* Placeholder until 042 mounts the real notes hub. */}
               <NotesPage />
             </main>
