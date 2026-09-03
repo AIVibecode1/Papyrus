@@ -21,7 +21,7 @@ Rules:
 
 ## v1.1.10 - 2026-09-03
 
-Status: committed, not yet pushed or published.
+Status: pushed to origin/main, not yet tagged or published.
 Built from: fe5f7be (release commit).
 Quality gates: 364 frontend tests, 134 Rust tests, clippy, rustfmt,
 ESLint, Prettier, strict typecheck, release-integrity checker, CI on
@@ -44,6 +44,10 @@ Windows and macOS.
   ai test suite) and the reader view, PDF viewer, paper list, toolbar,
   notes page and settings sections are extracted into small
   components, hooks and stores. All suites pass unchanged.
+- Chore: cleared both CI dependency-audit gates with no app-code
+  change — pinned semver-compatible `pnpm.overrides` (nanoid 3.3.18,
+  fast-uri 3.1.6) for the 5 frontend highs, and bumped `h2` 0.4.15 →
+  0.4.19 (RUSTSEC-2026-0258) in `src-tauri/Cargo.lock`.
 
 ## v1.1.9 - 2026-08-07
 
