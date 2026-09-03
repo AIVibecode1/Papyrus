@@ -65,6 +65,25 @@ Rules:
 - Exports never contain secrets (no API keys, no provider configs).
 - Tauri capabilities stay least-privilege (`capabilities/default.json`).
 
+## Runtime flows
+
+Paper, explanation, and key-storage flows:
+
+- **Paper flow.** Picking a field (for example cs.AI) calls
+  `fetch_papers`. Default source is the arXiv API (XML parsed into
+  title, authors, date, abstract, categories, PDF link). The Settings
+  source select switches to Semantic Scholar search (independent rate
+  limits; citation counts, TLDRs, venues, PDF links mapped into the same
+  `Paper` shape, automatic arXiv fallback). arXiv sends no CORS headers,
+  so the browser cannot call it directly: fetching always happens in the
+  backend.
+- **Explanation flow.** Explain sends title + abstract with the key read
+  from the OS keychain. Text streams back over a Tauri channel; Stop
+  cancels through a typed signal. Keys never pass through the frontend.
+- **Key storage.** Settings writes name, base URL, model, and key
+  straight to the backend, which stores the key in the OS keychain. The
+  frontend only ever knows whether a key exists, never its value.
+
 ## How to add a feature
 
 1. Store first: `src/stores/<domain>.ts` with a domain-scoped

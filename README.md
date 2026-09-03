@@ -16,31 +16,37 @@ backend can read it.
 Built with Tauri 2, React, TypeScript, Tailwind CSS, shadcn/ui, Zustand and
 react-i18next. Backend logic is written in Rust.
 
+## Contents
+
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Usage](docs/usage.md)
+- [Architecture](docs/architecture.md)
+- [Security](docs/security.md)
+- [Development](docs/development.md)
+- [Technical choices](docs/technical-choices.md)
+- [Changelog](#what-changed-since-the-first-version)
+- [Roadmap](#roadmap)
+- [License](#license)
+
 ## Features
 
-| Feature              | What it does                                                                                                                                                                                                                                                                                                                  |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Latest papers        | Fetches the newest arXiv papers, newest first, for 6 fields (AI, machine learning, language, vision, neural networks, statistics) plus free keyword search                                                                                                                                                                    |
-| Browse by day        | Step back through any past day (arXiv date-range queries), or pick a day from the collected history list                                                                                                                                                                                                                      |
-| Daily history        | The app automatically collects each day's papers for the current field (last 14 days on first launch, 30 days kept), so past days are always available                                                                                                                                                                        |
-| AI explanations      | Explains any paper in 200 to 300 plain words, streamed live, in the language of the interface (English or Arabic)                                                                                                                                                                                                             |
-| Markdown answers     | AI answers render as real markdown: headings, lists, tables, math equations (KaTeX) and mermaid diagrams, styled to the app and RTL-aware                                                                                                                                                                                     |
-| In-app PDF reader    | Open any paper's PDF inside the app: page navigation, zoom, find-in-page search with highlights, and text selection. Keyboard shortcuts (arrows, Ctrl/Cmd+F), reading position memory, one-click copy of any selection. The PDF and the AI panel are separated by a draggable divider you can resize. PDFs are cached on disk |
-| Whole-paper mentor   | The mentor reads the paper section by section and explains each one (press Continue between sections), then gives a final synthesis of the whole paper                                                                                                                                                                        |
-| Paper chat           | Ask anything about the paper in the Ask tab. Answers are grounded in the paper, and any passage you select in the PDF becomes context for your question                                                                                                                                                                       |
-| Your providers       | Works with OpenAI (API key from platform.openai.com; GPT-5.3 Codex and the GPT-5.6 family included), OpenRouter, DeepSeek, Groq, Mistral, Ollama (local) or any custom base URL and model name                                                                                                                                |
-| Privacy first        | API keys live in the OS keychain (Windows Credential Manager / macOS Keychain). Paper fetching and AI calls happen in the Rust backend, never in the web page                                                                                                                                                                 |
-| Bilingual            | Instant English to Arabic switching, full RTL layout, bundled IBM Plex Sans Arabic font                                                                                                                                                                                                                                       |
-| Three themes         | Light (soft, low-contrast day palette), Sepia (warm paper for reading) and Dark, switched from the top bar or the Appearance select in Settings                                                                                                                                                                               |
-| Favorites            | Bookmark papers and filter the list to show only saved ones                                                                                                                                                                                                                                                                   |
-| Citation counts      | "Cited by N" on every card from Semantic Scholar (batched, cached on disk for 7 days, failure-proof)                                                                                                                                                                                                                          |
-| Load more            | Fetch the next page of papers instead of stopping at 20                                                                                                                                                                                                                                                                       |
-| Second paper source  | Semantic Scholar search (citation counts, TLDRs, venues) with automatic fallback to arXiv and a dismissible notice when it happens                                                                                                                                                                                            |
-| Provider failover    | If the active AI provider fails, the next one in your list answers automatically ("Explained by ..." note)                                                                                                                                                                                                                    |
-| Export your data     | One click exports your saved papers, chat transcripts and notes to a timestamped JSON file in Documents; importing merges by id (newer wins)                                                                                                                                                                                  |
-| Notes and highlights | Take notes and highlight passages while reading: save a selection as a highlight with your comment, add free notes, and browse everything in the Notes hub with search and per-paper filtering                                                                                                                                |
-| Reader overview      | The reader opens on an Overview tab (ids, venue, citations, abstract) with one-click entry points: the whole-paper mentor and opening the paper page in the browser                                                                                                                                                           |
-| Advanced search      | Search any era of papers with fielded modes (All, Title, Author, Abstract, exact arXiv ID), year-range presets (last 5 years, 2010-2016, before 2010), optional scoping to the current field, one-click clear or Escape to restore the feed, and a status line that always says what you are looking at                       |
+| Feature              | What it does                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------------- |
+| Latest papers        | Newest arXiv papers for 6 fields, plus keyword search                                         |
+| Browse and history   | Day picker with 30 days of collected history, arrows for any past day, paging, fielded search |
+| AI explanations      | 200-300 word streamed explanations in the UI language                                         |
+| Markdown answers     | Headings, tables, KaTeX math, mermaid diagrams, RTL-aware                                     |
+| PDF reader           | In-app viewer with search, zoom, selection, position memory; cached on disk                   |
+| Mentor and Ask       | Section-by-section walkthroughs, grounded chat over PDF selections                            |
+| Your providers       | OpenAI, OpenRouter, DeepSeek, Groq, Mistral, Ollama or any compatible endpoint, with failover |
+| Privacy              | Keys in the OS keychain; network and AI run in Rust, never in the page                        |
+| Bilingual and themes | Instant English/Arabic with full RTL; Light, Sepia, Dark                                      |
+| Favorites and notes  | Bookmarks, highlights, free notes, searchable Notes hub                                       |
+| Citations            | "Cited by N" from Semantic Scholar, cached 7 days                                             |
+| Export               | One-click JSON backup; merge-on-import                                                        |
+
+Full list: docs/features.md.
 
 ## Screenshots
 
@@ -54,173 +60,20 @@ react-i18next. Backend logic is written in Rust.
 
 ## Architecture
 
-Papyrus has two parts. The frontend draws the interface and never
-touches your API key. The backend does the network and keychain work.
-
-1. The frontend (React): paper list, settings page, language and theme
-   toggles.
-2. The backend (Rust): arXiv and AI provider calls, OS keychain reads
-   and writes.
-
-```
-[ The window you see (React) ]
-            |
-            | commands through Tauri (invoke)
-            v
-[ The engine (Rust backend) ]
-      |           |                |
-      |           |                +--> OS keychain (your API keys)
-      |           +-------------------> your AI provider (OpenAI-compatible API)
-      +-------------------------------> arXiv API (paper feed)
-```
-
-### Paper flow
-
-When you pick a field (for example cs.AI), the frontend
-asks the Rust backend for the newest papers. By default the backend calls
-the arXiv API, parses the XML answer, and returns a list of papers with
-title, authors, date, abstract, categories and a PDF link. A source
-select in Settings switches to Semantic Scholar (search-only): the
-backend queries its search API with independent rate limits, maps the
-results (citation counts, TLDRs, venues, PDF links) into the same paper
-shape, and falls back to arXiv automatically if Semantic Scholar fails.
-arXiv sends no CORS headers, so the browser cannot call it directly:
-fetching always happens in the backend, never from the web page.
-
-### Explanation flow
-
-When you click Explain on a paper, the backend
-reads your key from the OS keychain, builds a short request containing the
-paper title and abstract, and sends it to your provider. The provider
-answers with a stream of text. Each piece of text arrives through a secure
-channel to the frontend, which shows it as it is generated. If you press
-Stop, the backend cancels the request with a typed signal that the
-interface understands. Nothing about your key ever passes through the
-frontend.
-
-### Key storage
-
-In Settings you add a provider: a name, a base URL, a
-model name, and your API key. The key is written straight from the
-interface to the backend, which stores it in the OS keychain. The frontend
-only ever knows whether a key exists, never its value.
+The frontend (React) draws the interface and never touches your API key.
+The backend (Rust) fetches papers, calls your AI provider, and owns the
+OS keychain. Module map and runtime flows: docs/architecture.md.
 
 ## Usage
 
-1. **Install the app.** Use the Windows installer (MSI or setup EXE) or
-   the macOS app bundle from the release page.
-2. **Add an AI provider.** Open Settings, press "Add provider", choose a
-   preset (OpenAI, OpenRouter, DeepSeek, Groq, Ollama) or type a custom
-   base URL and model. Paste your API key. Press "Test" to check the
-   connection. Ollama on your own machine works without a key.
-3. **Browse papers.** Pick a field from the sidebar. The 20 newest papers
-   appear, newest first. Use the search box to look for any topic. Press
-   the refresh button to check for new uploads.
-4. **Read a paper.** Press "Read" to open the paper's PDF inside the app:
-   flip pages, zoom, and search inside the PDF. The PDF button next to it
-   still opens the paper on arXiv in your browser. The bookmark button
-   saves it to your favorites, and the "Saved" toggle shows only saved
-   papers.
-5. **Explain a paper.** Press "Explain". The explanation streams in,
-   written in the current interface language in plain terms (every
-   technical term explained). Use
-   "Stop" to cancel or "Regenerate" to ask again. You can switch
-   providers from inside the explanation panel.
-6. **Walk through a whole paper.** Inside the reader, press "Explain the
-   whole paper". The mentor explains the paper section by section; press
-   "Continue" when you are ready for the next section, and it finishes
-   with a final summary of the whole paper.
-7. **Ask questions about a paper.** Open the "Ask" tab inside the reader
-   and type any question. The answer is grounded in the paper's text.
-   Select a passage in the PDF first and the question is answered with
-   that passage as context. Your chat history is kept per paper.
-8. **Switch language and theme.** Use the toggles in the top bar: the
-   language group flips the whole interface to Arabic with full RTL (and
-   explanations are then written in Arabic), and the theme button cycles
-   Light (soft, low contrast), Sepia (warm paper) and Dark. The same
-   choice lives in Settings under Appearance. Your choices are remembered.
+1. Install the app from the release page (Windows MSI or setup EXE,
+   macOS bundle).
+2. Settings → Add provider → paste your key → Test. Ollama on your own
+   machine needs no key.
+3. Pick a field, press Read or Explain.
 
-## Paper coverage and history
-
-Today's view is the latest 20 papers for the field you are looking at,
-newest first. You can refresh as often as you like. arXiv has no daily
-quota; it only asks for politeness (about one request every 3 seconds),
-and the app enforces that for you automatically.
-
-Every time you open a field, the app collects that field's papers day
-by day: on the first launch it
-backfills the last 14 days (up to 50 papers per day), and it keeps 30
-days of history per field. The day picker next to the paper list shows
-every collected day with its paper count ("Jul 30 (23)"). Click a day to
-browse it, or use the arrows to step through any past day, even ones
-older than the collected history (those are fetched live from arXiv).
-
-So there is no fixed "papers per day" number. You get up to 20 papers
-per view in the latest view, up to 50 per day in the history, and you
-can browse any past day at any time.
-
-## Explanations
-
-When you press Explain, the backend reads your key from the OS keychain,
-sends the paper's title and abstract to your provider with a system prompt
-that turns the model into a **research mentor**, not a summarizer. The
-mentor is asked to:
-
-1. Explain what the paper is about and how it works in plain terms
-2. Explain every technical term the first time it appears
-3. Use analogies and simple, natural language (no AI-sounding cliches)
-4. Point out the paper's assumptions and weaknesses
-5. Never invent details that are not in the paper
-
-The answer is 200 to 300 words, in short paragraphs, in the language of
-the interface (English or Arabic), and it renders as real markdown:
-headings, lists, tables, math equations and even diagrams. The text
-appears progressively as the provider generates it. You can stop or
-regenerate at any time.
-
-Whole-paper walkthroughs work the same way, except the mentor receives
-the actual text of the paper, section by section. The reader extracts the
-text from the PDF, splits it into sections, and the mentor explains each
-section using a full teaching structure before you press Continue. At the
-end it produces a final synthesis: the five most important ideas, the
-three biggest limitations, how the paper differs from earlier work, what
-to learn next, and five questions to check understanding.
-
-The Ask tab is a grounded chat: your question (plus any passage you
-selected in the PDF) is sent together with the relevant section of the
-paper, and the mentor answers only from that context, honestly saying
-when the answer is not in the paper.
-
-The explanation uses your provider and your model, so the cost (if any) is
-exactly what your provider charges for the tokens used, typically a small
-fraction of a cent for a 300-word answer. With a local Ollama model it is
-free.
-
-## Build history
-
-Papyrus was built in phases, each verified before moving on:
-
-1. **Foundation.** A Tauri 2 project with React, TypeScript, Tailwind CSS
-   and shadcn/ui, with English, Arabic, and RTL from the start.
-2. **Papers.** A Rust command that fetches and parses the arXiv feed, with
-   rate limiting, plus the paper list UI with loading, empty and error
-   states.
-3. **AI explanations.** A streaming explain command, secure key storage in
-   the OS keychain, a settings page for managing providers, and a mock AI
-   server so the whole flow can be tested without spending tokens.
-4. **Polish.** Custom icon, installers for Windows, README, MIT license.
-5. **Audit and hardening.** Repeated review rounds produced dozens of
-   improvement plans (`plans/`): bug fixes (including a stream decoder
-   fix for Arabic text, a race condition when switching fields quickly,
-   and stop-button correctness), security hardening (HTTPS enforcement,
-   key redaction in error messages, trimmed permissions, a maintained
-   keyring library), testing infrastructure, linting and formatting,
-   pre-commit hooks, a CI pipeline for Windows and macOS, keyword
-   search, favorites, and two design specs for future features. Every
-   plan landed as its own commit with tests.
-6. **The reader.** An in-app PDF reader (pdf.js), a whole-paper mentor
-   walkthrough that explains the paper section by section, and a grounded
-   chat where selections in the PDF become answer context.
+Full guide (setup, reading, paper history, how explanations work):
+docs/usage.md.
 
 ## What changed since the first version
 
@@ -378,6 +231,7 @@ installers for Windows, and the MIT license.
 | The 344-line papers toolbar mixed the filter bar with date/year navigation and chip helpers                                                                                                                                                                                                                                                       | Split out `ToolbarBrowseRow` (history label, year chips + category scope, day navigation) and `toolbar-helpers` (day format, years label, year-chip builder); the toolbar keeps status + search + actions only. All 6 toolbar tests pass unchanged through the same rendered output.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | The 482-line settings page owned the whole backup/data section (export, import, full wipe, history-only clear) inline                                                                                                                                                                                                                             | Extracted the self-contained `DataSection` component (own state and handlers, zero props); the page is now providers + appearance + source only. All 30 settings tests pass unchanged through the same rendered output.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | Docs prose read AI-generated and several claims had gone stale                                                                                                                                                                                                                                                                                    | Rewrote the README body, architecture map, research notes and spikes in plain engineer voice; fixed the stale CSP, layout, plan-count and path references; added a docs index. Changelog and release history untouched.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| README grew too long for a front page                                                                                                                                                                                                                                                                                                             | Split usage, features, choices, development and security into docs/ files; the README keeps summaries plus a table of contents. No content lost.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ### New features added after the first version
 
@@ -425,142 +279,31 @@ installers for Windows, and the MIT license.
 - **Design specs** for two future features: provider failover and a
   second paper source (Semantic Scholar / OpenAlex).
 
-## Technical choices and why
+## Technical choices
 
-| Choice                                        | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tauri 2 instead of Electron                   | Installers are a few megabytes instead of a hundred or more, because Tauri uses the operating system's own web engine. The backend is Rust, which is fast and safe.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| React + TypeScript (strict)                   | The standard modern UI stack. Strict TypeScript catches a whole class of bugs at compile time.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Tailwind CSS v4 + shadcn/ui                   | Fast, consistent, accessible UI. Components are local source files, so they are easy to customize and have no design-system lock-in.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Zustand for state                             | A tiny store library with no boilerplate. The app's state (papers, settings, explanations) stays simple to follow.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| react-i18next                                 | The mature internationalization library. Instant language switching and correct RTL document direction.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Pure Rust backend instead of a Python sidecar | One toolchain, one package. Bundling Python into a desktop installer on Windows is painful. Everything needed (HTTP, XML parsing, streaming) is simple and robust in Rust.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| arXiv as the first paper source               | Free, no API key, and it is where new research appears first. Semantic Scholar and OpenAlex are designed in as future sources.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| OpenAI-compatible protocol for AI             | One abstraction (base URL + key + model) covers OpenAI, OpenRouter, DeepSeek, Groq, Mistral, local Ollama and any custom endpoint. No provider-specific code.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| reqwest with native TLS                       | Uses the operating system's certificate store (Windows schannel). Avoids extra build tools on Windows and keeps the installer lean.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| The keyring crate for keys                    | The standard Rust library for OS credential vaults: Windows Credential Manager and macOS Keychain. Keys never touch app storage or the web view.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Streaming with SSE over a Tauri channel       | Explanations appear as they are generated, which feels fast, and cancellation is clean and typed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Mock AI server for development                | A small OpenAI-compatible server (dev/mock-ai-server.mjs) lets you exercise the full explain flow, in both languages, without spending tokens.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| pdf.js for the in-app reader                  | Mozilla's PDF renderer, embedded in the app. One engine does the viewer (canvas + selectable text layer), find-in-page search, and the text extraction that powers the mentor walkthrough and the chat.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Testing and quality gates                     | 134 Rust tests and 364 frontend tests cover parsing, streaming, error paths, stores (including search modes, year ranges, the notes hub, the notes load/upsert race window, and the reading-history upsert/cap/merge), the markdown renderer, PDF text logic, the reader state machine (including multi-flush streaming, chat-history regressions, walkthrough persistence, the stop compare-and-swap and the shared in-flight extraction join), PDF render lifecycle (resize, zoom, cancellation, zero-size pages, failure isolation, never-settling tasks, deferred repaints, HiDPI scaling, retry affordance, fresh-canvas-per-run generation, citation-batch completion and stale-batch tokens), the provider IPC wire contract, the SSRF redirect chain, the browser failover loop, settings validation, the clear-data and import flows (including the 5 MiB payload cap and section validation), provider test memory and quick-add presets, the OpenAI preset, Today's picks, the sort logic, the full reader open-to-ready boundary, WCAG AA contrast, RTL direction-utility hygiene, EN/AR key parity, the arXiv relevance URL grammar (quoted phrases, category default, sort modes), the clipboard helper, the markdown link-scheme allowlist, the virtualized list windowing and the reading-position helper. ESLint, Prettier, strict typecheck, clippy and rustfmt run on every commit through pre-commit hooks, CI repeats them on Windows and macOS, and pnpm audit + cargo audit gate every PR. |
-
-## Project layout
-
-```
-src/                React frontend
-  components/         shared UI (shadcn/ui primitives, markdown renderer, pdf.js reader, top bar)
-  features/           papers, reader, settings, notes
-  hooks/              theme, view focus, PDF search, reading position
-  i18n/               English and Arabic strings
-  lib/                pure functions + Tauri invoke wrappers (papers, AI, PDF, citations, export)
-  stores/             Zustand stores (papers, reader, explanation, settings, favorites, history, digest, notes, ui)
-src-tauri/          Rust backend
-  src/papers/         arXiv feed + Semantic Scholar search
-  src/citations/      citation counts (S2 batch + OpenAlex fallback, disk cache)
-  src/ai/             explanations, chat, provider test, keychain
-  src/pdf/            PDF fetch + cache (SSRF-guarded)
-  src/*.rs            notes, reading history, JSON export/import, cache clearing
-  capabilities/       webview permissions (least privilege)
-  prompts.json        AI prompts (English + Arabic), loaded at compile time
-dev/                mock AI server, screenshot capture, diagnostics
-docs/               architecture map, research notes, design spikes, screenshots
-plans/              build plans, one per change
-```
-
-### Editing the AI prompts
-
-Every explanation (quick explanation, whole-paper walkthrough, final
-synthesis, and Ask answers) is shaped by the prompts in
-`src-tauri/prompts.json`. There are English and Arabic versions of each
-prompt, plus the cancellation marker the app matches when a stream is
-stopped. Edit the JSON directly (for example to adjust the mentor style
-or add instructions) and rebuild; the Rust backend loads the file at
-compile time through `include_str!`, so no code changes are needed. Keep
-the English and Arabic versions in sync.
+Tauri 2 (small installers), strict TypeScript, Tailwind + shadcn/ui,
+Zustand, react-i18next, pure Rust backend, arXiv + Semantic Scholar,
+any OpenAI-compatible AI provider, OS keychain for keys. One line per
+decision: docs/technical-choices.md.
 
 ## Development
-
-Prerequisites: [Rust](https://rustup.rs), Node.js 20 or newer (which ships
-[corepack](https://nodejs.org/api/corepack.html); run `corepack enable
-pnpm` to get pnpm), [pnpm](https://pnpm.io/installation) 9 or newer, and on
-Windows: Visual Studio Build Tools (C++) and WebView2.
 
 ```bash
 pnpm install
 pnpm tauri dev
 ```
 
-### Local mock AI server (no API key needed)
+Mock server, tests, lint, screenshots, prompt editing:
+docs/development.md.
 
-To develop and test the explain flow without spending tokens:
+## Security
 
-```bash
-pnpm mock-ai
-# then add it in Papyrus Settings:
-#   Base URL: http://localhost:8765/v1
-#   Model:    mock-model
-#   API key:  anything (or empty)
-```
+- Keys live in the OS keychain, read only by Rust; the webview never
+  sees them.
+- Restrictive CSP, least-privilege capabilities, escaped-markdown
+  rendering, sandboxed PDFs, HTTPS-only remotes.
 
-### Regenerating the screenshots
-
-With the dev server and mock AI server running (see above):
-
-```bash
-pnpm exec node dev/capture-screenshots.mjs
-```
-
-## Tests, lint and formatting
-
-```bash
-cargo test --manifest-path src-tauri/Cargo.toml   # Rust: parsing, streaming, error paths
-pnpm test                                          # Frontend unit tests (Vitest)
-pnpm run build                                     # TypeScript strict check + production build
-pnpm lint                                          # ESLint
-pnpm typecheck                                     # TypeScript strict (tsc --noEmit)
-pnpm format                                        # Prettier, write formatting fixes
-pnpm format:check                                  # Prettier, verify formatting
-```
-
-Pre-commit hooks (via [lefthook](https://lefthook.dev)) run typecheck,
-lint, formatting checks and `cargo fmt --check` automatically on every
-commit. CI (GitHub Actions) runs the same gates plus the Rust test suite
-and desktop builds on Windows and macOS.
-
-A live arXiv fetch test is included but ignored by default (it needs a
-network connection):
-
-```bash
-cargo test --manifest-path src-tauri/Cargo.toml live_fetch_from_arxiv -- --ignored
-```
-
-## Security notes
-
-- API keys are written to and read from the OS keychain by the Rust
-  backend only. They never enter the web view.
-- The webview runs with a restricted capability set (`core:default` and
-  `opener:allow-open-url`). The keychain plugin permission is not exposed
-  to the web view at all.
-- The webview runs under a restrictive Content-Security-Policy (exact
-  string in `src-tauri/tauri.conf.json`, verified per
-  `docs/spikes/csp.md`). All data fetching is Rust-side, so the policy
-  needs no remote `connect-src` entries; only the Tauri IPC origins are
-  allowlisted besides `'self'`.
-- AI responses are rendered as markdown, not raw HTML: the renderer
-  escapes any HTML tags the model produces (no raw-HTML passthrough),
-  mermaid diagrams run in strict security mode, and links open through
-  the operating system's browser. PDF text is only ever shown inside
-  the pdf.js viewer and sent to the AI backend; it is never injected
-  into the page as HTML.
-- Remote provider URLs must use HTTPS. Plain HTTP is only accepted for
-  local servers such as Ollama, so keys are never sent in clear text.
-- Provider error messages are redacted: key-shaped strings are masked
-  before they reach the interface.
-- arXiv's rate limit (about one request per 3 seconds) is enforced in the
-  Rust fetcher.
-- Paper content and AI responses are handled as untrusted data: markdown
-  rendering escapes HTML, and PDF downloads are capped in size and
-  rendered sandboxed in the viewer.
+Details: docs/security.md.
 
 ## Roadmap
 
