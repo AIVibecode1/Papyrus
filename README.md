@@ -52,16 +52,15 @@ react-i18next. Backend logic is written in Rust.
 | --------------------------------------------------- | ----------------------------------------------- |
 | ![Settings](docs/screenshots/settings-ar-light.png) | ![Reader](docs/screenshots/reader-en-light.png) |
 
-## How it works
+## Architecture
 
-Papyrus has two parts that talk to each other:
+Papyrus has two parts. The frontend draws the interface and never
+touches your API key. The backend does the network and keychain work.
 
-1. **The frontend** (React). This is the window you see: the paper list,
-   the settings page, the language and theme toggles. It only draws the
-   interface. It never touches your API key.
-2. **The backend** (Rust). This is the engine. It talks to arXiv, it talks
-   to your AI provider, and it reads and writes your key in the OS
-   keychain.
+1. The frontend (React): paper list, settings page, language and theme
+   toggles.
+2. The backend (Rust): arXiv and AI provider calls, OS keychain reads
+   and writes.
 
 ```
 [ The window you see (React) ]
@@ -75,7 +74,9 @@ Papyrus has two parts that talk to each other:
       +-------------------------------> arXiv API (paper feed)
 ```
 
-**The paper flow.** When you pick a field (for example cs.AI), the frontend
+### Paper flow
+
+When you pick a field (for example cs.AI), the frontend
 asks the Rust backend for the newest papers. By default the backend calls
 the arXiv API, parses the XML answer, and returns a list of papers with
 title, authors, date, abstract, categories and a PDF link. A source
@@ -83,10 +84,12 @@ select in Settings switches to Semantic Scholar (search-only): the
 backend queries its search API with independent rate limits, maps the
 results (citation counts, TLDRs, venues, PDF links) into the same paper
 shape, and falls back to arXiv automatically if Semantic Scholar fails.
-arXiv sends no permission headers for browser calls, so fetching always
-happens in the backend, never directly from the web page.
+arXiv sends no CORS headers, so the browser cannot call it directly:
+fetching always happens in the backend, never from the web page.
 
-**The explanation flow.** When you click Explain on a paper, the backend
+### Explanation flow
+
+When you click Explain on a paper, the backend
 reads your key from the OS keychain, builds a short request containing the
 paper title and abstract, and sends it to your provider. The provider
 answers with a stream of text. Each piece of text arrives through a secure
@@ -95,12 +98,14 @@ Stop, the backend cancels the request with a typed signal that the
 interface understands. Nothing about your key ever passes through the
 frontend.
 
-**The key flow.** In Settings you add a provider: a name, a base URL, a
+### Key storage
+
+In Settings you add a provider: a name, a base URL, a
 model name, and your API key. The key is written straight from the
 interface to the backend, which stores it in the OS keychain. The frontend
 only ever knows whether a key exists, never its value.
 
-## How to use it
+## Usage
 
 1. **Install the app.** Use the Windows installer (MSI or setup EXE) or
    the macOS app bundle from the release page.
@@ -117,8 +122,8 @@ only ever knows whether a key exists, never its value.
    saves it to your favorites, and the "Saved" toggle shows only saved
    papers.
 5. **Explain a paper.** Press "Explain". The explanation streams in,
-   written in the current interface language, using the research-mentor
-   style (every technical term explained, no AI-sounding text). Use
+   written in the current interface language in plain terms (every
+   technical term explained). Use
    "Stop" to cancel or "Regenerate" to ask again. You can switch
    providers from inside the explanation panel.
 6. **Walk through a whole paper.** Inside the reader, press "Explain the
@@ -135,15 +140,15 @@ only ever knows whether a key exists, never its value.
    Light (soft, low contrast), Sepia (warm paper) and Dark. The same
    choice lives in Settings under Appearance. Your choices are remembered.
 
-## How many papers do you get?
+## Paper coverage and history
 
 Today's view is the latest 20 papers for the field you are looking at,
 newest first. You can refresh as often as you like. arXiv has no daily
 quota; it only asks for politeness (about one request every 3 seconds),
 and the app enforces that for you automatically.
 
-There is also a history feature. Every time you open a field, the app
-quietly collects that field's papers day by day: on the first launch it
+Every time you open a field, the app collects that field's papers day
+by day: on the first launch it
 backfills the last 14 days (up to 50 papers per day), and it keeps 30
 days of history per field. The day picker next to the paper list shows
 every collected day with its paper count ("Jul 30 (23)"). Click a day to
@@ -154,7 +159,7 @@ So there is no fixed "papers per day" number. You get up to 20 papers
 per view in the latest view, up to 50 per day in the history, and you
 can browse any past day at any time.
 
-## How explanations work
+## Explanations
 
 When you press Explain, the backend reads your key from the OS keychain,
 sends the paper's title and abstract to your provider with a system prompt
@@ -173,7 +178,7 @@ headings, lists, tables, math equations and even diagrams. The text
 appears progressively as the provider generates it. You can stop or
 regenerate at any time.
 
-**Whole-paper walkthroughs** work the same way, but the mentor receives
+Whole-paper walkthroughs work the same way, except the mentor receives
 the actual text of the paper, section by section. The reader extracts the
 text from the PDF, splits it into sections, and the mentor explains each
 section using a full teaching structure before you press Continue. At the
@@ -181,7 +186,7 @@ end it produces a final synthesis: the five most important ideas, the
 three biggest limitations, how the paper differs from earlier work, what
 to learn next, and five questions to check understanding.
 
-**The Ask tab** is a grounded chat: your question (plus any passage you
+The Ask tab is a grounded chat: your question (plus any passage you
 selected in the PDF) is sent together with the relevant section of the
 paper, and the mentor answers only from that context, honestly saying
 when the answer is not in the paper.
@@ -191,13 +196,12 @@ exactly what your provider charges for the tokens used, typically a small
 fraction of a cent for a 300-word answer. With a local Ollama model it is
 free.
 
-## How it was built
+## Build history
 
 Papyrus was built in phases, each verified before moving on:
 
 1. **Foundation.** A Tauri 2 project with React, TypeScript, Tailwind CSS
-   and shadcn/ui, with English and Arabic and RTL working from the first
-   day.
+   and shadcn/ui, with English, Arabic, and RTL from the start.
 2. **Papers.** A Rust command that fetches and parses the arXiv feed, with
    rate limiting, plus the paper list UI with loading, empty and error
    states.
@@ -205,15 +209,15 @@ Papyrus was built in phases, each verified before moving on:
    the OS keychain, a settings page for managing providers, and a mock AI
    server so the whole flow can be tested without spending tokens.
 4. **Polish.** Custom icon, installers for Windows, README, MIT license.
-5. **Audit and hardening.** A deep review produced 28 improvement plans:
-   bug fixes (including a stream decoder fix for Arabic text, a race
-   condition when switching fields quickly, and stop-button correctness),
-   security hardening (HTTPS enforcement, key redaction in error
-   messages, trimmed permissions, a maintained keyring library), testing
-   infrastructure, linting and formatting, pre-commit hooks, a CI pipeline
-   for Windows and macOS, keyword search, favorites, and two design specs
-   for future features. Every plan landed as its own commit with tests.
-   The git history reads as a story of the project.
+5. **Audit and hardening.** Repeated review rounds produced dozens of
+   improvement plans (`plans/`): bug fixes (including a stream decoder
+   fix for Arabic text, a race condition when switching fields quickly,
+   and stop-button correctness), security hardening (HTTPS enforcement,
+   key redaction in error messages, trimmed permissions, a maintained
+   keyring library), testing infrastructure, linting and formatting,
+   pre-commit hooks, a CI pipeline for Windows and macOS, keyword
+   search, favorites, and two design specs for future features. Every
+   plan landed as its own commit with tests.
 6. **The reader.** An in-app PDF reader (pdf.js), a whole-paper mentor
    walkthrough that explains the paper section by section, and a grounded
    chat where selections in the PDF become answer context.
@@ -373,6 +377,7 @@ installers for Windows, and the MIT license.
 | Module-split follow-through: comments still pointed at `src-tauri/src/ai.rs` after the split                                                                                                                                                                                                                                                      | Repointed the four live-code references at `src-tauri/src/ai/` (frozen archive/spike docs intentionally untouched).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | The 344-line papers toolbar mixed the filter bar with date/year navigation and chip helpers                                                                                                                                                                                                                                                       | Split out `ToolbarBrowseRow` (history label, year chips + category scope, day navigation) and `toolbar-helpers` (day format, years label, year-chip builder); the toolbar keeps status + search + actions only. All 6 toolbar tests pass unchanged through the same rendered output.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | The 482-line settings page owned the whole backup/data section (export, import, full wipe, history-only clear) inline                                                                                                                                                                                                                             | Extracted the self-contained `DataSection` component (own state and handlers, zero props); the page is now providers + appearance + source only. All 30 settings tests pass unchanged through the same rendered output.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Docs prose read AI-generated and several claims had gone stale                                                                                                                                                                                                                                                                                    | Rewrote the README body, architecture map, research notes and spikes in plain engineer voice; fixed the stale CSP, layout, plan-count and path references; added a docs index. Changelog and release history untouched.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ### New features added after the first version
 
@@ -443,21 +448,23 @@ installers for Windows, and the MIT license.
 
 ```
 src/                React frontend
-  components/         shared UI components (shadcn/ui)
-  components/markdown  markdown renderer (tables, KaTeX, mermaid)
-  components/pdf-viewer embedded pdf.js reader
-  features/           papers (list, card, explain) and reader (viewer + AI panel)
-  hooks/              theme hook
+  components/         shared UI (shadcn/ui primitives, markdown renderer, pdf.js reader, top bar)
+  features/           papers, reader, settings, notes
+  hooks/              theme, view focus, PDF search, reading position
   i18n/               English and Arabic strings
-  lib/                types, arXiv client, AI client, PDF bytes, text splitting
-  stores/             Zustand stores (papers, settings, explanation, reader, ui, favorites)
+  lib/                pure functions + Tauri invoke wrappers (papers, AI, PDF, citations, export)
+  stores/             Zustand stores (papers, reader, explanation, settings, favorites, history, digest, notes, ui)
 src-tauri/          Rust backend
-  src/                papers.rs (arXiv), ai.rs (AI streaming + keychain), pdf.rs (PDF fetch + cache), citations.rs (Semantic Scholar)
+  src/papers/         arXiv feed + Semantic Scholar search
+  src/citations/      citation counts (S2 batch + OpenAlex fallback, disk cache)
+  src/ai/             explanations, chat, provider test, keychain
+  src/pdf/            PDF fetch + cache (SSRF-guarded)
+  src/*.rs            notes, reading history, JSON export/import, cache clearing
   capabilities/       webview permissions (least privilege)
-  prompts.json        the AI prompts (English and Arabic), see below
-dev/                Development-only tools (mock AI server, screenshot capture, sample PDF)
-docs/               Screenshots and design specs
-plans/              The 13 improvement plans of the latest audit round (all done)
+  prompts.json        AI prompts (English + Arabic), loaded at compile time
+dev/                mock AI server, screenshot capture, diagnostics
+docs/               architecture map, research notes, design spikes, screenshots
+plans/              build plans, one per change
 ```
 
 ### Editing the AI prompts
@@ -534,10 +541,11 @@ cargo test --manifest-path src-tauri/Cargo.toml live_fetch_from_arxiv -- --ignor
 - The webview runs with a restricted capability set (`core:default` and
   `opener:allow-open-url`). The keychain plugin permission is not exposed
   to the web view at all.
-- The webview ships without a Content-Security-Policy (`"csp": null` in
-  `src-tauri/tauri.conf.json`) by design. The UI loads only local bundled
-  assets, and users configure arbitrary provider base URLs, which a
-  static `connect-src` whitelist cannot express.
+- The webview runs under a restrictive Content-Security-Policy (exact
+  string in `src-tauri/tauri.conf.json`, verified per
+  `docs/spikes/csp.md`). All data fetching is Rust-side, so the policy
+  needs no remote `connect-src` entries; only the Tauri IPC origins are
+  allowlisted besides `'self'`.
 - AI responses are rendered as markdown, not raw HTML: the renderer
   escapes any HTML tags the model produces (no raw-HTML passthrough),
   mermaid diagrams run in strict security mode, and links open through
@@ -556,11 +564,10 @@ cargo test --manifest-path src-tauri/Cargo.toml live_fetch_from_arxiv -- --ignor
 
 ## Roadmap
 
-- Curated daily selection: a small hand-picked list of the day's most
-  interesting papers, ranked from the collected history (design spike
-  ready in docs/spikes/curated-daily.md; citation-based ranking starts
-  once papers are a few days old, because one-day-old papers are not
-  yet indexed by Semantic Scholar).
+- Curated daily selection: a small list of the day's most interesting
+  papers, ranked from the collected history (spec in
+  docs/spikes/curated-daily.md; citation ranking only kicks in after a
+  few days, once Semantic Scholar has indexed the papers).
 - An optional Semantic Scholar API key in Settings for steadier citation
   and search results (keyless works but is rate-limited).
 - macOS signing and notarization for a smoother install experience.

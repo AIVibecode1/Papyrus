@@ -1,17 +1,17 @@
-# Day boundary: local time vs arXiv (investigation note)
+# Day boundary: local time vs arXiv
 
 Status: closed as "no change" on 2026-08-03 (plan 009). The day labels are
 internally consistent; the skew against arXiv's own calendar is a labeling
 artifact around midnight, not a bug in the latest-papers flow.
 
-## The two clocks in play
+## Two clocks
 
 1. **Labels and storage** (`src/stores/digest.ts:14`): `todayStr()` returns
    the LOCAL date (e.g. `2026-08-01`). All day labels, the digest storage
    keys (`papyrus-digest-v1`), and the reading-position keys use this same
    local clock. Internally everything is consistent: the same local date
    always maps to the same query window.
-2. **Query windows and arXiv data** (`src-tauri/src/papers.rs:102-110`):
+2. **Query windows and arXiv data** (`src-tauri/src/papers/arxiv.rs:30`):
    `build_fetch_url` narrows with `submittedDate:[YYYYMMDD TO next-day]` —
    a UTC-based range. arXiv timestamps (`published`) are UTC (`Z`), but
    arXiv's daily announcement day is US Eastern time.

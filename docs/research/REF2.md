@@ -113,11 +113,3 @@ Suggested name ideas:
    Choose React + TypeScript + Tailwind.
 3. Add shadcn/ui and set up RTL from day one.
 4. Create a simple Rust script that fetches the latest 20 papers from `cs.AI` and prints them.
-
-I can give you:
-
-- Ready project structure
-- Exact Tauri + React starter commands
-- Rust code for arXiv + OpenAI-compatible client
-- Good system prompt for explanations (EN + AR)
-- UI component examples with proper RTL

@@ -1,6 +1,6 @@
 # dev/diagnostics — one-off live-verification harnesses
 
-These scripts drive the **built** Papyrus exe through Chrome DevTools
+These scripts drive the built Papyrus exe through Chrome DevTools
 Protocol (WebView2 remote debugging on port 9223). They are manual
 diagnostic tools, not part of CI and not imported by anything.
 

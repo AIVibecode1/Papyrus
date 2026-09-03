@@ -1,26 +1,29 @@
 # Papyrus feature layout
 
-Agent-oriented map of how the codebase is organized. Read this before
-touching a feature so new code lands in the same place as existing code.
+Agent-oriented map of the codebase. Read this before touching a feature
+so new code lands next to the code it belongs with.
 
 ## Frontend (`src/`)
 
 - `src/features/<domain>/` — UI for one user domain (papers, reader,
   settings, notes). Components here may read Zustand stores directly.
-- `src/stores/<domain>.ts` — Zustand state for that domain. Stores are
-  the only place that persists user data (localStorage keys are
-  domain-scoped constants at the top of each store file).
+- `src/stores/` — Zustand state, one file per domain: `papers`,
+  `papers-prefs`, `reader`, `reader-persist`, `explanation`, `settings`,
+  `favorites`, `history`, `digest`, `notes`, `ui`. Stores are the only
+  place that persists user data; each store keeps its localStorage keys
+  as domain-scoped constants.
 - `src/lib/` — pure functions and Tauri invoke wrappers (no React):
-  `arxiv.ts` (fetch wrapper), `ai.ts` (facade: Tauri dispatch +
-  re-exports; `ai-contract`, `ai-operations`, `ai-browser-keys`,
-  `ai-browser-chat` leaves), `export.ts`, `paper-sort.ts`,
-  `paper-text.ts`, `pdf-text.ts`, `types.ts` (shared types + provider
-  presets), `provider-errors.ts` (redaction), `stream.ts`, `dates.ts`.
+  `arxiv` (paper fetch), `citations`, `export`, `paper-sort`,
+  `paper-text`, `pdf` / `pdf-text` / `pdf-position`, `picks`, `dates`,
+  `stream`, `clipboard`, `safe-url`, `provider-errors` (key redaction),
+  `types` (shared types + provider presets), `utils`, `reader-ai`, plus
+  the split AI layer: `ai` (facade), `ai-contract`, `ai-operations`,
+  `ai-browser-keys`, `ai-browser-chat`.
 - `src/components/` — cross-cutting UI: `layout/` (top bar),
   `markdown/` (safe markdown pipeline), `pdf-viewer/`, `ui/` (shadcn
   primitives).
 - `src/i18n/locales/` — `en.json` + `ar.json`. Every user-visible string
-  goes through i18n; **EN and AR land in the same commit, always**.
+  goes through i18n; EN and AR land in the same commit, always.
 
 ## Backend (`src-tauri/src/`)
 
@@ -32,6 +35,7 @@ One Rust module per IPC concern, registered in `lib.rs`:
 | `citations/` | `fetch_citations` (`mod`: S2 batch + OpenAlex fallback; `cache`: session + disk cache; `tests`: fetch-path suite)                                                                                                         |
 | `ai/`        | explain/ask/stop, keychain (`save_api_key`, `get_key`, `has_api_key`, `delete_api_key`), provider test (`mod`: `ProviderConfig` + module wiring; `commands`, `keychain`, `prompts`, `registry`, `stream`; `tests`: suite) |
 | `pdf/`       | `fetch_pdf` (`mod`: command + cache naming; `guard`: SSRF/DNS-pinning download pipeline)                                                                                                                                  |
+| `history.rs` | `list_history`, `record_history`, `remove_history_entry`                                                                                                                                                                  |
 | `cache.rs`   | `clear_app_cache`                                                                                                                                                                                                         |
 | `export.rs`  | `export_data`, `import_data` (favorites + chats; never keys)                                                                                                                                                              |
 | `notes.rs`   | `list_notes`, `upsert_note`, `delete_note` (app-data JSON, atomic write)                                                                                                                                                  |

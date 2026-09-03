@@ -1,5 +1,9 @@
 # Spike: Second paper source — Semantic Scholar / OpenAlex (plan 028, DIR-4)
 
+> Note (2026-09-03): the backend has since been split into module dirs
+> (`papers.rs` → `src-tauri/src/papers/`, `ai.rs` → `src-tauri/src/ai/`).
+> File and line references below are against the pre-split tree.
+
 > Design spike output — feeds a future build plan. When the maintainer picks
 > it up, this document is the spec. See `plans/028-second-source-spike.md` for
 > the spike brief. No app code was changed by this spike.

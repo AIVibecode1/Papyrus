@@ -71,5 +71,3 @@ https://dblp.org/search/publ/api?q=attention+is+all+you+need&format=json&h=10
 - For **latest AI research** → Start with **arXiv API** (sort by `submittedDate`).
 - For richer search + citations + summaries → Use **Semantic Scholar**.
 - For pure CS conference papers → **DBLP**.
-
-Would you like ready-to-use Python code examples for any of these (especially arXiv or Semantic Scholar)?
