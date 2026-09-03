@@ -21,8 +21,8 @@ Rules:
 
 ## v1.1.10 - 2026-09-03
 
-Status: planned (working tree on main, not yet committed).
-Built from: uncommitted working tree (record the release-commit sha here at commit time).
+Status: committed, not yet pushed or published.
+Built from: fe5f7be (release commit).
 Quality gates: 364 frontend tests, 134 Rust tests, clippy, rustfmt,
 ESLint, Prettier, strict typecheck, release-integrity checker, CI on
 Windows and macOS.
