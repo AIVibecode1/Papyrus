@@ -21,8 +21,8 @@ Rules:
 
 ## v1.1.11 - 2026-09-27
 
-Status: committed; tagged and built by CI on the `v1.1.11` tag.
-Built from: commit 1e3152a
+Status: tagged; CI builds the installers onto the draft GitHub release.
+Built from: tag `v1.1.11`
 Quality gates: 417 frontend tests, 159 Rust tests, clippy, rustfmt,
 ESLint, Prettier, strict typecheck, release-integrity checker.
 
