@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { useTranslation } from "react-i18next";
 import { isSafeOpenUrl } from "@/lib/safe-url";
+import { normalizeMathDelimiters } from "@/lib/math-delimiters";
 import "katex/dist/katex.min.css";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -26,18 +27,6 @@ interface MarkdownProps {
  * plain browser preview. Code, math and tables are forced LTR even when
  * the surrounding text is Arabic/RTL.
  */
-/**
- * Models often write LaTeX with \(...\) / \[...\] delimiters, which
- * remark-math does not parse (it only knows $...$ / $$...$$). Normalize
- * the paren forms so AI equations actually render as math.
- */
-export function normalizeMathDelimiters(text: string): string {
-  // In a replacement string, $$ is an escaped literal $, so $$$$ emits $$.
-  return text
-    .replace(/\\\[([\s\S]*?)\\\]/g, "$$$$\n$1\n$$$$")
-    .replace(/\\\(([\s\S]*?)\\\)/g, "$$$1$");
-}
-
 export const Markdown = memo(function Markdown({ children, className }: MarkdownProps) {
   const handleLinkClick = (e: MouseEvent<HTMLAnchorElement>, href: string | undefined) => {
     if (!href || !isSafeOpenUrl(href)) {

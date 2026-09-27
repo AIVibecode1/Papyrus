@@ -112,7 +112,11 @@ describe("cross-language contract checks", () => {
 
   it("builds the user message in the exact shape messages_follow_ui_language asserts (Rust)", async () => {
     const onChunk = vi.fn();
-    const fetchMock = vi.fn().mockResolvedValue(new Response("data: [DONE]\n\n", { status: 200 }));
+    // A real provider sends at least one delta before [DONE]. Sending
+    // [DONE] alone is treated as a failure (nothing was produced), so the
+    // fixture has to be realistic to keep testing the request body.
+    const sse = 'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n' + "data: [DONE]\n\n";
+    const fetchMock = vi.fn().mockResolvedValue(new Response(sse, { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     try {
       await streamExplanation({

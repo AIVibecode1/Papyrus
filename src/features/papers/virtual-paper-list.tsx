@@ -52,7 +52,11 @@ export function VirtualList<T>({
       const viewport = Math.max(el.clientHeight, 400);
       const start = Math.max(0, Math.floor(scrollTop / estimateSize) - 6);
       const end = Math.min(items.length, Math.ceil((scrollTop + viewport) / estimateSize) + 6);
-      setWindow({ start, end });
+      // Keep the previous object when the window is unchanged. React bails
+      // out of a re-render on Object.is, so a fresh object literal here
+      // re-rendered every visible card on every scroll tick and every
+      // ResizeObserver callback, even when nothing had moved.
+      setWindow((w) => (w.start === start && w.end === end ? w : { start, end }));
     };
     update();
     el.addEventListener("scroll", update, { passive: true });

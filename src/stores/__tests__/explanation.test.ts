@@ -1,17 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Paper, ProviderConfig } from "@/lib/types";
 
-const { streamExplanationMock, stopExplanationMock, CANCELLED_MARKER } = vi.hoisted(() => ({
+const { streamExplanationMock, stopExplanationMock, CANCELLED_MARKER, opSeq } = vi.hoisted(() => ({
   streamExplanationMock: vi.fn(),
   stopExplanationMock: vi.fn(),
   // Must mirror src/lib/ai.ts — the store matches rejections against it.
   CANCELLED_MARKER: "\u{1F6D1}PAPYRUS_CANCELLED",
+  // Distinct id per call, like the real generator: the store keys its
+  // cancellable runs by id, so a fixed id would hide id mix-ups.
+  opSeq: { n: 0 },
 }));
 
 vi.mock("@/lib/ai", () => ({
   streamExplanation: streamExplanationMock,
   stopExplanation: stopExplanationMock,
-  newOperationId: () => "test-op-id",
+  newOperationId: () => `op-${++opSeq.n}`,
   CANCELLED_MARKER,
 }));
 
@@ -113,12 +116,56 @@ describe("explanation store", () => {
     unsubscribe();
   });
 
+  it("stop on one paper leaves a concurrent explanation on another running", async () => {
+    // Two papers can stream at once (generations are keyed by paper id).
+    // A single module-level operation id made stop() cancel whichever run
+    // started last, not the card whose Stop button was clicked — and left
+    // the other one unstoppable.
+    const other: Paper = { ...paper, id: "p2", title: "Second paper" };
+    let rejectA!: (e: unknown) => void;
+    let rejectB!: (e: unknown) => void;
+    // Both streams stay pending until the test rejects them at the end.
+    streamExplanationMock.mockImplementationOnce(
+      () =>
+        new Promise<string>((_res, rej) => {
+          rejectA = rej;
+        }),
+    );
+    streamExplanationMock.mockImplementationOnce(
+      () =>
+        new Promise<string>((_res, rej) => {
+          rejectB = rej;
+        }),
+    );
+
+    const runA = useExplanationStore.getState().start(paper, provider, "en");
+    const runB = useExplanationStore.getState().start(other, provider, "en");
+
+    // Stop only paper A.
+    await useExplanationStore.getState().stop(paper.id);
+    expect(stopExplanationMock).toHaveBeenCalledTimes(1);
+    expect(useExplanationStore.getState().byPaper[paper.id]?.status).toBe("stopped");
+    // B must still be streaming, and still cancellable afterwards.
+    expect(useExplanationStore.getState().byPaper[other.id]?.status).toBe("loading");
+
+    await useExplanationStore.getState().stop(other.id);
+    expect(stopExplanationMock).toHaveBeenCalledTimes(2);
+    expect(useExplanationStore.getState().byPaper[other.id]?.status).toBe("stopped");
+    // Two distinct ids: stopping B must not reuse A's.
+    expect(stopExplanationMock.mock.calls[0][0]).not.toBe(stopExplanationMock.mock.calls[1][0]);
+
+    // Settle both so the promises do not leak into the next test.
+    rejectA(new Error("🛑PAPYRUS_CANCELLED"));
+    rejectB(new Error("🛑PAPYRUS_CANCELLED"));
+    await Promise.all([runA, runB]);
+  });
+
   it("stop marks stopped and prevents further chunk appends", async () => {
     const p = useExplanationStore.getState().start(paper, provider, "en");
     onChunk("a");
     // Plan 015: commit the pre-stop chunk by advancing the flush window.
     vi.advanceTimersByTime(50);
-    await useExplanationStore.getState().stop();
+    await useExplanationStore.getState().stop(paper.id);
     expect(useExplanationStore.getState().byPaper[paper.id]?.status).toBe("stopped");
 
     // Plan 005: a chunk already in flight from the pre-stop run must be

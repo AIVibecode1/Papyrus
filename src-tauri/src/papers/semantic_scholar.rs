@@ -16,7 +16,8 @@ pub(crate) const S2_RETRIES: u32 = 3;
 pub(crate) const S2_RETRY_DELAY_MS: u64 = 1500;
 
 pub(crate) fn s2_search_url() -> String {
-    std::env::var("PAPYRUS_S2_SEARCH_URL").unwrap_or_else(|_| S2_SEARCH_URL.to_string())
+    crate::test_hooks::test_env("PAPYRUS_S2_SEARCH_URL")
+        .unwrap_or_else(|| S2_SEARCH_URL.to_string())
 }
 
 /// Fetches papers from the Semantic Scholar search API. Requires a

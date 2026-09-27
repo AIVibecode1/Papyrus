@@ -19,6 +19,247 @@ Rules:
 
 ---
 
+## v1.1.11 - 2026-09-27
+
+Status: in development; not yet tagged or built.
+Built from: (unreleased working tree)
+Quality gates: 417 frontend tests, 159 Rust tests, clippy, rustfmt,
+ESLint, Prettier, strict typecheck, release-integrity checker.
+
+- Fixed: paper card titles and metadata ignored the density design
+  tokens. `text-(--text-card-title)` is an ambiguous Tailwind utility
+  name, so it resolved to `color`, emitted an invalid `color: 0.9375rem`
+  that the browser dropped, and both the 15px title and the 12px
+  metadata silently fell back to the inherited 16px. The class now
+  carries Tailwind's `length:` type hint, and a new inventory test fails
+  on any unhinted `text-(--var)` holding a length.
+- Fixed: opening the PDF no longer freezes while the AI explanation
+  streams. `ReaderView` subscribes to the whole reader store, so every
+  50 ms flush re-rendered the viewer and repainted every page's canvas
+  and text layer. The viewer is memoized and its callback is stable, so
+  streaming beside the paper leaves the document alone.
+- Improved: startup got much lighter. pdf.js was imported at module
+  scope by the viewer and the text extractor, and the reader store is
+  imported eagerly, so every launch downloaded and parsed the whole
+  parser before the user opened a paper. Both paths now load it on
+  demand through a shared cached loader: the startup bundle dropped
+  from 1,431 kB to 998 kB (440 kB to 310 kB gzipped), with pdf.js as
+  its own 434 kB chunk paid for only in the reader.
+- Security: a base URL like `http://localhost:1234@evil.com/v1` passed
+  the loopback check, so a plaintext HTTP provider URL could send the
+  API key to a remote host. Userinfo (`@`) is now rejected outright.
+- Security: the PDF SSRF guard now also blocks IPv6 unique-local
+  addresses (fc00::/7) and RFC 6598 shared address space
+  (100.64.0.0/10), both reachable on a local network.
+- Fixed: the browser AI stream path now enforces the same size bounds
+  as the Rust backend and treats a `[DONE]` with no content as an error,
+  so a malformed gateway can no longer stream unbounded or paint a
+  blank explanation.
+- Fixed: the Rust QA prompt kept the oldest 8 chat turns, discarding
+  the recent context a follow-up question refers to. It now keeps the 8
+  most recent, matching the webview.
+- Improved: re-importing notes or reading history used one IPC call
+  per entry, re-reading and re-writing the whole file each time (up to
+  200 calls). Both are now single batched commands with an entry cap,
+  up-front validation and a newer-wins merge.
+- Improved: nine `PAPYRUS_*` test overrides are now compiled out of
+  release builds. Three of them chose where the user's notes, history
+  and exports are written, and four redirected every outbound API call;
+  anything able to set environment variables for the process could have
+  redirected private data. Verified by building in release and finding
+  zero override names in the binary.
+- Fixed: saving a note that failed to reach disk discarded the user's
+  text. The draft was cleared, no error was shown, and the failure only
+  appeared as an unhandled rejection. Both note paths now report the
+  failure and keep the text; a failed highlight save no longer clears
+  the PDF selection either.
+- Fixed: stopping one paper's explanation cancelled another's. The
+  store kept a single active operation id, so with two papers streaming,
+  Stop on the first card cancelled whichever run started last and left
+  the first unstoppable. Runs are now keyed by paper, matching how
+  generations already were.
+- Improved: the reader's split handle is now keyboard operable
+  (Arrow keys, Shift for a larger step, Home/End), focusable, and
+  reports its position. It previously declared `role="separator"` with
+  no keyboard path at all.
+- Improved: a provider response body is now read through a capped reader
+  on the non-streaming and error paths. `Response::text()` buffers the
+  entire body before any check could run, so a hostile or broken
+  endpoint could exhaust memory. The streaming path was already capped.
+- Fixed: a pointer drag released outside the window, or a touch gesture
+  taken over by the OS, leaked the split handle's listeners for the
+  session.
+- Fixed: exporting your data during startup silently wrote empty
+  sections. `buildExportPayload` called each store's `load()` without
+  awaiting it and then read `getState()`, but zustand replaces the state
+  object rather than mutating it, so the snapshot was the pre-load one.
+  It now awaits the loads and re-reads fresh state.
+- Fixed: deleting a provider that has no stored key (Ollama, or any
+  provider whose key was cleared) failed with "No matching entry found"
+  and the provider row could never be removed. `delete_key` now treats a
+  missing keychain entry as success, matching how `get_key` already
+  handled it.
+- Fixed: reopening a paper labelled every finished walkthrough section
+  "Stopped." The restore path collapsed all non-error statuses to
+  stopped, so completed sections lost their checkmark and reported
+  finished work as abandoned. Only in-flight statuses are demoted now.
+- Security: the focus ring was drawn at 50% opacity, measuring 2.76:1
+  against the card surface — below the 3:1 that WCAG 1.4.11 requires of a
+  focus indicator. It is now solid (7.1:1), which affects every primary
+  button in the app.
+- Fixed: the app honoured no motion preferences at all. Every paper card
+  animated in on a stagger with 12px of vertical travel, and the reader
+  and chat scrolled smoothly, with no opt-out. A
+  `prefers-reduced-motion` block now collapses those.
+- Fixed: every card had 44px of vertical padding against 20px
+  horizontal, because `py-6` on the Card box stacked with the padding
+  consumers set on the nested CardContent — and `tw-merge` cannot
+  collapse padding declared on two different elements. The Card base no
+  longer sets padding, so callers own spacing as intended.
+- Fixed: the dependency-audit gate was red — a new high-severity advisory
+  (js-yaml CPU DoS) in the dev-only shadcn chain would have failed CI on
+  every push. Pinned via a `pnpm.overrides` entry, same as the existing
+  nanoid and fast-uri fixes.
+- Improved: three component modules also exported a plain helper
+  function, which React Fast Refresh rejects. Editing the history list,
+  the markdown renderer, or the note card forced a full page reload
+  instead of preserving state. The helpers moved to
+  `lib/relative-time.ts`, `lib/math-delimiters.ts` and
+  `features/notes/resolve-paper.ts`, and the dev server now hot-updates
+  all three (verified against a running Vite instance).
+- New: the notes hub now reports a failed load instead of showing an
+  empty list, so a storage fault is never mistaken for "you have no
+  notes". Reading history had the same problem and now behaves the same
+  way: a failed read no longer renders as "no reading history", which
+  read as data loss for positions the user still had.
+- Improved: the history import replays the whole merged list through one
+  IPC call per entry, re-reading and re-writing the entire file each time
+  (up to 200 calls). Notes and history are now single batched commands
+  with an entry cap, up-front validation and a newer-wins merge.
+- Fixed: "Load more" silently cancelled the refresh it overlapped. A day
+  view shows its cached page straight away while the real fetch is still in
+  flight, so the button was enabled in exactly that window; paging then
+  invalidated the refresh's generation token and threw away both its result
+  and its citation batch. Pagination and refresh now have separate tokens,
+  each invalidated by the other in one direction only.
+- Fixed: a stale citation batch could answer a list it was never asked
+  about. Switching field cleared the counts but not the batch's token, so an
+  in-flight response merged the previous list's counts into the new one and
+  could raise a bogus "citations unavailable" banner.
+- Fixed: an export could silently write empty sections. The payload read
+  the stores off a snapshot taken before their disk reads finished, so an
+  export started during startup backed up nothing while still reporting
+  success. It now waits for the reads, and the notes load is joinable so a
+  second caller waits for the first instead of racing it.
+- Fixed: a corrupt saved-provider file could cost the user every provider.
+  The failed read reported an empty list as a success, so the next edit
+  rewrote the file with one entry. The failure is surfaced and writes are
+  refused until it is cleared, leaving the file on disk intact.
+- Fixed: the paper list re-rendered every visible card on every scroll tick
+  and every resize callback, because the virtual window was replaced with a
+  fresh object even when it had not moved.
+- Fixed: in the browser preview, "Load more" re-fetched page 1 forever, so
+  the button spun without ever appending anything.
+- Fixed: "Clear cache and saved data" did not clear everything. The
+  in-memory citation counts survived until a restart, and one locked
+  directory aborted the remaining steps, so the user's notes and history
+  could be left on disk after asking for them to be gone. Every step now
+  runs and the first failure is reported at the end.
+- Fixed: a fully-cached citation batch reported itself as unreachable, so
+  the list showed "check your connection" when nothing had failed. A
+  Semantic Scholar list makes no citation request at all, because those
+  counts arrive with the search, and it still raised the banner.
+- Fixed: the PDF downloader pinned only the last of a host's addresses.
+  The pin helper stores one entry per host, so each call replaced the
+  previous one; a host publishing both A and AAAA records could fail to
+  download even though a validated address was reachable.
+- Fixed: same-host PDF redirects were rejected. Publisher CDNs commonly
+  answer with a relative `Location`, which was read as a non-https target.
+  It is now resolved against the current hop and the resolved url is
+  validated, so the redirect chain still cannot leave https or the host's
+  own address checks.
+- Fixed: citation lookups ignored the per-source politeness delay, firing
+  one request per batch back to back against the same unauthenticated pool
+  the paper search already throttles — and the rate-limit retry slept
+  inside the loop, so it never re-entered the limiter. They queue behind
+  the search calls now.
+- Fixed: an arXiv entry with no id became a paper the user could not open
+  ("Invalid paper id"); it is skipped with the other malformed entries.
+- Fixed: the citation badge read "Cited 1 times". The count is a plural
+  form now, in both languages, and English has the singular. Arabic keeps
+  its single uninflected noun across every plural category.
+- Added: `\(...\)` and `\[...\]` LaTeX from a model is normalized to the
+  `$`/`$$` forms remark-math understands, so equations in an explanation
+  render as math instead of showing raw delimiters.
+- Fixed: the daily digest is now held to a byte budget and evicts the
+  oldest days first, so it keeps persisting instead of silently
+  failing on the first oversized write.
+- Security: the PDF downloader followed redirects automatically, so a
+  validated https URL could redirect to a loopback or metadata address
+  and reach the user's own machine. Every hop is now validated and the
+  connection is pinned to the validated addresses, so neither a redirect
+  nor a DNS change between validation and connect can escape the guard.
+  The body is also size-capped while streaming rather than after being
+  buffered in full.
+- Security: the private-address blocklist missed IPv4-mapped IPv6 forms.
+  `::ffff:127.0.0.1` is a spelling of loopback, not a global address, and
+  it is now decided by the IPv4 rules like any other spelling of the same
+  host.
+- Fixed: superseded streaming runs can no longer overwrite a newer
+  one's status or splice their text into a regenerated explanation.
+- Security: the token redactor leaked keys. A short `sk-`-shaped run
+  earlier in a message (`"model sk-8 rejected"`) aborted the scan for
+  that whole prefix, so the real key echoed after it reached the UI
+  untouched — and the 32-char fallback cannot cover it, because real
+  API keys are routinely shorter than that. The scan now continues past
+  a non-token match.
+- Security: error cards could render a key in the clear. The webview
+  carried its own `sk-`-only redaction, weaker than the Rust masker, and
+  the paper explanation and chat answers printed provider errors
+  unredacted. All three now go through the one canonical masker, and
+  every error surface truncates as well.
+- Fixed: a provider could report a mid-stream failure as a data frame
+  carrying `error`. It parses as JSON but has no delta, so it was
+  silently dropped and the run reported success with a half-written
+  answer. Both the Rust and browser stream paths now surface it. A
+  `[DONE]` that arrives with no content is likewise an error, not an
+  empty success.
+- Fixed: an unbounded SSE stream. A peer that never emitted a newline
+  grew the line buffer for the whole 10-minute window, and a peer that
+  streamed forever did the same to the assembled text. Both are now
+  capped (1 MiB per frame, 4 MiB per response), on both paths.
+- Fixed: the notes hub reported a failed read as an empty list, and
+  showed a spinner while saying "could not load notes". It now
+  distinguishes loading, failed (with a working retry) and genuinely
+  empty, so a storage fault never reads as lost work.
+- Fixed: a rejected note save or import left the note on screen with
+  nothing on disk, so the next launch silently dropped it. Both now
+  roll back to the pre-write state and re-throw.
+- Fixed: reading-history writes were not serialized. Opening a paper
+  fires `record_history` without awaiting, so two overlapping calls
+  could each read the file and each write it, and the later write
+  dropped the earlier one. Every history command now shares one lock.
+- Accessibility: loading states are announced. The paper list, the
+  history strip and the notes hub swapped in silently, and the
+  skeleton list used an `aria-label` on a plain div, which most screen
+  readers ignore. Loading panels are now live regions with
+  `aria-busy`, and the spinner is hidden from assistive tech since the
+  title already carries the message.
+- Fixed: the test suite could not run on current Node. Node 25+ exposes
+  experimental `localStorage`/`sessionStorage` globals that return
+  `undefined` without `--localstorage-file`, and they shadow the jsdom
+  ones, so 40 tests failed on any machine not pinned to Node 22 —
+  exactly what CI runs. A setup file now repairs the storage globals.
+- Fixed: tests were feeding the stylesheet. Tailwind scans test files
+  too, so class names quoted in assertions (and the project test that
+  documents the `text-(--var)` form) shipped as dead CSS, and a class
+  referenced only by a test would have looked "used" and survived a
+  purge. Tests are now excluded from Tailwind's sources.
+- Fixed: the PDF viewer could throw from an effect cleanup while
+  cancelling in-flight render tasks, aborting the rest of the teardown.
+  Its test stub also omitted `cancel`, which hid the defect; the stub
+  now matches the real `RenderTask` shape.
+
 ## v1.1.10 - 2026-09-03
 
 Status: tagged v1.1.10, draft release building; not yet published.

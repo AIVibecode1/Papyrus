@@ -81,7 +81,10 @@ pub struct Paper {
 
 /// Enforces the per-source politeness interval between API calls
 /// (arXiv 3 s, Semantic Scholar 1.1 s — no cross-source blocking).
-async fn rate_limit(source: &str) {
+/// Crate-visible because the citation batches hit the same shared
+/// unauthenticated Semantic Scholar pool and must queue behind the search
+/// calls rather than firing a burst of chunk requests alongside them.
+pub(crate) async fn rate_limit(source: &str) {
     let interval = source_interval(source);
     // Serialize per source: the lock is held across the sleep, so a
     // concurrent caller cannot start (and fire) while this one is

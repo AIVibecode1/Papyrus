@@ -47,9 +47,12 @@ fn arxiv_pdf_url(paper_id: &str) -> Result<String, String> {
 
 /// Downloads a paper's PDF and caches it on disk keyed by the paper id, so
 /// the viewer and the text extractor never download the same PDF twice.
-/// The fetch target is DERIVED server-side: arXiv ids map to the canonical
-/// arXiv PDF url; `s2:` ids (source-provided hosts) pass their url through
-/// the https/public-host guard. The webview never picks a fetch target.
+/// The fetch target is derived server-side for arXiv ids (the canonical arXiv
+/// PDF url). For `s2:` ids the url comes from the caller, because the host is
+/// whatever publisher S2 recorded and cannot be derived from the id — that
+/// url is the webview's to supply, and `download_pdf_guarded` is what keeps it
+/// safe (https only, no credentials, no private/link-local/loopback host, one
+/// validated and re-validated hop at a time).
 #[tauri::command]
 pub async fn fetch_pdf(
     app: AppHandle,
@@ -69,7 +72,7 @@ pub async fn fetch_pdf(
         arxiv_pdf_url(&paper_id)?
     };
     // Validation and DNS pinning happen inside, per hop, including
-    // redirects; the webview never picks a fetch target.
+    // redirects.
     let bytes = download_pdf_guarded(&target).await?;
     // Best-effort cache write: a full disk is not a reason to fail the read.
     let _ = fs::write(&path, &bytes);

@@ -263,6 +263,7 @@ export const useReaderStore = create<ReaderState>((set, get) => {
         const buffer = createStreamBuffer<ReaderState>(set, {
           isCurrent: () => wtGen === gen,
           apply: (s, text) => {
+            if (wtGen !== gen) return s;
             const cur = s.synthesis;
             // loading OR streaming: the first flush flips the status and
             // later flushes must keep appending (same rule as sections).
@@ -326,6 +327,11 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       const buffer = createStreamBuffer<ReaderState>(set, {
         isCurrent: () => wtGen === gen,
         apply: (s, text) => {
+          // Generation guard: Regenerate reuses this exact index with a
+          // fresh "loading" entry, so a late flush from the superseded run
+          // would otherwise pass the status check below and splice its
+          // text into the new explanation.
+          if (wtGen !== gen) return s;
           const entry = s.sectionEntries[i];
           // Apply to loading AND streaming entries: the first flush flips
           // the status, and later flushes must keep appending.

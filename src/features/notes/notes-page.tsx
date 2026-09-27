@@ -1,4 +1,4 @@
-import { Loader2, NotebookPen, Search, X } from "lucide-react";
+import { AlertCircle, Loader2, NotebookPen, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,8 @@ import { filterNotes, useNotesStore } from "@/stores/notes";
 import { useFavoritesStore } from "@/stores/favorites";
 import { useReaderStore } from "@/stores/reader";
 import { useUiStore } from "@/stores/ui";
-import { NoteCard, resolvePaper } from "./note-card";
+import { NoteCard } from "./note-card";
+import { resolvePaper } from "./resolve-paper";
 
 export function NotesPage() {
   const { t } = useTranslation();
@@ -20,6 +21,7 @@ export function NotesPage() {
   const filterPaperId = useNotesStore((s) => s.filterPaperId);
   const setFilterPaperId = useNotesStore((s) => s.setFilterPaperId);
   const remove = useNotesStore((s) => s.remove);
+  const loadError = useNotesStore((s) => s.loadError);
   const openReader = useReaderStore((s) => s.open);
   const setView = useUiStore((s) => s.setView);
   const favorites = useFavoritesStore((s) => s.byId);
@@ -33,6 +35,13 @@ export function NotesPage() {
   const filteredPaperTitle = filterPaperId
     ? notes.find((n) => n.paperId === filterPaperId)?.paperTitle
     : undefined;
+
+  // `load` is a no-op once `loaded` is set, so a retry has to clear the
+  // flag first or the button would silently do nothing.
+  const retryLoad = async () => {
+    useNotesStore.setState({ loaded: false, loadError: null });
+    await useNotesStore.getState().load();
+  };
 
   const handleOpen = async (note: PaperNote) => {
     setOpeningId(note.id);
@@ -87,8 +96,23 @@ export function NotesPage() {
         {!loaded ? (
           <StatePanel
             icon={<Loader2 className="size-8 animate-spin" />}
-            title={t("notes.loadError")}
+            title={t("notes.loading")}
+            busy
             muted
+          />
+        ) : loadError ? (
+          // A failed read must not masquerade as "you have no notes" —
+          // that would read as data loss for work the user still has.
+          <StatePanel
+            icon={<AlertCircle className="size-8 text-destructive" />}
+            title={t("notes.loadError")}
+            description={loadError}
+            tone="destructive"
+            action={
+              <Button size="sm" variant="outline" onClick={() => void retryLoad()}>
+                {t("papers.retry")}
+              </Button>
+            }
           />
         ) : visible.length === 0 ? (
           <StatePanel

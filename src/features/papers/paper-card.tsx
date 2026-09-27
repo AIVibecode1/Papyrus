@@ -90,7 +90,7 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
         <div dir="ltr" className="flex items-start justify-between gap-3">
           <h3
             dir="ltr"
-            className="line-clamp-2 text-(--text-card-title) font-semibold leading-5 tracking-tight text-balance"
+            className="line-clamp-2 text-(length:--text-card-title) font-semibold leading-5 tracking-tight text-balance"
           >
             {paper.title}
           </h3>
@@ -115,7 +115,7 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
 
         <p
           dir="ltr"
-          className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-(--text-card-meta) leading-relaxed text-muted-foreground"
+          className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-(length:--text-card-meta) leading-relaxed text-muted-foreground"
         >
           <time dateTime={paper.published}>{published}</time>
           {paper.authors.length > 0 && (
@@ -140,7 +140,7 @@ export function PaperCard({ paper, index = 0 }: PaperCardProps) {
                 <span dir="ltr" className="font-mono">
                   {citationCount}
                 </span>{" "}
-                {t("papers.citedBySuffix")}
+                {t("papers.citedBySuffix", { count: citationCount })}
               </span>
             </>
           )}

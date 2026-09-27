@@ -159,4 +159,18 @@ describe("notes store", () => {
     expect(merged.find((n) => n.id === "n1")?.body).toBe("local newer");
     expect(merged.find((n) => n.id === "n2")?.body).toBe("imported only");
   });
+
+  it("re-importing an identical backup changes nothing", async () => {
+    // Regression: importNotes replayed the WHOLE merged set to the
+    // backend, so re-importing the same file rewrote every note on disk
+    // for no reason. Nothing changed means nothing is sent.
+    const stored = makeNote({ id: "n1", body: "same", updatedAt: "2026-08-05T00:00:00Z" });
+    useNotesStore.setState({ notes: [stored], loaded: true });
+    localStorageMock.setItem("papyrus-notes-v1", JSON.stringify([stored]));
+
+    await useNotesStore.getState().importNotes([{ ...stored }]);
+
+    expect(useNotesStore.getState().notes).toHaveLength(1);
+    expect(useNotesStore.getState().notes[0].body).toBe("same");
+  });
 });

@@ -11,7 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Where exports land. Test hook: PAPYRUS_EXPORT_DIR overrides the
 /// Documents folder (tests cannot construct an AppHandle).
 fn export_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("PAPYRUS_EXPORT_DIR") {
+    if let Some(dir) = crate::test_hooks::test_env("PAPYRUS_EXPORT_DIR") {
         return PathBuf::from(dir);
     }
     if let Ok(profile) = std::env::var("USERPROFILE") {

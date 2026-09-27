@@ -68,6 +68,30 @@ describe("ReaderNotes", () => {
     await screen.findByText("A fresh thought", { selector: "p" });
   });
 
+  it("keeps the draft and reports the failure when a save does not persist", async () => {
+    // The store rolls the optimistic note back, so the user's words exist
+    // only in the textarea. Clearing it (or swallowing the error) would
+    // lose the note with no explanation and no unhandled rejection.
+    const realUpsert = useNotesStore.getState().upsert;
+    useNotesStore.setState({
+      upsert: async () => {
+        throw new Error("disk full");
+      },
+    });
+
+    render(<ReaderNotes paper={paper} />);
+    const box = screen.getByRole("textbox", { name: "Add note" });
+    fireEvent.change(box, { target: { value: "Unsaved words" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not save/i);
+    // The text is still there, and nothing was written.
+    expect(screen.getByRole("textbox", { name: "Add note" })).toHaveValue("Unsaved words");
+    expect(useNotesStore.getState().notes).toHaveLength(0);
+
+    useNotesStore.setState({ upsert: realUpsert });
+  });
+
   it("shows highlight quotes with a page badge", () => {
     useNotesStore.setState({
       notes: [makeNote({ kind: "highlight", quote: "we call it attention", page: 3, body: "" })],

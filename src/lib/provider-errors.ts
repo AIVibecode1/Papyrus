@@ -4,15 +4,21 @@
  * The backend (Rust test_provider) never returns key material, but
  * defense in depth: anything that looks like a token is redacted here
  * too, and raw messages are truncated before they reach the UI.
+ *
+ * Reuse note: `redactTokens` in @/lib/ai is the single canonical masker
+ * (it mirrors `redact_tokens` in src-tauri/src/ai/stream.rs). This file
+ * used to carry its own weaker `sk-`-only regex, which meant a `key_…`
+ * or prefixless key echoed by a custom gateway was masked in Rust but
+ * rendered raw in the cards that call this module.
  */
+
+import { redactTokens } from "@/lib/ai";
 
 export type TestErrorCategory = "url" | "auth" | "network" | "model" | "unknown";
 
 /** Anything that looks like a bearer/API key token. */
-const KEY_TOKEN = /\bsk-[A-Za-z0-9_-]{8,}\b/g;
-
 export function redactSecrets(message: string): string {
-  return message.replace(KEY_TOKEN, "[redacted]");
+  return redactTokens(message);
 }
 
 /** Caps raw provider messages so details never flood the UI. */

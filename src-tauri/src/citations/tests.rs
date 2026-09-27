@@ -687,3 +687,48 @@ fn disk_cache_ttl_override_expires_immediately() {
         std::env::remove_var("PAPYRUS_S2_URL");
     }
 }
+/// A fully-served batch is not an unreachable network. The flag used to
+/// be passed through unchanged, so a list whose ids were all cached — and
+/// an all-`s2:` list, which makes no request at all because those counts
+/// arrive with the search — reported a failed fetch, and the UI showed
+/// "check your connection".
+#[test]
+fn a_fully_cached_batch_is_reported_as_reachable() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    reset_session_cache();
+    // Rust 2024 made env::set_var/remove_var unsafe. Point both sources
+    // at a dead port: any request that *is* attempted fails, so a
+    // `reachable` of true can only mean none was needed.
+    unsafe {
+        std::env::set_var("PAPYRUS_S2_URL", "http://127.0.0.1:1/never");
+        std::env::set_var("PAPYRUS_OPENALEX_URL", "http://127.0.0.1:1/never");
+    }
+    if let Ok(mut guard) = cache::cache().lock() {
+        *guard = Some(HashMap::from([(
+            "2601.00001".to_string(),
+            (7, crate::citations::cache::now_secs()),
+        )]));
+    }
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (counts, reachable) = rt.block_on(fetch_citations_impl(vec!["2601.00001".to_string()]));
+    assert_eq!(counts.get("2601.00001"), Some(&7));
+    assert!(
+        reachable,
+        "a cached-only batch must not report a network failure"
+    );
+
+    // An all-`s2:` list resolves nothing over the network for the same
+    // reason, and must be reachable too.
+    reset_session_cache();
+    let (_counts, reachable_s2) = rt.block_on(fetch_citations_impl(vec!["s2:abc".to_string()]));
+    assert!(
+        reachable_s2,
+        "an all-s2 list must not report a network failure"
+    );
+
+    unsafe {
+        std::env::remove_var("PAPYRUS_S2_URL");
+        std::env::remove_var("PAPYRUS_OPENALEX_URL");
+    }
+}

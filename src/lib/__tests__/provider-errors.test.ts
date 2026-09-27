@@ -36,11 +36,28 @@ describe("categorizeTestError", () => {
 });
 
 describe("redactSecrets", () => {
+  // Asserts the security property (the token is gone), not a specific
+  // marker: redactSecrets now delegates to the canonical redactTokens so
+  // every card in the app masks identically.
   it("strips token-shaped strings from error text", () => {
-    const msg = "bad key sk-abc12345XYZ__more9 for provider";
-    const out = redactSecrets(msg);
-    expect(out).not.toContain("sk-abc12345XYZ__more9");
-    expect(out).toContain("[redacted]");
+    const secret = "sk-ABCDEFGHIJKLMNOP";
+    const out = redactSecrets(`bad key ${secret} for provider`);
+    expect(out).not.toContain("ABCDEFGHIJKLMNOP");
+    expect(out).toContain("bad key");
+    expect(out).toContain("for provider");
+  });
+
+  it("covers non-`sk-` prefixes the old local regex missed", () => {
+    // The previous implementation here only matched `sk-`, so a gateway
+    // echoing a `key_…` or bearer token was masked by Rust but rendered
+    // raw in the cards that call this module.
+    for (const secret of [
+      "key-ABCDEFGHIJKLMNOP",
+      "ghp_ABCDEFGHIJKLMNOPQRST",
+      "xai-ABCDEFGHIJKLMNOP",
+    ]) {
+      expect(redactSecrets(`echoed ${secret} back`)).not.toContain("ABCDEFGHIJKLMNOP");
+    }
   });
 
   it("leaves ordinary text alone", () => {

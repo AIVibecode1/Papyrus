@@ -26,6 +26,12 @@ let requestSeq = 0;
 // Same token for the citation batch: only the newest attempt may flip the
 // loading flag (a slow stale batch must not clear a newer one's flag).
 let citationsSeq = 0;
+// Separate token for pagination. loadMore must be invalidated by a scope
+// change and by a refresh that commits, but it must NOT invalidate a refresh
+// that is still in flight — a cache-first day view deliberately shows its
+// cached page 1 with `loading: false` while that fetch is outstanding, and a
+// shared counter let "Load more" cancel it.
+let moreSeq = 0;
 
 interface PapersState {
   category: string;
@@ -93,6 +99,12 @@ export const usePapersStore = create<PapersState>((set, get) => {
       fallbackNote: null,
       ...patch,
     });
+    // Invalidate the citation batch the *previous* list started: without
+    // this its response still passes the seq check and merges the old
+    // list's counts into the fresh (empty) map, which also flips
+    // citationsReachable for a list that was never queried.
+    citationsSeq += 1;
+    moreSeq += 1;
     void get().refresh();
   };
 
@@ -206,6 +218,10 @@ export const usePapersStore = create<PapersState>((set, get) => {
           limitToCategory,
         );
         if (seq !== requestSeq) return;
+        // The list this pagination was paging through is being replaced, so
+        // its offset no longer means anything. Invalidate the in-flight
+        // loadMore (not the reverse: a page-2 must never cancel this fetch).
+        moreSeq += 1;
         set({ papers, fallbackNote, loading: false, lastUpdated: Date.now() });
         get().loadCitations(papers.map((p) => p.id));
       } catch (err) {
@@ -232,10 +248,12 @@ export const usePapersStore = create<PapersState>((set, get) => {
         limitToCategory,
       } = get();
       if (loading || loadingMore || papers.length === 0) return;
-      // Same generation token as refresh: a category/query/source/date
-      // change that lands while this request is in flight must invalidate
-      // it, so a stale page-2 can never be appended to a newer list.
-      const seq = ++requestSeq;
+      // A *separate* generation token from refresh. Sharing one meant this
+      // bumped the counter the in-flight refresh was holding, so a cached
+      // day view (which sets `loading: false` before the background fetch
+      // finishes) let this through and silently cancelled that fetch —
+      // dropping its result and its citation batch. Scope changes bump both.
+      const seq = ++moreSeq;
       set({ loadingMore: true });
       try {
         const { papers: next, fallbackNote } = await fetchPapers(
@@ -250,7 +268,7 @@ export const usePapersStore = create<PapersState>((set, get) => {
           yearTo ?? undefined,
           limitToCategory,
         );
-        if (seq !== requestSeq) {
+        if (seq !== moreSeq) {
           // Stale: never touch the list, but always release the busy flag
           // or loadMore would be stuck for the whole session.
           set({ loadingMore: false });
@@ -263,7 +281,7 @@ export const usePapersStore = create<PapersState>((set, get) => {
         set({ papers: [...papers, ...fresh], loadingMore: false });
         get().loadCitations(fresh.map((p) => p.id));
       } catch (err) {
-        if (seq !== requestSeq) {
+        if (seq !== moreSeq) {
           set({ loadingMore: false });
           return;
         }

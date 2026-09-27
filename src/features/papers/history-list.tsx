@@ -1,4 +1,4 @@
-import { BookOpenText, Bookmark, Clock, Loader2, Trash2 } from "lucide-react";
+import { AlertCircle, BookOpenText, Bookmark, Clock, Loader2, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -9,24 +9,7 @@ import { useFavoritesStore } from "@/stores/favorites";
 import { useHistoryStore, paperFromEntry } from "@/stores/history";
 import { useReaderStore } from "@/stores/reader";
 import { useUiStore } from "@/stores/ui";
-
-/** Relative "Opened X ago" label in the active UI language (pure, so
- * tests can pin it). Falls back to the raw date when the input is
- * unparseable. */
-export function relativeOpened(iso: string, lang: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return iso;
-  const minutes = Math.round((Date.now() - then) / 60_000);
-  const rtf = new Intl.RelativeTimeFormat(lang, { numeric: "auto" });
-  if (Math.abs(minutes) < 60) return rtf.format(-minutes, "minute");
-  const hours = Math.round(minutes / 60);
-  if (Math.abs(hours) < 24) return rtf.format(-hours, "hour");
-  const days = Math.round(hours / 24);
-  if (Math.abs(days) < 30) return rtf.format(-days, "day");
-  const months = Math.round(days / 30);
-  if (Math.abs(months) < 12) return rtf.format(-months, "month");
-  return rtf.format(Math.round(months / 12), "year");
-}
+import { relativeOpened } from "@/lib/relative-time";
 
 /** Compact row for one history entry: title, "Opened …", and the Open /
  * Save to favorites / Remove actions. */
@@ -93,13 +76,41 @@ export function HistoryList() {
   const { t } = useTranslation();
   const loaded = useHistoryStore((s) => s.loaded);
   const entries = useHistoryStore((s) => s.entries);
+  const loadError = useHistoryStore((s) => s.loadError);
 
   if (!loaded) {
     return (
       <StatePanel
         icon={<Loader2 className="size-8 animate-spin" />}
         title={t("papers.loading")}
+        busy
         muted
+      />
+    );
+  }
+
+  // A failed read must not masquerade as "no reading history" — that reads
+  // as data loss for reading positions the user still has. `load` is a
+  // no-op once `loaded` is set, so a retry clears the flag first.
+  if (loadError) {
+    return (
+      <StatePanel
+        icon={<AlertCircle className="size-8 text-destructive" />}
+        title={t("history.loadError")}
+        description={loadError}
+        tone="destructive"
+        action={
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              useHistoryStore.setState({ loaded: false, loadError: null });
+              void useHistoryStore.getState().load();
+            }}
+          >
+            {t("papers.retry")}
+          </Button>
+        }
       />
     );
   }

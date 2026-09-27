@@ -22,6 +22,10 @@ export default defineConfig(async () => ({
     // globals, RTL cannot register afterEach and rendered components leak
     // into the next test).
     globals: true,
+    // Repairs the web Storage globals for `// @vitest-environment jsdom`
+    // files on Node 25+, whose experimental localStorage global otherwise
+    // shadows jsdom's (see src/test-setup.ts for the full story).
+    setupFiles: ["./src/test-setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
   },
 

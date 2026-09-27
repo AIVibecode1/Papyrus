@@ -106,6 +106,10 @@ pub(crate) fn synthesis_prompt(language: &str) -> &'static str {
 /// splits sections well below this).
 const MAX_PAPER_TEXT_CHARS: usize = 60_000;
 
+/// How many prior chat turns are replayed to a provider, keeping the most
+/// recent. Mirrors `history.slice(-8)` in src/lib/reader-ai.ts.
+pub(crate) const MAX_HISTORY_TURNS: usize = 8;
+
 /// Mentor walkthrough message for ONE section of the paper. The format
 /// string must stay in sync with the browser path in src/lib/reader-ai.ts
 /// (ai-contract tests cross-check the shape).
@@ -173,8 +177,14 @@ pub(crate) fn build_qa_messages(
     language: &str,
 ) -> Vec<Value> {
     let mut messages = vec![json!({ "role": "system", "content": qa_prompt(language) })];
-    // Prior turns first (max 8, oldest to newest), then the live question.
-    for turn in history.iter().take(8) {
+    // Prior turns first, oldest to newest, capped at the 8 MOST RECENT.
+    // Keeping the newest is the point of the cap: dropping the tail would
+    // discard exactly the context the follow-up question refers to. The
+    // webview already sends at most 8 (reader.ts `slice(-8)`), so this is
+    // a backstop — but it must degrade the same way as
+    // ai-browser-chat.ts, which also keeps the last 8.
+    let start = history.len().saturating_sub(MAX_HISTORY_TURNS);
+    for turn in &history[start..] {
         let role = if turn.role == "assistant" {
             "assistant"
         } else {

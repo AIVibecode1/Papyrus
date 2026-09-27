@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { memo } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import "@/i18n";
@@ -15,8 +16,18 @@ import type { ProviderConfig } from "@/lib/types";
 // Isolate the reader screen from pdf.js: the viewer component has its own
 // test file (pdf-viewer.test.tsx). The Markdown renderer (mermaid-lazy)
 // is stubbed so the tests assert wiring, not rendering.
+// The viewer mock mirrors the real component's memo boundary and counts
+// renders. ReaderView subscribes to the whole reader store, so a stream
+// flush re-renders it ~20x/second; the real PdfViewer is memoized so it
+// does not, and that memo only holds while its props keep their identity
+// (bytes/paperId are set once per open; ReaderView keeps onSelect in a
+// useCallback so it never invalidates the memo).
+const pdfViewerRenders = vi.hoisted(() => ({ count: 0 }));
 vi.mock("@/components/pdf-viewer/pdf-viewer", () => ({
-  PdfViewer: () => <div data-testid="pdf-viewer" />,
+  PdfViewer: memo(({ bytes, paperId }: { bytes: Uint8Array; paperId?: string }) => {
+    pdfViewerRenders.count += 1;
+    return <div data-testid="pdf-viewer" data-paper={paperId} data-len={bytes.length} />;
+  }),
 }));
 vi.mock("@/components/markdown/markdown", () => ({
   Markdown: ({ children }: { children: string }) => <div data-testid="markdown">{children}</div>,
@@ -82,6 +93,35 @@ describe("clampSplit", () => {
     expect(clampSplit(0.1)).toBe(0.3);
     expect(clampSplit(Number.NaN)).toBe(0.62);
     expect(clampSplit(Number.POSITIVE_INFINITY)).toBe(0.62);
+  });
+});
+
+describe("split separator", () => {
+  it("is reachable and operable by keyboard, and reports its position", () => {
+    // A `separator` that only answers a pointer advertises a widget
+    // assistive tech cannot move (WCAG 2.1.1), and a focusable one has
+    // to expose aria-valuenow.
+    localStorage.setItem("papyrus-reader-split", "0.5");
+    render(<ReaderView />);
+    const sep = screen.getByRole("separator");
+    expect(sep).toHaveAttribute("tabindex", "0");
+    expect(sep).toHaveAttribute("aria-valuenow", "50");
+
+    // Right grows the PDF pane in LTR.
+    fireEvent.keyDown(sep, { key: "ArrowRight" });
+    expect(screen.getByRole("separator")).toHaveAttribute("aria-valuenow", "52");
+    fireEvent.keyDown(sep, { key: "ArrowLeft" });
+    expect(screen.getByRole("separator")).toHaveAttribute("aria-valuenow", "50");
+
+    // Home/End jump to the clamps.
+    fireEvent.keyDown(sep, { key: "End" });
+    expect(screen.getByRole("separator")).toHaveAttribute("aria-valuenow", "80");
+    fireEvent.keyDown(sep, { key: "Home" });
+    expect(screen.getByRole("separator")).toHaveAttribute("aria-valuenow", "30");
+
+    // An unrelated key must not move it.
+    fireEvent.keyDown(sep, { key: "a" });
+    expect(screen.getByRole("separator")).toHaveAttribute("aria-valuenow", "30");
   });
 });
 
@@ -321,5 +361,37 @@ describe("ReaderView", () => {
     expect(await screen.findByPlaceholderText("اسأل عن الورقة…")).toBeInTheDocument();
 
     await i18n.changeLanguage("en");
+  });
+
+  it("does not re-render the PDF viewer while the AI panel streams", () => {
+    // The regression this guards: ReaderView subscribes to the whole
+    // reader store, so every stream flush (~50 ms) re-renders it. The
+    // real PdfViewer is memoized and its props are stable (bytes/paperId
+    // set once per open, onSelect via useCallback), so the page canvases
+    // must NOT be re-rendered while AI text streams in beside them.
+    //
+    // Asserted behaviorally: render the reader, then push a stream chunk
+    // into the store and assert the viewer did not re-render at all.
+    // The real memo boundary is what holds the count steady.
+    render(<ReaderView />);
+    const afterMount = pdfViewerRenders.count;
+    expect(afterMount).toBeGreaterThan(0);
+
+    // A stream flush mutates the reader store (this is what re-renders
+    // ReaderView). The PDF props are unchanged, so the memo must hold.
+    act(() => {
+      useReaderStore.setState((s) => ({
+        ...s,
+        sectionEntries: [
+          ...s.sectionEntries,
+          { status: "streaming", text: "chunk", title: "Intro" } as never,
+        ],
+      }));
+    });
+
+    // The stream update re-renders ReaderView. The PDF props are unchanged
+    // (memoized + stable identity), so the viewer must not re-render at
+    // all: a count of 1 here means the memo was defeated.
+    expect(pdfViewerRenders.count - afterMount).toBe(0);
   });
 });

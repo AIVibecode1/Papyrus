@@ -1,7 +1,7 @@
 import { FileText, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import * as pdfjsLib from "pdfjs-dist";
+import type * as pdfjsLib from "pdfjs-dist";
 import type { PDFPageProxy } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 // Positioning rules for the text layer (spans over the canvas).
@@ -21,6 +21,21 @@ export { highlightSpan, renderInQueue };
 export { escapeHtml } from "./search-highlight";
 export type { PageView };
 
+/**
+ * pdf.js on demand, resolved once and shared.
+ *
+ * The reader is one view of four, so a module-scope import charged every
+ * user ~350 kB of parser on app start for a screen most sessions never
+ * open. Both this viewer and `lib/pdf-text.ts` need it, so the module is
+ * fetched once and cached on the promise: every call site awaits the same
+ * import, and whichever runs first warms the browser cache for the other.
+ */
+let pdfjsPromise: Promise<typeof pdfjsLib> | null = null;
+function loadPdfjs(): Promise<typeof pdfjsLib> {
+  pdfjsPromise ??= import("pdfjs-dist");
+  return pdfjsPromise;
+}
+
 interface PdfViewerProps {
   bytes: Uint8Array;
   /** arXiv id: enables reading-position memory across sessions. */
@@ -35,7 +50,7 @@ type PageStatus = "pending" | "painting" | "ready" | "failed";
 // Viewer
 // ---------------------------------------------------------------------------
 
-export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
+export const PdfViewer = memo(function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
@@ -48,6 +63,11 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   const [pages, setPages] = useState<PageView[]>([]);
   const [scale, setScale] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
+  // Mirror of `currentPage` for the window keydown handler, which must not
+  // close over the state: re-subscribing on every page change left a window
+  // where a keystroke saw a stale page and the arrow keys stopped advancing
+  // (an intermittent full-suite failure). Same pattern as `scaleRef`.
+  const currentPageRef = useRef(1);
   const [error, setError] = useState<string | null>(null);
   // Bumping this re-runs the load effect (the error state's retry action).
   const [reloadKey, setReloadKey] = useState(0);
@@ -81,14 +101,25 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
     (async () => {
       try {
+        // pdf.js is loaded on demand (see loadPdfjs): the reader is one
+        // view of four, so a static import charged every user ~350 kB of
+        // parser on app start for a screen most sessions never open.
+        const pdfjsLib = await loadPdfjs();
+        pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
         // Copy the bytes: pdf.js transfers its input buffer to the worker,
         // which would detach a buffer shared with the text extractor.
         const loadingTask = pdfjsLib.getDocument({ data: bytes.slice() });
         loadingTaskRef.current = loadingTask;
+        // Unmounted (or re-run) while the import was in flight: the task
+        // exists now, so destroy it here. Returning before creating it
+        // would leak a pdf.js worker with no owner.
+        if (cancelled) {
+          void loadingTask.destroy();
+          return;
+        }
         const loaded = await loadingTask.promise;
         if (cancelled) {
           void loadingTask.destroy();
@@ -118,12 +149,20 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
 
     return () => {
       cancelled = true;
+      // The module import is async, so the loading task may not exist yet
+      // when this cleanup runs (unmount, or a `bytes`/reloadKey change
+      // mid-import). Without this, a task created after the component went
+      // away would keep its pdf.js worker and decoded pages alive with no
+      // owner. Optional-call: a rejected load can leave a partial task
+      // behind, and a cleanup must never throw over it.
+      void loadingTaskRef.current?.destroy?.();
+      loadingTaskRef.current = null;
     };
   }, [bytes, reloadKey]);
 
   useEffect(
     () => () => {
-      void loadingTaskRef.current?.destroy();
+      void loadingTaskRef.current?.destroy?.();
     },
     [],
   );
@@ -236,7 +275,8 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       layer.innerHTML = "";
       layer.style.width = `${viewport.width}px`;
       layer.style.height = `${viewport.height}px`;
-      const textLayer = new pdfjsLib.TextLayer({
+      const { TextLayer } = await loadPdfjs();
+      const textLayer = new TextLayer({
         textContentSource: page.streamTextContent(),
         container: layer,
         viewport,
@@ -427,7 +467,14 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       // let fresh renders interleave with winding-down ones — the
       // black-page race. Entries are removed by renderPage after the
       // wait; never-settling zombies are handled by the bounded race.
-      renderTasksRef.current.forEach((task) => task.cancel());
+      // A cleanup path must never throw: an exception here aborts the rest
+      // of the teardown and surfaces as an unhandled error instead of the
+      // real cause. `cancel` is present on every pdf.js RenderTask, but a
+      // task can also be a bare object from a stub, and one missing method
+      // must not take the whole effect down.
+      renderTasksRef.current.forEach((task) => {
+        task.cancel?.();
+      });
     };
   }, [scale, repaintTick]);
 
@@ -506,6 +553,7 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
   const goToPage = (n: number) => {
     // Update the indicator immediately; the scroll tracker agrees once the
     // scroll settles (and in environments where scrolling is a no-op).
+    currentPageRef.current = n;
     setCurrentPage(n);
     const wrap = pageWrapRefs.current[n - 1];
     wrap?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -513,6 +561,12 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
 
   // Reading-position memory (restore once layout is real, then save).
   useReadingPosition(paperId, pages.length, currentPage, setCurrentPage, getWrap);
+
+  // Keep the keydown mirror in step with every writer above (the scroll
+  // tracker, goToPage, and the reading-position restore) in one place.
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
 
   // Keyboard shortcuts: ArrowLeft/ArrowRight page navigation (ignored while
   // typing), Ctrl/Cmd+F opens the find bar, Escape closes it.
@@ -540,15 +594,15 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       }
       if (e.key === "ArrowLeft" || e.key === "PageUp") {
         e.preventDefault();
-        goToPage(Math.max(1, currentPage - 1));
+        goToPage(Math.max(1, currentPageRef.current - 1));
       } else if (e.key === "ArrowRight" || e.key === "PageDown") {
         e.preventDefault();
-        goToPage(Math.min(pages.length, currentPage + 1));
+        goToPage(Math.min(pages.length, currentPageRef.current + 1));
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [currentPage, pages.length, paperId]);
+  }, [pages.length, paperId]);
 
   if (error) {
     return (
@@ -673,4 +727,4 @@ export function PdfViewer({ bytes, paperId, onSelect }: PdfViewerProps) {
       </div>
     </div>
   );
-}
+});

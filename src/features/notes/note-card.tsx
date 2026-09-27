@@ -1,25 +1,11 @@
 import { BookOpenText, Loader2, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { fetchPapers } from "@/lib/arxiv";
 import { Markdown } from "@/components/markdown/markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatUiDate } from "@/lib/dates";
-import type { Paper, PaperNote } from "@/lib/types";
-
-/** Resolves a note's paper: favorites cache first, then a live arXiv id
- * lookup (plan 041). S2 ids cannot be resolved via arXiv and fall back
- * to the favorites cache only. */
-export async function resolvePaper(paperId: string): Promise<Paper | null> {
-  if (paperId.startsWith("s2:")) return null;
-  try {
-    const { papers } = await fetchPapers("cs.AI", 5, paperId, undefined, 0, "arxiv", "id");
-    return papers[0] ?? null;
-  } catch {
-    return null;
-  }
-}
+import type { PaperNote } from "@/lib/types";
 
 export function NoteCard({
   note,

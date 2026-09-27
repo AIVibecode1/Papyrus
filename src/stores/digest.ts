@@ -9,6 +9,22 @@ const BACKFILL_DAYS = 14;
 const RETENTION_DAYS = 30;
 /** Papers requested per day (a field can get more than 20 papers/day). */
 const DAY_PAGE_SIZE = 50;
+/**
+ * Hard byte budget for the whole digest blob.
+ *
+ * localStorage is a single ~5 MB origin-wide budget that ALSO holds
+ * favorites, chat, walkthroughs and notes. Six fields at 30 days x 50
+ * papers x ~1.7 KB is ~15 MB of paper JSON, so without a budget the very
+ * first setItem() to overflow throws QuotaExceededError — which
+ * `persist` swallows. The user then silently loses day history on every
+ * restart and the app re-backfills the same 14 days forever. Capping and
+ * evicting oldest-first keeps persistence working; the day view just
+ * falls back to a live fetch for anything evicted.
+ */
+const MAX_DIGEST_BYTES = 3 * 1024 * 1024;
+/** Slack reserved for the JSON envelope ({...}, lastChecked map) so the
+ * budget accounts for the whole written value, not just the papers. */
+const ENVELOPE_BYTES = 512;
 
 /** Today as YYYY-MM-DD in local time. */
 export function todayStr(): string {
@@ -79,6 +95,77 @@ function sanitizeByCategory(raw: unknown): Record<string, Record<string, Paper[]
       }
     }
     out[cat] = dayMap;
+  }
+  return out;
+}
+
+/**
+ * Drops the oldest days until the digest fits the byte budget. A day
+ * removed here is not lost data, only cache: browsing that day falls back
+ * to a live fetch (papers.ts does the same for an uncached day).
+ *
+ * Pure and exported for testing: eviction is the difference between a
+ * working day picker and a digest that silently stops persisting.
+ */
+export function evictToBudget(
+  byCategory: Record<string, Record<string, Paper[]>>,
+  maxBytes: number,
+): Record<string, Record<string, Paper[]>> {
+  // Measure each day once: re-serializing the whole blob on every
+  // deletion would make eviction quadratic in the digest size, which is
+  // the very cost this function exists to avoid. The per-day cost
+  // includes the date key and its punctuation, not just the papers, so
+  // the running total tracks the real serialized length.
+  const days: { cat: string; date: string; bytes: number }[] = [];
+  let total = ENVELOPE_BYTES;
+  for (const [cat, map] of Object.entries(byCategory)) {
+    total += cat.length + 5; // quoted key + colon + open brace + comma
+    for (const [date, papers] of Object.entries(map ?? {})) {
+      // `"<date>":[…],` = date + 2 quotes + colon + comma + payload
+      const bytes = JSON.stringify(papers).length + date.length + 4;
+      days.push({ cat, date, bytes });
+      total += bytes;
+    }
+  }
+  if (total <= maxBytes) return byCategory;
+  // Newest first, so dropping from the tail removes the oldest days.
+  days.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const out: Record<string, Record<string, Paper[]>> = {};
+  for (const cat of Object.keys(byCategory)) out[cat] = { ...byCategory[cat] };
+  for (let i = days.length - 1; i >= 0 && total > maxBytes; i -= 1) {
+    const { cat, date, bytes } = days[i];
+    if (!out[cat]?.[date]) continue;
+    delete out[cat][date];
+    total -= bytes; // the category key is charged once, not per day
+    if (Object.keys(out[cat]).length === 0) {
+      delete out[cat];
+      total -= cat.length + 5;
+    }
+  }
+  // Key overhead is estimated, so make the guarantee unconditional: if
+  // the estimate still overshoots, fall back to measuring exactly.
+  if (JSON.stringify(out).length > maxBytes) {
+    return evictExact(byCategory, maxBytes);
+  }
+  return out;
+}
+
+/** Exact, slower fallback used only when the estimate above overshoots. */
+function evictExact(
+  byCategory: Record<string, Record<string, Paper[]>>,
+  maxBytes: number,
+): Record<string, Record<string, Paper[]>> {
+  const out: Record<string, Record<string, Paper[]>> = {};
+  for (const cat of Object.keys(byCategory)) out[cat] = { ...byCategory[cat] };
+  const all = Object.entries(out)
+    .flatMap(([cat, map]) => Object.keys(map).map((date) => ({ cat, date })))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  for (let i = all.length - 1; i >= 0; i -= 1) {
+    if (JSON.stringify(out).length <= maxBytes) break;
+    const { cat, date } = all[i];
+    if (!out[cat]?.[date]) continue;
+    delete out[cat][date];
+    if (Object.keys(out[cat]).length === 0) delete out[cat];
   }
   return out;
 }
@@ -198,11 +285,26 @@ export const useDigestStore = create<DigestState>((set, get) => ({
   },
 
   persist: () => {
+    // Synchronous on purpose. A backfill stores one day per arXiv round
+    // trip (~3 s apart), so serializing the whole digest each time costs
+    // nothing measurable next to the network wait — while a debounce
+    // would open a window where a user quitting right after a fetch
+    // loses the day. The byte budget is what actually matters here.
     const { byCategory, lastChecked } = get();
+    // Evict oldest-first when over budget. Without this the first
+    // overflowing write throws QuotaExceededError, which is swallowed,
+    // and the digest silently stops persisting at all.
+    const pruned = evictToBudget(byCategory, MAX_DIGEST_BYTES);
+    if (pruned !== byCategory) {
+      // Keep memory in step with disk so the UI never shows a day that
+      // was just evicted (it would render, then vanish next launch).
+      set({ byCategory: pruned });
+    }
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ byCategory, lastChecked }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ byCategory: pruned, lastChecked }));
     } catch {
-      // Storage full or unavailable: the digest is best-effort.
+      // Storage full or unavailable: the digest is best-effort, and the
+      // budget above keeps this from firing in normal use.
     }
   },
 }));

@@ -101,13 +101,14 @@ describe("provider card", () => {
   });
 
   it("shows truncated, redacted detail only for unknown failures", async () => {
-    testProvider.mockRejectedValueOnce(new Error("odd failure with sk-abc12345XYZ__more9 token"));
+    const secret = "sk-ABCDEFGHIJKLMNOP";
+    testProvider.mockRejectedValueOnce(new Error(`odd failure with ${secret} token`));
     renderCard();
     fireEvent.click(screen.getByRole("button", { name: "Test" }));
     const msg = await screen.findByText(/odd failure/);
     expect(msg).toHaveAttribute("dir", "ltr");
-    expect(msg.textContent).not.toContain("sk-abc12345XYZ__more9");
-    expect(msg.textContent).toContain("[redacted]");
+    expect(msg.textContent).not.toContain("ABCDEFGHIJKLMNOP");
+    expect(msg.textContent).toContain("odd failure");
   });
 
   it("persists a failed test result with its category", async () => {

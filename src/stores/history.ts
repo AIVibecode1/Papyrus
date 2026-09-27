@@ -87,6 +87,10 @@ export function upsertHistory(
 interface HistoryState {
   entries: ReadingHistoryEntry[];
   loaded: boolean;
+  /** Set when the initial read failed. A failed read must not render as
+   * "no reading history": that reads as data loss for reading positions
+   * the user still has. */
+  loadError: string | null;
   load: () => Promise<void>;
   /** Records a successful open; sync and never throws (fire-and-forget
    * from the reader so history can never block opening a paper). */
@@ -101,29 +105,23 @@ interface HistoryState {
   importHistory: (entries: ReadingHistoryEntry[]) => Promise<ReadingHistoryEntry[]>;
 }
 
-async function persistEntries(entries: ReadingHistoryEntry[]) {
-  if (isTauri()) {
-    // Replay through the same command the UI uses; bounded by the cap.
-    for (const entry of entries) {
-      await invoke("record_history", { entry });
-    }
-  } else {
-    saveBrowserHistory(entries);
-  }
-}
-
 export const useHistoryStore = create<HistoryState>((set, get) => ({
   entries: [],
   loaded: false,
+  loadError: null,
 
   load: async () => {
     if (get().loaded) return;
     let entries: ReadingHistoryEntry[] = [];
+    let failure: string | null = null;
     if (isTauri()) {
       try {
         entries = await invoke<ReadingHistoryEntry[]>("list_history");
-      } catch {
-        // A list failure reads as empty history, never an error state.
+      } catch (err) {
+        // Surface the fault. Treating a failed read as "no history" tells
+        // the user their reading positions are gone, which is both wrong
+        // and unrecoverable from their side.
+        failure = err instanceof Error ? err.message : String(err);
       }
     } else {
       entries = loadBrowserHistory();
@@ -131,6 +129,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     set({
       entries: entries.filter(isEntry).sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt)),
       loaded: true,
+      loadError: failure,
     });
   },
 
@@ -175,20 +174,38 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
   importHistory: async (entries) => {
     if (entries.length === 0) return get().entries;
-    const merged = [...get().entries];
+    // Map-indexed: a findIndex per incoming entry made the merge
+    // quadratic in the size of the user's history.
+    const byId = new Map(get().entries.map((e) => [e.paperId, e]));
+    // Only entries the batch actually changes are sent: the old path
+    // replayed the entire merged list (up to 200) through record_history,
+    // each call re-reading and re-writing the whole history file.
+    const winners: ReadingHistoryEntry[] = [];
     for (const incoming of entries) {
       if (!isEntry(incoming)) continue;
-      const idx = merged.findIndex((e) => e.paperId === incoming.paperId);
-      if (idx === -1) {
-        merged.push(incoming);
-      } else if (incoming.lastOpenedAt > merged[idx].lastOpenedAt) {
-        merged[idx] = incoming;
-      }
+      const local = byId.get(incoming.paperId);
+      if (local && local.lastOpenedAt >= incoming.lastOpenedAt) continue;
+      byId.set(incoming.paperId, incoming);
+      winners.push(incoming);
     }
-    const sorted = merged.sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt));
-    const capped = sorted.slice(0, HISTORY_CAP);
+    if (winners.length === 0) return get().entries;
+
+    const capped = [...byId.values()]
+      .sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt))
+      .slice(0, HISTORY_CAP);
     set({ entries: capped });
-    await persistEntries(capped).catch(() => undefined);
+    try {
+      if (isTauri()) {
+        await invoke("import_history", { entries: winners });
+      } else {
+        saveBrowserHistory(capped);
+      }
+    } catch {
+      // History is explicitly best-effort (recordOpen behaves the same
+      // way), and the returned list must match what the store now holds,
+      // so a disk failure keeps the in-memory merge rather than silently
+      // diverging from the return value.
+    }
     return capped;
   },
 }));

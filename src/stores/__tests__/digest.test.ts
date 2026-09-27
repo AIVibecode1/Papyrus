@@ -4,7 +4,7 @@ import type { Paper } from "@/lib/types";
 vi.mock("@/lib/arxiv", () => ({ fetchPapers: vi.fn() }));
 
 import { fetchPapers } from "@/lib/arxiv";
-import { useDigestStore, addDays, todayStr } from "@/stores/digest";
+import { useDigestStore, addDays, todayStr, evictToBudget } from "@/stores/digest";
 
 // The vitest environment is "node" — provide an in-memory localStorage so
 // the digest store's persistence can be exercised (same pattern as the
@@ -41,6 +41,18 @@ function paperFor(date: string): Paper {
     pdfUrl: `https://arxiv.org/pdf/${date}`,
     categories: ["cs.AI"],
   };
+}
+
+/** A realistic day: 50 papers with abstracts, matching what the digest
+ * actually stores (~1.7 KB of JSON per paper, measured from the bundled
+ * arXiv fixture). Sized like this, 60 days overruns the 3 MB budget,
+ * which is exactly the condition eviction exists for. */
+function bigDay(date: string): Paper[] {
+  return Array.from({ length: 50 }, (_, i) => ({
+    ...paperFor(date),
+    id: `${date}-${i}`,
+    summary: "x".repeat(1400),
+  }));
 }
 
 describe("digest store", () => {
@@ -255,5 +267,99 @@ describe("digest store", () => {
     const state = useDigestStore.getState();
     expect(state.days("cs.AI")).toEqual([today]);
     expect(state.days("cs.LG")).toEqual([]);
+  });
+});
+
+describe("evictToBudget", () => {
+  it("leaves a digest that already fits untouched (same reference)", () => {
+    const input = { "cs.AI": { "2026-01-02": [paperFor("2026-01-02")] } };
+    expect(evictToBudget(input, 1_000_000)).toBe(input);
+  });
+
+  it("holds the budget on the measured output, not just the estimate", () => {
+    // The fast path tracks an estimate; the guarantee is on the real
+    // serialized value. Sweep budgets so both the estimate-driven path and
+    // the exact fallback are exercised against the real byte count.
+    const byCategory: Record<string, Record<string, Paper[]>> = {};
+    for (let c = 0; c < 3; c += 1) {
+      const map: Record<string, Paper[]> = {};
+      for (let d = 1; d <= 20; d += 1) {
+        const date = `2026-01-${String(d).padStart(2, "0")}`;
+        map[date] = Array.from({ length: 6 }, (_, i) => ({
+          ...paperFor(date),
+          id: `${date}-${i}`,
+          summary: "x".repeat(120),
+        }));
+      }
+      byCategory[`cs.C${c}`] = map;
+    }
+    const full = JSON.stringify(byCategory).length;
+    for (const budget of [full, full * 0.9, full * 0.5, full * 0.1, 500, 50]) {
+      const out = evictToBudget(byCategory, budget);
+      expect(JSON.stringify(out).length).toBeLessThanOrEqual(budget);
+      // Eviction only ever removes whole days, never a partial one.
+      for (const [cat, map] of Object.entries(out)) {
+        for (const [date, papers] of Object.entries(map)) {
+          expect(byCategory[cat]?.[date]).toEqual(papers);
+        }
+      }
+    }
+  });
+
+  it("drops the oldest days until the digest fits the budget", () => {
+    const input = {
+      "cs.AI": {
+        "2026-01-01": bigDay("2026-01-01"),
+        "2026-01-02": bigDay("2026-01-02"),
+        "2026-01-03": bigDay("2026-01-03"),
+      },
+    };
+    const full = JSON.stringify(input).length;
+    // Budget for roughly two days: the oldest must go, the newest stay.
+    const out = evictToBudget(input, Math.floor((full / 3) * 2));
+    expect(out["cs.AI"]["2026-01-01"]).toBeUndefined();
+    expect(out["cs.AI"]["2026-01-03"]).toBeDefined();
+    expect(JSON.stringify(out).length).toBeLessThanOrEqual(Math.floor((full / 3) * 2));
+  });
+
+  it("evicts across categories oldest-first and never mutates the input", () => {
+    const newer = { "cs.LG": { "2026-01-05": bigDay("2026-01-05") } };
+    const input = { "cs.AI": { "2026-01-01": bigDay("2026-01-01") }, ...newer };
+    // Budget is the size of the day we expect to survive, plus envelope
+    // slack (the real budget is megabytes; this pins the ordering rule).
+    const budget = JSON.stringify(newer).length + 512;
+    const out = evictToBudget(input, budget);
+    // The newer category survives. The older day is dropped, which empties
+    // its category, and an emptied category is removed entirely.
+    expect(out["cs.AI"]).toBeUndefined();
+    expect(out["cs.LG"]["2026-01-05"]).toBeDefined();
+    expect(JSON.stringify(out).length).toBeLessThanOrEqual(budget);
+    // Input untouched.
+    expect(input["cs.AI"]["2026-01-01"]).toBeDefined();
+  });
+});
+
+describe("digest storage budget", () => {
+  const today = todayStr();
+  beforeEach(() => {
+    localStorageMock.clear();
+    vi.stubGlobal("localStorage", localStorageMock);
+    useDigestStore.setState({ byCategory: {}, lastChecked: {}, loaded: true, progress: null });
+  });
+
+  it("keeps the persisted blob under the localStorage budget", () => {
+    // Each day is ~40 papers; 60 days would be ~4 MB of paper JSON, well
+    // past the 3 MB budget. persist() must evict rather than let the
+    // write throw and silently stop persisting the digest.
+    for (let i = 0; i < 60; i += 1) {
+      const date = addDays(today, -i);
+      useDigestStore.getState().storeDay("cs.AI", date, bigDay(date));
+    }
+    const written = localStorageMock.getItem("papyrus-digest-v2");
+    expect(written).not.toBeNull();
+    expect(written!.length).toBeLessThanOrEqual(3 * 1024 * 1024);
+    // The newest day is always kept; the oldest is evicted first.
+    expect(useDigestStore.getState().days("cs.AI")).toContain(today);
+    expect(useDigestStore.getState().days("cs.AI")).not.toContain(addDays(today, -59));
   });
 });

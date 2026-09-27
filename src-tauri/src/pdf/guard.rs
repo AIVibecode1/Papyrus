@@ -20,10 +20,14 @@ fn pdf_client(pinned: Option<(&str, Vec<std::net::SocketAddr>)>) -> reqwest::Cli
     if let Some((host, ips)) = pinned {
         // Pin this download to the IPs we validated: the connection can
         // no longer be rebound by DNS between validation and connect.
-        // reqwest 0.13 resolves one address per call; they accumulate.
-        for ip in &ips {
-            builder = builder.resolve(host, *ip);
-        }
+        // One `resolve_to_addrs` call, not a loop of `resolve`: `resolve`
+        // forwards to `resolve_to_addrs`, which does
+        // `dns_overrides.insert(host, ...)`, so each call REPLACES the
+        // previous entry and only the last address would survive. The SSRF
+        // property held either way (the survivor is still a validated
+        // address), but a host publishing A+AAAA whose last address is
+        // unreachable would fail to download.
+        builder = builder.resolve_to_addrs(host, &ips);
     }
     builder
         .build()
@@ -74,6 +78,60 @@ async fn download_pdf(url: &str) -> Result<Vec<u8>, String> {
     download_pdf_with_limit(url, MAX_PDF_BYTES).await
 }
 
+/// True when an IP is not globally routable, i.e. it points back into the
+/// user's own network (or the cloud metadata service) rather than the
+/// public internet.
+///
+/// This is the SSRF blocklist. The ranges come from the standard set
+/// used by SSRF guards: RFC 1918 + loopback + link-local (which covers
+/// the 169.254.169.254 metadata endpoint) + RFC 6598 shared address
+/// space, and on IPv6 loopback + link-local + unique-local (fc00::/7),
+/// the IPv6 counterpart of RFC 1918.
+///
+/// Split out as a pure function so every range is unit-testable as a
+/// literal, not only through whatever a DNS lookup happens to return.
+fn is_private_addr(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.is_unspecified()
+                || v4.is_multicast()
+                // Shared address space, RFC 6598 (100.64.0.0/10).
+                // Carriers hand these out on the CPE-to-CGNAT link, so
+                // they are internal hops, not the public internet —
+                // is_private() does not cover them.
+                || (v4.octets()[0] == 100 && (64..=127).contains(&v4.octets()[1]))
+        }
+        std::net::IpAddr::V6(v6) => {
+            if v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                // Link-local: fe80::/10 (metadata endpoints live here).
+                || v6.is_unicast_link_local()
+                // Unique local: fc00::/7, the IPv6 counterpart of
+                // RFC 1918. Explicitly listed in every SSRF blocklist
+                // and reachable on the local network.
+                || v6.is_unique_local()
+            {
+                return true;
+            }
+            // A V4-mapped address (`::ffff:127.0.0.1`) is a different spelling
+            // of an IPv4 host, so the V4 rules must decide it: without this,
+            // `::ffff:127.0.0.1` is not ::1 and not link-local, so it would
+            // sail past the checks above and point the download at the user's
+            // own machine. `to_ipv4` covers the mapped form and the
+            // deprecated compatible form, and is consulted only after the V6
+            // tests because `::1` also decodes as the compatible 0.0.0.1,
+            // which is not itself blocked.
+            v6.to_ipv4()
+                .is_some_and(|v4| is_private_addr(std::net::IpAddr::V4(v4)))
+        }
+    }
+}
+
 /// SSRF guard for source-provided PDF urls (S2 `openAccessPdf` hosts are
 /// arbitrary publisher domains, so they cannot be derived from the id).
 /// Rejects anything but https with no credentials, and refuses hosts that
@@ -100,24 +158,7 @@ async fn validate_public_https(url: &str) -> Result<(String, Vec<std::net::Socke
         return Err("PDF host could not be resolved".to_string());
     }
     for ip in &ips {
-        let private = match ip.ip() {
-            std::net::IpAddr::V4(v4) => {
-                v4.is_loopback()
-                    || v4.is_private()
-                    || v4.is_link_local()
-                    || v4.is_broadcast()
-                    || v4.is_unspecified()
-                    || v4.is_multicast()
-            }
-            std::net::IpAddr::V6(v6) => {
-                v6.is_loopback()
-                    || v6.is_unspecified()
-                    || v6.is_multicast()
-                    // Link-local: fe80::/10 (metadata endpoints live here).
-                    || (v6.segments()[0] & 0xffc0) == 0xfe80
-            }
-        };
-        if private {
+        if is_private_addr(ip.ip()) {
             return Err("PDF host resolves to a private address".into());
         }
     }
@@ -127,9 +168,16 @@ async fn validate_public_https(url: &str) -> Result<(String, Vec<std::net::Socke
 /// Decides the next hop for a response. Returns None when the response is
 /// not a redirect; errors on missing or non-https locations. Pure so the
 /// redirect policy is unit-testable without a server.
+///
+/// `base` is the url that produced this response, so a *relative* Location
+/// (very common on publisher CDNs: `Location: /b?v=2`) resolves against the
+/// current hop instead of being rejected outright. Resolution happens before
+/// the https check, and the result is re-validated by the caller's loop, so
+/// resolving cannot widen what is reachable.
 fn next_redirect_target(
     status: reqwest::StatusCode,
     headers: &reqwest::header::HeaderMap,
+    base: &str,
 ) -> Result<Option<String>, String> {
     if !status.is_redirection() {
         return Ok(None);
@@ -138,10 +186,17 @@ fn next_redirect_target(
         .get(reqwest::header::LOCATION)
         .and_then(|v| v.to_str().ok())
         .ok_or_else(|| "PDF redirect without a location".to_string())?;
-    if !location.starts_with("https://") {
+    // Resolve against the current hop so a relative Location works, then
+    // apply the scheme check to the RESOLVED url. Checking `location` first
+    // rejected same-host redirects like "/b?v=2" that publisher CDNs emit
+    // routinely, which failed legitimate downloads.
+    let resolved = reqwest::Url::parse(base)
+        .and_then(|b| b.join(location))
+        .map_err(|_| "PDF redirect has an unresolvable target".to_string())?;
+    if resolved.scheme() != "https" {
         return Err("PDF redirect target must be https".into());
     }
-    Ok(Some(location.to_string()))
+    Ok(Some(resolved.to_string()))
 }
 
 /// Interprets a guarded hop's response: Ok(None) means the download is
@@ -152,8 +207,9 @@ fn next_redirect_target(
 fn interpret_hop(
     status: reqwest::StatusCode,
     headers: &reqwest::header::HeaderMap,
+    base: &str,
 ) -> Result<Option<String>, String> {
-    if let Some(next) = next_redirect_target(status, headers)? {
+    if let Some(next) = next_redirect_target(status, headers, base)? {
         return Ok(Some(next));
     }
     if !status.is_success() {
@@ -175,7 +231,7 @@ pub(crate) async fn download_pdf_guarded(url: &str) -> Result<Vec<u8>, String> {
             .await
             .map_err(|e| format!("Failed to download the PDF: {e}"))?;
         let status = response.status();
-        if let Some(next) = interpret_hop(status, response.headers())? {
+        if let Some(next) = interpret_hop(status, response.headers(), &target)? {
             target = next;
             continue;
         }
@@ -191,6 +247,10 @@ pub(crate) const PDF_BYTES: &[u8] = b"%PDF-1.4 test-pdf-bytes";
 mod tests {
     use super::*;
     use std::io::Read;
+
+    /// A public-looking base for the redirect-policy tests. Only the url
+    /// *resolution* is exercised here; no request is made.
+    const BASE: &str = "https://papers.example/doi/pdf";
     use std::io::Write;
     use std::net::TcpListener;
     use std::thread;
@@ -329,13 +389,57 @@ mod tests {
     }
 
     #[test]
+    fn a_relative_location_resolves_against_the_current_hop() {
+        // Publisher CDNs routinely answer with `Location: /b?v=2`. Checking
+        // the raw header rejected those as non-https, so legitimate PDFs
+        // failed to open.
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::LOCATION,
+            reqwest::header::HeaderValue::from_static("/b?v=2"),
+        );
+        let next = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &headers, BASE) })
+            .expect("a same-host relative redirect must be accepted")
+            .expect("a redirect target");
+        assert_eq!(next, "https://papers.example/b?v=2");
+    }
+
+    #[test]
+    fn a_relative_location_cannot_downgrade_the_scheme() {
+        // Resolution happens before the scheme check, so the check must be
+        // applied to the RESOLVED url. A protocol-relative `//host/x` keeps
+        // https and is therefore allowed past this check — it is stopped
+        // later by host validation, which is where a new host belongs. Only
+        // an actual downgrade to plaintext is refused here.
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::LOCATION,
+            reqwest::header::HeaderValue::from_static("http://papers.example/paper.pdf"),
+        );
+        let err = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &headers, BASE) })
+            .expect_err("an explicit plaintext downgrade must be refused");
+        assert!(err.contains("must be https"), "unexpected error: {err}");
+
+        // A protocol-relative target survives the scheme check with https
+        // intact, which is correct: it has not left https.
+        headers.insert(
+            reqwest::header::LOCATION,
+            reqwest::header::HeaderValue::from_static("//cdn.example/paper.pdf"),
+        );
+        let next = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &headers, BASE) })
+            .expect("a protocol-relative https target is not a downgrade")
+            .expect("a redirect target");
+        assert_eq!(next, "https://cdn.example/paper.pdf");
+    }
+
+    #[test]
     fn redirect_policy_rejects_everything_but_absolute_https() {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             reqwest::header::LOCATION,
             reqwest::header::HeaderValue::from_static("https://cdn.example/paper.pdf"),
         );
-        let next = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &headers) })
+        let next = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &headers, BASE) })
             .expect("a valid redirect target must be accepted");
         assert_eq!(next.as_deref(), Some("https://cdn.example/paper.pdf"));
 
@@ -343,20 +447,21 @@ mod tests {
             reqwest::header::LOCATION,
             reqwest::header::HeaderValue::from_static("http://evil.example/paper.pdf"),
         );
-        let err = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &headers) })
+        let err = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &headers, BASE) })
             .expect_err("plaintext redirect targets must be rejected");
         assert!(err.contains("must be https"), "unexpected error: {err}");
 
         let no_location = reqwest::header::HeaderMap::new();
-        let err = run(async { next_redirect_target(reqwest::StatusCode::FOUND, &no_location) })
-            .expect_err("a redirect without a location must be rejected");
+        let err =
+            run(async { next_redirect_target(reqwest::StatusCode::FOUND, &no_location, BASE) })
+                .expect_err("a redirect without a location must be rejected");
         assert!(
             err.contains("without a location"),
             "unexpected error: {err}"
         );
 
         let ok_headers = reqwest::header::HeaderMap::new();
-        let next = run(async { next_redirect_target(reqwest::StatusCode::OK, &ok_headers) })
+        let next = run(async { next_redirect_target(reqwest::StatusCode::OK, &ok_headers, BASE) })
             .expect("a non-redirect status is not a hop");
         assert!(next.is_none());
     }
@@ -368,15 +473,15 @@ mod tests {
             reqwest::header::LOCATION,
             reqwest::header::HeaderValue::from_static("https://cdn.example/paper.pdf"),
         );
-        let next = interpret_hop(reqwest::StatusCode::FOUND, &redirect)
+        let next = interpret_hop(reqwest::StatusCode::FOUND, &redirect, BASE)
             .expect("redirect must be followed");
         assert_eq!(next.as_deref(), Some("https://cdn.example/paper.pdf"));
 
-        let err = interpret_hop(reqwest::StatusCode::INTERNAL_SERVER_ERROR, &redirect)
+        let err = interpret_hop(reqwest::StatusCode::INTERNAL_SERVER_ERROR, &redirect, BASE)
             .expect_err("an http error is terminal");
         assert!(err.contains("500"), "unexpected error: {err}");
 
-        let done = interpret_hop(reqwest::StatusCode::OK, &redirect).expect("ok is final");
+        let done = interpret_hop(reqwest::StatusCode::OK, &redirect, BASE).expect("ok is final");
         assert!(done.is_none());
     }
 
@@ -392,7 +497,7 @@ mod tests {
             reqwest::header::LOCATION,
             reqwest::header::HeaderValue::from_static("https://127.0.0.1/evil.pdf"),
         );
-        let next = interpret_hop(reqwest::StatusCode::FOUND, &headers)
+        let next = interpret_hop(reqwest::StatusCode::FOUND, &headers, BASE)
             .expect("the hop decision accepts the redirect");
         let next = next.expect("a redirect target");
 
@@ -406,7 +511,7 @@ mod tests {
             reqwest::header::LOCATION,
             reqwest::header::HeaderValue::from_static("https://localhost/evil.pdf"),
         );
-        let next = interpret_hop(reqwest::StatusCode::FOUND, &local_headers)
+        let next = interpret_hop(reqwest::StatusCode::FOUND, &local_headers, BASE)
             .expect("the hop decision accepts the redirect");
         let err = run(validate_public_https(&next.expect("a redirect target")))
             .expect_err("localhost must fail re-validation");
@@ -431,5 +536,72 @@ mod tests {
             let err = run(validate_public_https(url)).expect_err("must reject {url}");
             assert!(!err.is_empty(), "expected an error for {url}");
         }
+    }
+
+    /// Every address the guard must refuse, as literals. Kept separate from
+    /// the host-based test above so the whole blocklist is readable at a
+    /// glance and every entry is asserted, not just the ones a DNS lookup
+    /// happens to return.
+    #[test]
+    fn private_address_blocklist_covers_the_reserved_ranges() {
+        use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+        let blocked_v4 = [
+            Ipv4Addr::LOCALHOST,               // 127.0.0.0/8
+            Ipv4Addr::new(10, 0, 0, 5),        // RFC 1918
+            Ipv4Addr::new(172, 16, 0, 5),      // RFC 1918
+            Ipv4Addr::new(192, 168, 1, 5),     // RFC 1918
+            Ipv4Addr::new(169, 254, 169, 254), // link-local / cloud metadata
+            Ipv4Addr::new(100, 64, 0, 1),      // RFC 6598 CGNAT
+            Ipv4Addr::new(100, 127, 255, 254), // CGNAT upper edge
+            Ipv4Addr::new(0, 0, 0, 0),         // unspecified
+            Ipv4Addr::new(255, 255, 255, 255), // broadcast
+        ];
+        for ip in blocked_v4 {
+            assert!(
+                is_private_addr(IpAddr::V4(ip)),
+                "IPv4 {ip} must be treated as private"
+            );
+        }
+        // Neighbours of the CGNAT range that ARE public: 100.63.x and
+        // 100.128.x sit just outside /10 and must stay reachable.
+        for ip in [
+            Ipv4Addr::new(100, 63, 255, 255),
+            Ipv4Addr::new(100, 128, 0, 0),
+        ] {
+            assert!(
+                !is_private_addr(IpAddr::V4(ip)),
+                "IPv4 {ip} is public and must not be blocked"
+            );
+        }
+
+        let blocked_v6 = [
+            Ipv6Addr::LOCALHOST,                        // ::1
+            Ipv6Addr::new(0xfe80, 0, 0, 0, 0, 0, 0, 1), // fe80::/10 link-local
+            Ipv6Addr::new(0xfc00, 0, 0, 0, 0, 0, 0, 1), // fc00::/7 ULA
+            Ipv6Addr::new(0xfd00, 0, 0, 0, 0, 0, 0, 1), // fd00::/8 ULA
+            Ipv6Addr::UNSPECIFIED,
+            // V4-mapped spellings of IPv4 hosts. These are the same host, so
+            // the IPv4 rules decide them: a redirect to either of these must
+            // not reach the user's own machine just by being written in hex.
+            Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0x7f00, 0x0001), // ::ffff:127.0.0.1
+            Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xa00, 0x0001),  // ::ffff:10.0.0.1
+            Ipv6Addr::new(0, 0, 0, 0, 0, 0xffff, 0xa9fe, 0xa9fe), // ::ffff:169.254.169.254
+            Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0x7f00, 0x0001),      // ::127.0.0.1 (compatible)
+        ];
+        for ip in blocked_v6 {
+            assert!(
+                is_private_addr(IpAddr::V6(ip)),
+                "IPv6 {ip} must be treated as private"
+            );
+        }
+        // A global unicast address stays reachable.
+        assert!(!is_private_addr(IpAddr::V6(Ipv6Addr::new(
+            0x2606, 0x4700, 0, 0, 0, 0, 0, 0x1111
+        ))));
+        // A V4-mapped *public* address must stay reachable too, or the
+        // mapped check would just block every dual-stack host.
+        assert!(!is_private_addr(IpAddr::V6(Ipv6Addr::new(
+            0, 0, 0, 0, 0, 0xffff, 0x0808, 0x0808
+        ))));
     }
 }

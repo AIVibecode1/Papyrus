@@ -35,7 +35,7 @@ describe("buildExportPayload", () => {
     useNotesStore.setState({ notes: [], loaded: false });
   });
 
-  it("includes favorites and chat transcripts", () => {
+  it("includes favorites and chat transcripts", async () => {
     useFavoritesStore.getState().toggle(paper);
     localStorage.setItem(
       CHAT_STORAGE_KEY,
@@ -47,7 +47,7 @@ describe("buildExportPayload", () => {
       }),
     );
 
-    const payload = buildExportPayload();
+    const payload = await buildExportPayload();
 
     expect(payload.app).toBe("papyrus");
     expect(payload.favorites).toEqual([paper]);
@@ -57,15 +57,15 @@ describe("buildExportPayload", () => {
     ]);
   });
 
-  it("includes saved notes", () => {
+  it("includes saved notes", async () => {
     useNotesStore.setState({ notes: [note], loaded: true });
 
-    const payload = buildExportPayload();
+    const payload = await buildExportPayload();
 
     expect(payload.notes).toEqual([note]);
   });
 
-  it("includes reading history", () => {
+  it("includes reading history", async () => {
     useHistoryStore.setState({
       entries: [
         {
@@ -81,17 +81,17 @@ describe("buildExportPayload", () => {
       loaded: true,
     });
 
-    const payload = buildExportPayload();
+    const payload = await buildExportPayload();
 
     expect(payload.readingHistory).toHaveLength(1);
     expect(payload.readingHistory[0].paperId).toBe("p1");
   });
 
-  it("never exports key-shaped fields (security regression)", () => {
+  it("never exports key-shaped fields (security regression)", async () => {
     useFavoritesStore.getState().toggle(paper);
     useNotesStore.setState({ notes: [note], loaded: true });
 
-    const json = JSON.stringify(buildExportPayload());
+    const json = JSON.stringify(await buildExportPayload());
 
     // API keys live only in the OS keychain: no provider config, no
     // apiKey field and no secret-shaped tokens may ever reach an export.
@@ -101,7 +101,7 @@ describe("buildExportPayload", () => {
     expect(json).not.toMatch(/"baseUrl"/);
   });
 
-  it("drops malformed chat entries and empty transcripts", () => {
+  it("drops malformed chat entries and empty transcripts", async () => {
     useFavoritesStore.setState({ loaded: true });
     localStorage.setItem(
       CHAT_STORAGE_KEY,
@@ -111,17 +111,17 @@ describe("buildExportPayload", () => {
       }),
     );
 
-    const payload = buildExportPayload();
+    const payload = await buildExportPayload();
 
     expect(payload.chat.p1).toEqual([{ role: "user", content: "ok" }]);
     expect(payload.chat.p2).toBeUndefined();
   });
 
-  it("survives corrupted chat storage", () => {
+  it("survives corrupted chat storage", async () => {
     useFavoritesStore.setState({ loaded: true });
     localStorage.setItem(CHAT_STORAGE_KEY, "not json {{{");
 
-    const payload = buildExportPayload();
+    const payload = await buildExportPayload();
 
     expect(payload.chat).toEqual({});
     expect(payload.favorites).toEqual([]);

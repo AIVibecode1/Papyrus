@@ -38,14 +38,30 @@ function toChatTurn(value: unknown): ExportChatTurn | null {
 }
 
 /** Collects the user's saved data (favorites + chat transcripts + notes
- * + reading history). */
-export function buildExportPayload(): ExportPayload {
+ * + reading history).
+ *
+ * Async on purpose. The stores read from disk, and `getState()` hands back a
+ * *snapshot*: reading `notes.notes` off the snapshot taken before `load()`
+ * resolves yields the pre-load (empty) array, because zustand replaces the
+ * state object rather than mutating it. That made an export started during the
+ * initial load silently write empty sections. So: await the loads, then read
+ * fresh state. */
+export async function buildExportPayload(): Promise<ExportPayload> {
+  // notes.load() marks itself loaded optimistically to protect concurrent
+  // writes, so its `loaded` flag cannot gate this wait; it joins an
+  // outstanding read instead. `load()` on all three is idempotent.
+  await Promise.all([
+    useFavoritesStore.getState().loaded
+      ? Promise.resolve()
+      : Promise.resolve(useFavoritesStore.getState().load()),
+    useNotesStore.getState().load(),
+    useHistoryStore.getState().loaded ? Promise.resolve() : useHistoryStore.getState().load(),
+  ]);
+
+  // Re-read after the loads: the snapshots above are stale by construction.
   const favorites = useFavoritesStore.getState();
-  if (!favorites.loaded) favorites.load();
   const notes = useNotesStore.getState();
-  if (!notes.loaded) void notes.load();
   const history = useHistoryStore.getState();
-  if (!history.loaded) void history.load();
 
   let chatRaw: unknown = {};
   try {
@@ -79,7 +95,7 @@ export function buildExportPayload(): ExportPayload {
  * the browser preview it triggers a download instead.
  */
 export async function exportSavedData(): Promise<string> {
-  const payload = JSON.stringify(buildExportPayload(), null, 2);
+  const payload = JSON.stringify(await buildExportPayload(), null, 2);
 
   if (isTauri()) {
     return invoke<string>("export_data", { payload });

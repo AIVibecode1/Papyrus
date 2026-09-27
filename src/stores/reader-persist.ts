@@ -78,6 +78,18 @@ export interface WalkthroughSnapshot {
   synthesis: SectionEntry | null;
 }
 
+/** Status a persisted entry gets when it is read back.
+ *
+ * `loading`/`streaming` are in-flight and must not be restored as-is
+ * (they would wedge the UI into a permanent spinner), so they settle to
+ * `stopped`. `done` and `error` are terminal and are preserved: a
+ * completed section is still completed, and reporting it as stopped
+ * would tell the user they abandoned work they finished. */
+function restoredStatus(status: SectionEntry["status"]): SectionEntry["status"] {
+  if (status === "error" || status === "done") return status;
+  return "stopped";
+}
+
 export function loadWalkthrough(paperId: string): WalkthroughSnapshot {
   try {
     const raw = JSON.parse(localStorage.getItem(WALKTHROUGH_STORAGE_KEY) ?? "{}") as Record<
@@ -89,16 +101,19 @@ export function loadWalkthrough(paperId: string): WalkthroughSnapshot {
       return { sectionEntries: [], synthesis: null };
     // A restored entry must never look busy: it belongs to a finished
     // stream, and a "streaming" status would wedge the walkthrough UI.
+    // But "done" must survive the restore — collapsing it to "stopped"
+    // would drop the checkmark and tell the user they abandoned work
+    // they actually finished. Only the in-flight statuses are demoted.
     const entries = snap.sectionEntries
       .filter((e) => e && typeof e.text === "string")
       .map((e) => ({
         text: e.text,
-        status: (e.status === "error" ? "error" : "stopped") as SectionEntry["status"],
+        status: restoredStatus(e.status),
         error: e.status === "error" ? e.error : null,
       }));
     const synthesis =
       snap.synthesis && typeof snap.synthesis.text === "string"
-        ? { ...snap.synthesis, status: "stopped" as const, error: null }
+        ? { ...snap.synthesis, status: restoredStatus(snap.synthesis.status), error: null }
         : null;
     return { sectionEntries: entries, synthesis };
   } catch {

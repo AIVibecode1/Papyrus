@@ -132,10 +132,22 @@ export function PaperListContent({
         {historyMode && <HistoryList />}
 
         {!historyMode && loading && (
-          <div className="flex flex-col gap-4" aria-label={t("papers.loading")}>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <PaperSkeleton key={i} />
-            ))}
+          // role="status" is what makes the transition into and out of
+          // loading announced; an aria-label on a plain div is ignored.
+          // aria-busy tells assistive tech the region is still settling.
+          <div
+            className="flex flex-col gap-4"
+            role="status"
+            aria-busy="true"
+            aria-label={t("papers.loading")}
+          >
+            {/* Purely decorative placeholders: the status label above is
+                the message, so the skeletons must not be read as content. */}
+            <div className="contents" aria-hidden="true">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <PaperSkeleton key={i} />
+              ))}
+            </div>
           </div>
         )}
 

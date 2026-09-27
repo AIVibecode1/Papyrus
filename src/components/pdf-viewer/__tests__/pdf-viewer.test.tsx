@@ -4,11 +4,28 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import "@/i18n";
+import { configure } from "@testing-library/react";
 import { PdfViewer, renderInQueue } from "@/components/pdf-viewer/pdf-viewer";
+
+// The viewer is deliberately debounced (150 ms render queue, 400 ms resize
+// re-fit, plus retry backoffs), so its assertions legitimately wait on
+// timers. The 1 s default `waitFor` budget is not enough when the whole
+// suite runs in parallel on a loaded machine, which made this file fail
+// intermittently rather than deterministically. Raise it per file instead
+// of loosening assertions everywhere.
+configure({ asyncUtilTimeout: 10_000 });
+
+/** A render task with pdf.js's real shape: `promise`, `cancel` and
+ * `completed`. The viewer cancels in-flight tasks during cleanup, so a stub
+ * without `cancel` turns that cleanup into a throw — a real defect this
+ * loose mock was silently hiding. */
+function fakeRenderTask(promise: Promise<unknown> = Promise.resolve()) {
+  return { promise, cancel: vi.fn(), completed: promise };
+}
 
 const fakePage = {
   getViewport: (scale: number) => ({ width: 100 * scale, height: 150 * scale }),
-  render: () => ({ promise: Promise.resolve() }),
+  render: () => fakeRenderTask(),
   streamTextContent: () => ({ items: [] }),
 };
 
@@ -277,12 +294,17 @@ describe("render state transitions", () => {
   });
 
   it("cancels the loading task on unmount", async () => {
+    // pdf.js is imported on demand, so the loading task is created one
+    // microtask after mount; waitFor (rather than a bare tick) keeps this
+    // independent of how many microtask turns act() flushes, which varies
+    // with what ran earlier in the file.
     const destroy = vi.fn(async () => {});
     vi.mocked(pdfjsLib.getDocument).mockReturnValue({
       promise: new Promise(() => {}), // load stays in flight
       destroy,
     } as never);
     const { unmount } = render(<PdfViewer bytes={BYTES} paperId="p1" onSelect={onSelect} />);
+    await waitFor(() => expect(pdfjsLib.getDocument).toHaveBeenCalled());
     unmount();
     expect(destroy).toHaveBeenCalled();
   });

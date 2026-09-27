@@ -12,6 +12,7 @@ import {
 import { useExplanationStore } from "@/stores/explanation";
 import { useSettingsStore } from "@/stores/settings";
 import { useUiStore } from "@/stores/ui";
+import { redactSecrets, truncateError } from "@/lib/provider-errors";
 import type { Paper, ProviderConfig } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +57,7 @@ export function ExplainPanel({ paper }: ExplainPanelProps) {
         </Select>
 
         {busy && (
-          <Button size="sm" variant="outline" onClick={() => void stop()}>
+          <Button size="sm" variant="outline" onClick={() => void stop(paper.id)}>
             <Square className="size-3.5" />
             {t("explain.stop")}
           </Button>
@@ -123,7 +124,12 @@ export function ExplainPanel({ paper }: ExplainPanelProps) {
             <AlertCircle className="size-4" />
             {t("explain.error")}
           </span>
-          <span className="text-muted-foreground">{explanation.error}</span>
+          <span className="text-muted-foreground">
+            {/* Defense in depth, same as the reader's section cards: the
+                backend already redacts, but a key echoed by a gateway
+                must never reach the screen through any future path. */}
+            {truncateError(redactSecrets(explanation.error))}
+          </span>
           {provider && (
             <Button
               size="sm"

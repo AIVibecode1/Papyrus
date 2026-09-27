@@ -8,6 +8,15 @@ pub(crate) const KEYRING_SERVICE: &str = "papyrus";
 /// Reports whether a host is a loopback address, where plaintext HTTP is
 /// acceptable because no on-path observer can read the API key.
 pub(crate) fn is_loopback_host(host: &str) -> bool {
+    // Reject URL userinfo outright. Per RFC 3986 everything before the
+    // last '@' in the authority is credentials, so `localhost:1234@evil.com`
+    // resolves to host `evil.com` — accepting it as loopback let a
+    // plaintext http:// URL reach a REMOTE host with the API key in the
+    // Authorization header, and also made the host look local enough to
+    // skip the key requirement. Splitting on ':' cannot see past this.
+    if host.contains('@') {
+        return false;
+    }
     // Strip IPv6 brackets, keeping any port that follows (e.g. [::1]:8080).
     let host = host
         .strip_prefix('[')
@@ -70,12 +79,22 @@ pub(crate) fn set_key(service: &str, account: &str, key: &str) -> Result<(), Str
 }
 
 /// Removes a secret from the OS keychain.
+///
+/// A missing entry is success, not failure: the caller wants the key
+/// gone, and it already is. `get_key` above maps `NoEntry` to `Ok(None)`
+/// for the same reason. Without this, deleting a provider that never had
+/// a key (Ollama, or any provider whose key was cleared) failed with
+/// "No matching entry found" and the provider row could never be
+/// removed.
 pub(crate) fn delete_key(service: &str, account: &str) -> Result<(), String> {
     let entry = Entry::new(service, account)
         .map_err(|e| format!("Failed to access the system keychain: {e}"))?;
-    entry
-        .delete_credential()
-        .map_err(|e| format!("Failed to remove key from the system keychain: {e}"))
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!(
+            "Failed to remove key from the system keychain: {e}"
+        )),
+    }
 }
 
 /// Loads the stored API key for a provider. Local endpoints (Ollama etc.) may have no key.

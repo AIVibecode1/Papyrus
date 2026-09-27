@@ -69,7 +69,7 @@ export function ReaderOverview({
                 <span dir="ltr" className="font-mono">
                   {citationCount}
                 </span>{" "}
-                {t("papers.citedBySuffix")}
+                {t("papers.citedBySuffix", { count: citationCount })}
               </span>
             </>
           )}

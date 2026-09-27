@@ -1,7 +1,7 @@
 import { BookOpenText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { relativeOpened } from "@/features/papers/history-list";
+import { relativeOpened } from "@/lib/relative-time";
 import { useHistoryStore, paperFromEntry } from "@/stores/history";
 import { useReaderStore } from "@/stores/reader";
 import { useUiStore } from "@/stores/ui";

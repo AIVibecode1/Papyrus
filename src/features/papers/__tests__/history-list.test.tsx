@@ -14,7 +14,7 @@ vi.mock("pdfjs-dist", () => ({
   TextLayer: class {},
 }));
 
-import { HistoryList, relativeOpened } from "@/features/papers/history-list";
+import { HistoryList } from "@/features/papers/history-list";
 import { useFavoritesStore } from "@/stores/favorites";
 import { useHistoryStore } from "@/stores/history";
 import { useReaderStore } from "@/stores/reader";
@@ -100,18 +100,5 @@ describe("HistoryList", () => {
     render(<HistoryList />);
     fireEvent.click(screen.getByRole("button", { name: "Remove from history" }));
     expect(useHistoryStore.getState().entries).toEqual([]);
-  });
-});
-
-describe("relativeOpened", () => {
-  it("produces a relative label in the given language", () => {
-    const twoHours = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    expect(relativeOpened(twoHours, "en")).toBe("2 hours ago");
-    // Arabic uses the dual form for two hours.
-    expect(relativeOpened(twoHours, "ar")).toMatch(/ساعتين|ساعة/);
-  });
-
-  it("falls back to the raw value for unparseable dates", () => {
-    expect(relativeOpened("not-a-date", "en")).toBe("not-a-date");
   });
 });

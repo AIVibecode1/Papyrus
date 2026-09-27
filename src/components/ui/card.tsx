@@ -6,8 +6,14 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card"
+      // No padding or gap here on purpose. Consumers nest their own
+      // padding inside CardContent, and `cn`/tw-merge cannot collapse
+      // padding declared on two different elements — so a `py-6` here
+      // silently stacked with the consumer's `p-5` to give 44px of
+      // vertical padding against 20px horizontal, which read as
+      // vertically bloated and horizontally cramped. Callers own spacing.
       className={cn(
-        "flex flex-col gap-6 rounded-lg border bg-card py-6 text-card-foreground shadow-sm",
+        "flex flex-col rounded-lg border bg-card text-card-foreground shadow-sm",
         className,
       )}
       {...props}

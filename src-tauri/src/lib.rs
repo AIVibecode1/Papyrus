@@ -6,6 +6,7 @@ mod history;
 mod notes;
 mod papers;
 mod pdf;
+mod test_hooks;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,9 +30,11 @@ pub fn run() {
             export::import_data,
             notes::list_notes,
             notes::upsert_note,
+            notes::import_notes,
             notes::delete_note,
             history::list_history,
             history::record_history,
+            history::import_history,
             history::remove_history_entry,
             history::clear_history,
         ])

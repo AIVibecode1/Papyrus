@@ -21,13 +21,19 @@ interface ExplanationState {
   generations: Record<string, number>;
   toggle: (paperId: string) => void;
   start: (paper: Paper, provider: ProviderConfig, language: string) => Promise<void>;
-  stop: () => Promise<void>;
+  /** Cancels the run for `paperId` specifically.
+   *
+   *  Paper-scoped on purpose: the store allows one live stream *per
+   *  paper*, so a single module-level operation id cannot represent
+   *  them. Two explanations can overlap, and a global stop() would
+   *  cancel whichever started last — not the card the user clicked. */
+  stop: (paperId: string) => Promise<void>;
 }
 
 export const useExplanationStore = create<ExplanationState>((set, get) => {
-  // The operation id of the most recent start(); stop() targets exactly it
-  // (the Rust registry ignores ids that already finished).
-  let activeOperationId: string | null = null;
+  // Operation id per paper. Generations are keyed by paper id, so the
+  // cancellable runs must be too (see stop()).
+  const activeOperations: Record<string, string> = {};
 
   return {
     byPaper: {},
@@ -71,6 +77,11 @@ export const useExplanationStore = create<ExplanationState>((set, get) => {
         },
       }));
 
+      // Declared before the try so the finally below can compare it: a
+      // superseded run must not clear a newer run's id.
+      const operationId = newOperationId();
+      activeOperations[id] = operationId;
+
       try {
         // Failover chain: the picked provider first, then the others in
         // configuration order (deduped). The Rust backend iterates it and
@@ -79,17 +90,21 @@ export const useExplanationStore = create<ExplanationState>((set, get) => {
           provider,
           ...useSettingsStore.getState().providers.filter((p) => p.id !== provider.id),
         ];
-        activeOperationId = newOperationId();
         const winnerId = await streamExplanation({
           providers: chain,
           paper,
           language,
-          operationId: activeOperationId,
+          operationId,
           onChunk: (chunk) => buffer.push(chunk),
         });
         // Done: commit the tail first so the final chunk is not lost, then
         // mark done. A stale timer must not fire after completion.
         buffer.flushNow();
+        // Generation guard: a Stop that lands while the stream is resolving
+        // (the backend can return before it reads the cancel flag) would set
+        // "stopped", and this unconditional write would then paint it back
+        // to "done" — making the Stop button look broken.
+        if (get().generations[id] !== gen) return;
         set((s) => ({
           byPaper: {
             ...s.byPaper,
@@ -103,6 +118,9 @@ export const useExplanationStore = create<ExplanationState>((set, get) => {
         const message = err instanceof Error ? err.message : String(err);
         const stopped = message.startsWith(CANCELLED_MARKER);
         const status: ExplainStatus = stopped ? "stopped" : "error";
+        // Same guard as the success path: a superseded run must never
+        // overwrite the newer run's entry with its own error text.
+        if (get().generations[id] !== gen) return;
         set((s) => ({
           byPaper: {
             ...s.byPaper,
@@ -111,32 +129,36 @@ export const useExplanationStore = create<ExplanationState>((set, get) => {
             [id]: { ...s.byPaper[id], status, error: stopped ? null : message },
           },
         }));
+      } finally {
+        // Drop the id once the run settles, but only if it is still this
+        // run's: a newer start() for the same paper must keep its own.
+        if (activeOperations[id] === operationId) delete activeOperations[id];
       }
     },
 
-    stop: async () => {
-      const active = get().expandedId;
-      if (active) {
-        // Bump the generation first so any chunk already in flight from the
-        // old run is dropped and the status stays "stopped".
-        set((s) => ({
-          generations: {
-            ...s.generations,
-            [active]: (s.generations[active] ?? 0) + 1,
-          },
-        }));
+    stop: async (paperId) => {
+      // Bump the generation first so any chunk already in flight from the
+      // old run is dropped and the status stays "stopped".
+      set((s) => ({
+        generations: {
+          ...s.generations,
+          [paperId]: (s.generations[paperId] ?? 0) + 1,
+        },
+      }));
+      // Only this paper's run. Never the expanded card's: the panel the
+      // user clicked may not be the one streaming.
+      const operationId = activeOperations[paperId];
+      delete activeOperations[paperId];
+      if (operationId) {
+        await stopExplanation(operationId);
       }
-      await stopExplanation(activeOperationId);
-      activeOperationId = null;
       // The in-flight stream rejects with CANCELLED_MARKER, which the catch
       // block maps to "stopped".
-      if (active) {
-        const cur = get().byPaper[active];
-        if (cur && (cur.status === "loading" || cur.status === "streaming")) {
-          set((s) => ({
-            byPaper: { ...s.byPaper, [active]: { ...cur, status: "stopped" } },
-          }));
-        }
+      const cur = get().byPaper[paperId];
+      if (cur && (cur.status === "loading" || cur.status === "streaming")) {
+        set((s) => ({
+          byPaper: { ...s.byPaper, [paperId]: { ...cur, status: "stopped" } },
+        }));
       }
     },
   };

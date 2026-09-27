@@ -16,6 +16,40 @@ use tauri::ipc::Channel;
 pub(crate) const EXPLAIN_TIMEOUT: Duration = Duration::from_secs(600);
 /// Upper bound for the Settings "Test" request.
 pub(crate) const TEST_TIMEOUT: Duration = Duration::from_secs(30);
+/// Upper bound on a single SSE line held in the line buffer. One event is
+/// normally a few hundred bytes; anything past this is a malformed or
+/// hostile endpoint, not a real delta.
+const MAX_SSE_LINE_BYTES: usize = 1024 * 1024;
+/// Upper bound on the assembled answer. Generous for a paper explanation
+/// (the longest prompt caps paper text at 60k chars) while still bounding
+/// a peer that streams forever inside the request timeout.
+const MAX_STREAM_TEXT_BYTES: usize = 4 * 1024 * 1024;
+/// Upper bound on a whole HTTP body we read into memory. The streaming
+/// path is capped by `MAX_STREAM_TEXT_BYTES`; the non-streaming fallback
+/// and the error path are not, and `Response::text()` buffers
+/// everything before we ever look at it. A peer that returns a 10 GB
+/// body would exhaust the heap before any limit could apply.
+pub(crate) const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
+
+/// Reads a response body with a hard ceiling, refusing *before* the
+/// allocation grows past it rather than truncating after the fact.
+async fn read_capped(response: reqwest::Response) -> Result<String, String> {
+    if let Some(len) = response.content_length()
+        && len as usize > MAX_RESPONSE_BYTES
+    {
+        return Err("Provider response is too large".into());
+    }
+    let mut buf: Vec<u8> = Vec::new();
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| format!("Failed to read provider response: {e}"))?;
+        if buf.len() + chunk.len() > MAX_RESPONSE_BYTES {
+            return Err("Provider response is too large".into());
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    Ok(String::from_utf8_lossy(&buf).into_owned())
+}
 
 /// Normalizes a user-provided base URL into a full chat-completions URL.
 ///
@@ -67,15 +101,16 @@ pub(crate) async fn stream_chat(
     if !key.is_empty() {
         request = request.bearer_auth(key);
     }
-    let response = request
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("Network error while contacting the provider: {e}"))?;
+    let response = request.json(&body).send().await.map_err(|e| {
+        format!(
+            "Network error while contacting the provider: {}",
+            redact_tokens(&e.to_string())
+        )
+    })?;
 
     let status = response.status();
     if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
+        let text = read_capped(response).await.unwrap_or_default();
         return Err(format!(
             "Provider returned HTTP {status}: {}",
             truncate(&redact_tokens(&text), 300)
@@ -120,6 +155,13 @@ pub(crate) async fn stream_chat(
             // Buffer raw bytes and decode only complete lines, so a multi-byte
             // UTF-8 character split across two chunks is not corrupted.
             buf.extend_from_slice(&chunk);
+            // A peer that never emits a newline would otherwise grow `buf`
+            // without bound for the whole 600 s window. One SSE line is
+            // normally a few hundred bytes; 1 MiB is far past any real
+            // event and stops a malformed endpoint from eating the heap.
+            if buf.len() > MAX_SSE_LINE_BYTES {
+                return Err("Provider sent an oversized stream frame".into());
+            }
             while let Some(pos) = buf.iter().position(|&b| b == b'\n') {
                 let line_bytes = buf[..pos].to_vec();
                 buf.drain(..=pos);
@@ -131,18 +173,41 @@ pub(crate) async fn stream_chat(
                 if let Some(data) = line.strip_prefix("data:") {
                     let data = data.trim();
                     if data == "[DONE]" {
+                        // A gateway can send [DONE] having produced nothing
+                        // (rejected model, empty tool call, truncated
+                        // response). Reporting success here would mark an
+                        // EMPTY explanation as done, so the panel shows a
+                        // blank card with no way to tell it failed. Match
+                        // the clean-close branch below.
+                        if full.is_empty() {
+                            return Err("Provider returned no content".into());
+                        }
                         return Ok(full);
                     }
-                    if let Ok(value) = serde_json::from_str::<Value>(data)
-                        && let Some(content) = value
+                    if let Ok(value) = serde_json::from_str::<Value>(data) {
+                        // OpenAI-compatible gateways report mid-stream
+                        // failures as a data frame carrying `error`. It
+                        // parses fine but has no delta.content, so without
+                        // this check it is silently dropped and the run
+                        // still reports success.
+                        if let Some(message) =
+                            value.pointer("/error/message").and_then(|m| m.as_str())
+                        {
+                            return Err(truncate(&redact_tokens(message), 300));
+                        }
+                        if let Some(content) = value
                             .pointer("/choices/0/delta/content")
                             .and_then(|c| c.as_str())
-                    {
-                        if cancel_flag.load(Ordering::SeqCst) {
-                            return Err(cancelled_marker().into());
+                        {
+                            if cancel_flag.load(Ordering::SeqCst) {
+                                return Err(cancelled_marker().into());
+                            }
+                            if full.len() + content.len() > MAX_STREAM_TEXT_BYTES {
+                                return Err("Provider response exceeded the size limit".into());
+                            }
+                            full.push_str(content);
+                            on_chunk(content);
                         }
-                        full.push_str(content);
-                        on_chunk(content);
                     }
                 }
             }
@@ -151,9 +216,9 @@ pub(crate) async fn stream_chat(
             }
         }
     } else {
-        // Non-streaming fallback: parse the whole JSON response.
-        let text = response
-            .text()
+        // Non-streaming fallback: parse the whole JSON response, with a
+        // ceiling so a huge body cannot exhaust memory before parsing.
+        let text = read_capped(response)
             .await
             .map_err(|e| format!("Failed to read provider response: {e}"))?;
         let value: Value = serde_json::from_str(&text)
@@ -212,7 +277,13 @@ pub(crate) fn redact_tokens(text: &str) -> String {
                 out.replace_range(pos..pos + pat.len() + end, &format!("{pat}***"));
                 search_from = pos + pat.len() + 3; // past the "***" marker
             } else {
-                break; // not a real token; avoid mangling words like "sk-8"
+                // Not a real token ("sk-8" in "model sk-8 rejected"). Step
+                // PAST it and keep scanning the rest of the body — bailing
+                // out of the whole pattern here let any short "sk-"-shaped
+                // run earlier in an error body mask every real key after
+                // it, which the 32-char fallback cannot catch (API keys are
+                // routinely shorter than that).
+                search_from = pos + pat.len() + end;
             }
         }
     }

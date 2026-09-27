@@ -195,4 +195,22 @@ describe("settings page", () => {
     fireEvent.click(screen.getByRole("option", { name: "Amiri (Naskh serif)" }));
     expect(mocks.setArabicFontTo).toHaveBeenCalledWith("amiri");
   });
+
+  it("deletes a provider that has no stored key", async () => {
+    // Regression: a keyless provider (Ollama, or any provider whose key
+    // was cleared) made the backend reject the delete with "No matching
+    // entry found", so the row could never be removed. The backend now
+    // treats a missing entry as success, and the row must go with it.
+    mocks.providers = [provider];
+    mocks.activeProviderId = "p1";
+    render(<SettingsPage />);
+
+    const del = screen.getAllByRole("button", { name: /^Delete/ })[0];
+    fireEvent.click(del);
+    // Confirm in the dialog.
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(mocks.deleteKey).toHaveBeenCalledWith("p1"));
+    expect(mocks.removeProvider).toHaveBeenCalledWith("p1");
+  });
 });

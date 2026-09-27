@@ -37,6 +37,10 @@ interface SettingsState {
   providers: ProviderConfig[];
   activeProviderId: string | null;
   loaded: boolean;
+  /** Set when the saved provider blob could not be read. Until it is
+   * cleared, writes are refused: the list on disk is intact but unread, so
+   * persisting the empty in-memory list would destroy it. */
+  loadError: string | null;
   load: () => void;
   addProvider: (p: ProviderConfig) => void;
   updateProvider: (p: ProviderConfig) => void;
@@ -52,6 +56,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   providers: [],
   activeProviderId: null,
   loaded: false,
+  loadError: null,
 
   load: () => {
     if (get().loaded) return;
@@ -65,14 +70,25 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       ) {
         activeProviderId = providers[0]?.id ?? null;
       }
-      set({ providers, activeProviderId, loaded: true });
-    } catch {
-      set({ loaded: true });
+      set({ providers, activeProviderId, loaded: true, loadError: null });
+    } catch (err) {
+      // Do NOT mark this loaded-and-empty as success. The blob is still on
+      // disk, so the next addProvider would rewrite it with a one-element
+      // array and every saved provider config would be lost with no warning.
+      // Surface the failure and refuse writes until the user clears it.
+      set({
+        loaded: true,
+        loadError: err instanceof Error ? err.message : String(err),
+      });
     }
   },
 
   addProvider: (p) =>
     set((s) => {
+      // Refuse to persist over an unreadable blob. The user's providers are
+      // still on disk; writing the empty in-memory list here would replace
+      // them with a single entry and the loss would be silent.
+      if (s.loadError) return {};
       const providers = [...s.providers, p];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(providers));
       return { providers, activeProviderId: s.activeProviderId ?? p.id };
@@ -80,6 +96,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   updateProvider: (p) =>
     set((s) => {
+      if (s.loadError) return {};
       const providers = s.providers.map((x) => (x.id === p.id ? p : x));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(providers));
       return { providers };
@@ -87,6 +104,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   removeProvider: (id) =>
     set((s) => {
+      if (s.loadError) return {};
       const providers = s.providers.filter((x) => x.id !== id);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(providers));
       return {

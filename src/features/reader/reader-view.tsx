@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AlertCircle } from "lucide-react";
 
 import { PdfViewer } from "@/components/pdf-viewer/pdf-viewer";
 import { ReaderNotes } from "@/features/reader/reader-notes";
@@ -38,8 +39,9 @@ export function ReaderView() {
   const [tab, setTab] = useState<Tab>("overview");
   const [question, setQuestion] = useState("");
   const [savingHighlight, setSavingHighlight] = useState(false);
+  const [highlightError, setHighlightError] = useState<string | null>(null);
   const upsertNote = useNotesStore((s) => s.upsert);
-  const { split, isRow, rowRef, startSplitDrag } = useReaderSplit();
+  const { split, isRow, rowRef, startSplitDrag, onSplitKeyDown } = useReaderSplit();
   const { copied, copySelection } = useCopySelection();
 
   const paper = reader.paper;
@@ -71,11 +73,21 @@ export function ReaderView() {
     setQuestion("");
   };
 
+  // Stable identity: PdfViewer is memoized, and an inline arrow here would
+  // change on every render and defeat it — the AI panel streams every ~50 ms
+  // while the user watches the PDF, so a re-render there is a re-render of
+  // every page's canvas and text layer.
+  const handleSelect = useCallback(
+    (text: string) => useReaderStore.getState().setSelection(text),
+    [],
+  );
+
   // Saves the current PDF selection as a highlight note (explicit user
   // action — selecting text never auto-saves anything).
   const handleSaveHighlight = async () => {
     if (!reader.selection || !paper) return;
     setSavingHighlight(true);
+    setHighlightError(null);
     try {
       await upsertNote({
         paperId: paper.id,
@@ -86,6 +98,11 @@ export function ReaderView() {
       });
       setTab("notes");
       reader.clearSelection();
+    } catch {
+      // Do NOT clear the selection or switch tabs. The selection is the
+      // only copy of the text the user just highlighted; discarding it on
+      // a failed write loses their highlight with no way to recover.
+      setHighlightError(t("notes.saveError"));
     } finally {
       setSavingHighlight(false);
     }
@@ -150,6 +167,15 @@ export function ReaderView() {
           >
             {reader.pdfBytes && (
               <>
+                {highlightError && (
+                  <p
+                    role="alert"
+                    className="mx-3 mb-1 flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs text-destructive"
+                  >
+                    <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                    {highlightError}
+                  </p>
+                )}
                 {reader.selection && (
                   <SelectionBar
                     selection={reader.selection}
@@ -161,11 +187,7 @@ export function ReaderView() {
                     onClear={() => reader.clearSelection()}
                   />
                 )}
-                <PdfViewer
-                  bytes={reader.pdfBytes}
-                  paperId={paper.id}
-                  onSelect={(text) => reader.setSelection(text)}
-                />
+                <PdfViewer bytes={reader.pdfBytes} paperId={paper.id} onSelect={handleSelect} />
               </>
             )}
           </div>
@@ -176,9 +198,16 @@ export function ReaderView() {
               role="separator"
               aria-orientation="vertical"
               aria-label={t("reader.resizeSplit")}
+              // A focusable separator must expose its position and accept
+              // keyboard input (APG / ARIA: window splitter).
+              tabIndex={0}
+              aria-valuenow={Math.round(split * 100)}
+              aria-valuemin={30}
+              aria-valuemax={80}
               title={t("reader.resizeSplit")}
               onPointerDown={startSplitDrag}
-              className="w-1.5 shrink-0 cursor-col-resize touch-none border-x border-border/60 bg-muted/40 transition-colors hover:bg-primary/20 active:bg-primary/30"
+              onKeyDown={onSplitKeyDown}
+              className="w-1.5 shrink-0 cursor-col-resize touch-none border-x border-border/60 bg-muted/40 transition-colors hover:bg-primary/20 active:bg-primary/30 focus-visible:bg-primary/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             />
           )}
 

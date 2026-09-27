@@ -83,7 +83,10 @@ export async function fetchPapers(
         return (yearFrom == null || y >= yearFrom) && (yearTo == null || y <= yearTo);
       });
     }
-    return { papers: papers.slice(0, maxResults), fallbackNote: null };
+    // Honour `start` so "Load more" in the browser preview fetches the next
+    // page instead of re-serving page 1 (which deduped to nothing, leaving
+    // the button spinning forever).
+    return { papers: papers.slice(start, start + maxResults), fallbackNote: null };
   }
 
   throw new Error("Papers can only be fetched inside the desktop app.");

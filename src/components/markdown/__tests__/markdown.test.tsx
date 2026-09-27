@@ -3,7 +3,8 @@ import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Markdown, normalizeMathDelimiters } from "@/components/markdown/markdown";
+import { Markdown } from "@/components/markdown/markdown";
+import { normalizeMathDelimiters } from "@/lib/math-delimiters";
 import "@/i18n";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));

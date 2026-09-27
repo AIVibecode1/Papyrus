@@ -14,6 +14,7 @@ pub mod cache;
 mod tests;
 
 pub(crate) use cache::cache_path;
+pub(crate) use cache::clear_memory_cache;
 
 use std::collections::HashMap;
 
@@ -32,14 +33,16 @@ const MAX_IDS_PER_REQUEST: usize = 100;
 const OPENALEX_MAX_IDS: usize = 50;
 
 /// Test hook: lets the unit tests point at a local mock server.
+/// Compiled out of release builds (see `crate::test_hooks`).
 fn s2_url() -> String {
-    std::env::var("PAPYRUS_S2_URL").unwrap_or_else(|_| S2_BATCH_URL.to_string())
+    crate::test_hooks::test_env("PAPYRUS_S2_URL").unwrap_or_else(|| S2_BATCH_URL.to_string())
 }
 
 /// Test hook: PAPYRUS_OPENALEX_URL overrides the works endpoint.
+/// Compiled out of release builds (see `crate::test_hooks`).
 fn openalex_url() -> String {
-    std::env::var("PAPYRUS_OPENALEX_URL")
-        .unwrap_or_else(|_| "https://api.openalex.org/works".to_string())
+    crate::test_hooks::test_env("PAPYRUS_OPENALEX_URL")
+        .unwrap_or_else(|| "https://api.openalex.org/works".to_string())
 }
 
 /// arXiv ids may carry a version suffix ("2607.00001v2"); Semantic Scholar
@@ -130,7 +133,12 @@ async fn fetch_citations_impl(ids: Vec<String>) -> (HashMap<String, u32>, bool) 
     // nothing.
     missing.retain(|id| !id.starts_with("s2:"));
     if missing.is_empty() {
-        return (result, reachable);
+        // Nothing needed a network call, so the network is not unreachable.
+        // Returning the incoming `reachable` here reported a failed fetch for
+        // a fully-cached batch — and for an all-`s2:` list, which makes zero
+        // requests because those counts arrive inline with the search — so
+        // the UI raised a bogus "check your connection" banner.
+        return (result, true);
     }
 
     // Semantic Scholar ids must be unique per request; dedupe on the bare id.
@@ -156,6 +164,12 @@ async fn fetch_citations_impl(ids: Vec<String>) -> (HashMap<String, u32>, bool) 
         // couple of times before giving up on the chunk.
         let mut attempt = 0u32;
         let response = loop {
+            // Queue behind the search calls on the same pool. Without this
+            // a long id list fired one request per chunk back to back, with
+            // the 429 retry sleeping *inside* the loop and so never
+            // re-entering the limiter — exactly the burst that earns the
+            // 429s in the first place.
+            crate::papers::rate_limit("semanticscholar").await;
             let response = client
                 .post(format!("{}?fields=citationCount", s2_url()))
                 .json(&body)

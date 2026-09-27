@@ -1,4 +1,16 @@
 @import "tailwindcss";
+/* Tests quote real class names in their assertions (and one test documents
+   the ambiguous `text-(--var)` form in prose). Tailwind scans them as plain
+   text, so those strings leak into the production stylesheet as dead rules —
+   and worse, a class referenced only by a test would look "used" and survive
+   a purge. Tests must not feed the stylesheet.
+   Paths are relative to this file. Both forms are listed because `@source not`
+   takes directories and globs, and a leading `**` is not guaranteed to match
+   zero path segments. */
+@source not "./__tests__";
+@source not "./**/__tests__/**";
+@source not "./**/*.test.ts";
+@source not "./**/*.test.tsx";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -419,5 +431,25 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Respect the OS "reduce motion" setting.
+   Every paper card animates in on a stagger, and the reader/chat use
+   smooth scrolling, so vestibular-sensitive users were getting 12px of
+   vertical motion per list item with no opt-out. Collapsing durations
+   (rather than `animation: none`) keeps the end state — an element
+   animated to `opacity: 0` must still finish visible, so a blanket
+   `animation: none` would leave cards stuck invisible. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -14,6 +14,13 @@ import { isOperationAborted, trackOperation, untrackOperation } from "./ai-opera
 // - Cancellation surfaces the CANCELLED_MARKER string (Rust: Err(marker);
 //   TS: throw Error(marker)).
 // - Delta payloads are JSON objects; content lives at choices[0].delta.content.
+// - A data frame carrying `error` is a stream failure, not a delta.
+
+/** Mirrors MAX_SSE_LINE_BYTES in src-tauri/src/ai/stream.rs. */
+const MAX_SSE_LINE_CHARS = 1024 * 1024;
+/** Mirrors MAX_STREAM_TEXT_BYTES in src-tauri/src/ai/stream.rs. */
+const MAX_STREAM_TEXT_CHARS = 4 * 1024 * 1024;
+
 export async function streamChatBrowser(
   provider: ProviderConfig,
   messages: { role: string; content: string }[],
@@ -48,27 +55,62 @@ export async function streamChatBrowser(
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
+    let received = false;
+    let total = 0;
 
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       buf += decoder.decode(value, { stream: true });
+      // A peer that never emits a newline would grow `buf` without bound.
+      // One SSE event is normally a few hundred bytes.
+      if (buf.length > MAX_SSE_LINE_CHARS) {
+        throw new Error("Provider sent an oversized stream frame");
+      }
       let newline: number;
       while ((newline = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, newline).replace(/\r$/, "");
         buf = buf.slice(newline + 1);
         if (!line.startsWith("data:")) continue;
         const data = line.slice(5).trim();
-        if (data === "[DONE]") return;
+        if (data === "[DONE]") {
+          // Mirrors the Rust side: [DONE] with nothing before it is a
+          // failure, not an empty success.
+          if (!received) throw new Error("Provider returned no content");
+          return;
+        }
+        // Parse in its own try: only malformed JSON is tolerated here.
+        // Throwing inside the same try would let the catch below swallow
+        // the deliberate error-frame/bounds failures.
+        let parsed: unknown;
         try {
-          const parsed = JSON.parse(data);
-          const content = parsed?.choices?.[0]?.delta?.content;
-          if (content) onChunk(content);
+          parsed = JSON.parse(data);
         } catch {
-          // keep-alive comments and partial JSON are ignored
+          continue; // keep-alive comments and partial JSON are ignored
+        }
+        const value = parsed as {
+          error?: { message?: unknown };
+          choices?: { delta?: { content?: unknown } }[];
+        };
+        // Gateways report mid-stream failures as a data frame carrying
+        // `error`; without this it is dropped and the run "succeeds".
+        const errMessage = value?.error?.message;
+        if (typeof errMessage === "string") {
+          throw new Error(redactTokens(errMessage).slice(0, 300));
+        }
+        const content = value?.choices?.[0]?.delta?.content;
+        if (typeof content === "string" && content) {
+          received = true;
+          if (total + content.length > MAX_STREAM_TEXT_CHARS) {
+            throw new Error("Provider response exceeded the size limit");
+          }
+          total += content.length;
+          onChunk(content);
         }
       }
     }
+    // Clean close without [DONE]: success only if content arrived.
+    if (!received) throw new Error("Stream ended unexpectedly");
   } catch (err) {
     // A stop aborts the fetch signal; surface it through the same typed
     // cancellation contract the Tauri path uses (plan 005).

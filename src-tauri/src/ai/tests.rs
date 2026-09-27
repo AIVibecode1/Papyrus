@@ -367,6 +367,79 @@ fn streams_sse_chunks_in_order() {
     assert_eq!(chunks, vec!["Hello", " world"]);
 }
 
+/// Spawns a server that replies 200 with a large declared
+/// `Content-Length`, then writes ~16 MiB in 1 MiB steps. The client is
+/// expected to abort once it passes its own cap; the write loop stops as
+/// soon as that disconnect shows up as a write error.
+fn spawn_oversized_server(declared_len: usize) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut req = Vec::new();
+            let mut buf = [0u8; 4096];
+            let mut header_end = 0usize;
+            loop {
+                match stream.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        req.extend_from_slice(&buf[..n]);
+                        if let Some(pos) = req.windows(4).position(|w| w == b"\r\n\r\n") {
+                            header_end = pos + 4;
+                            break;
+                        }
+                        if req.len() > 64 * 1024 {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            if header_end == 0 {
+                return;
+            }
+            let headers = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {declared_len}\r\n\r\n"
+            );
+            let _ = stream.write_all(headers.as_bytes());
+            // Push past the cap in 1 MiB steps, ignoring the client's
+            // disconnect once it has given up.
+            let chunk = vec![b'x'; 1024 * 1024];
+            for _ in 0..16 {
+                if stream.write_all(&chunk).is_err() {
+                    break;
+                }
+            }
+        }
+    });
+    format!("http://{addr}")
+}
+
+#[test]
+fn rejects_an_oversized_non_streaming_body() {
+    // A provider that declares a huge non-streaming JSON body must be
+    // refused, not buffered. `Response::text()` would materialize the whole
+    // thing before any check could run; the read is capped incrementally.
+    let url = spawn_oversized_server(64 * 1024 * 1024);
+    let client = reqwest::Client::new();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let err = runtime
+        .block_on(stream_chat(
+            &client,
+            &format!("{url}/v1/chat/completions"),
+            "test-key",
+            json!({ "model": "mock", "messages": [] }),
+            Duration::from_secs(10),
+            &TEST_FLAG,
+            &mut |_| {},
+        ))
+        .expect_err("an oversized body must be rejected");
+    assert!(
+        err.contains("too large"),
+        "expected a size error, got: {err}"
+    );
+}
+
 #[test]
 fn streams_utf8_split_across_chunks() {
     // A multi-byte Arabic character split across two TCP chunks must not
@@ -569,6 +642,24 @@ fn redact_tokens_ignores_short_prefixes() {
 }
 
 #[test]
+fn redact_tokens_masks_key_after_a_short_prefixed_run() {
+    // Regression: a short "sk-8" earlier in the body used to abort the
+    // scan for the whole pattern, so a real key echoed after it reached
+    // the UI. The >= 32-char fallback cannot cover this — real API keys
+    // are routinely shorter than that.
+    let secret = "sk-ABCDEFGHIJKLMNOP";
+    let body = format!("provider model sk-8 rejected; bad credential {secret}");
+    let out = redact_tokens(&body);
+    assert!(!out.contains("ABCDEFGHIJKLMNOP"), "key leaked: {out}");
+    assert!(out.contains("sk-***"), "got: {out}");
+    // The short run itself must stay intact.
+    assert!(out.contains("sk-8"), "got: {out}");
+
+    let out2 = redact_tokens(&format!("sk-8 {secret}"));
+    assert!(!out2.contains("ABCDEFGHIJKLMNOP"), "key leaked: {out2}");
+}
+
+#[test]
 fn redact_tokens_masks_prefixless_long_keys() {
     // Custom gateways echo raw keys with no recognizable prefix; a
     // long opaque run must be masked even without sk-/key-/ghp_.
@@ -587,6 +678,27 @@ fn redact_tokens_keeps_urls_and_short_hashes() {
     // slash breaks the run, and short runs are never masked.
     let body = "check https://example.com/status/abc123 for details (id 42)";
     assert_eq!(redact_tokens(body), body);
+}
+
+#[test]
+fn loopback_check_rejects_url_userinfo() {
+    // Per RFC 3986 the real host is whatever follows the LAST '@', so
+    // these all resolve to a REMOTE host. Treating them as loopback let a
+    // plaintext http:// base URL send the API key to that remote host and
+    // also skipped the "local endpoints may omit a key" rule.
+    assert!(!is_loopback_host("localhost:1234@evil.example.com"));
+    assert!(!is_loopback_host("[::1]@evil.example.com"));
+    assert!(!is_loopback_host("user@localhost"));
+    assert!(!is_local_base_url(
+        "http://localhost:1234@evil.example.com/v1"
+    ));
+    assert!(!is_local_base_url("http://[::1]@evil.example.com/v1"));
+    // build_chat_url must refuse the plaintext form of the same URL.
+    assert!(build_chat_url("http://localhost:1234@evil.example.com/v1").is_err());
+    // Genuine loopback is untouched.
+    assert!(is_loopback_host("localhost:11434"));
+    assert!(is_loopback_host("[::1]:8080"));
+    assert!(build_chat_url("http://localhost:11434/v1").is_ok());
 }
 
 #[test]
@@ -958,6 +1070,57 @@ fn qa_messages_include_conversation_history_in_order() {
             .unwrap()
             .contains("Question: What about the keys?")
     );
+}
+
+#[test]
+fn qa_history_cap_keeps_the_most_recent_turns() {
+    // 12 turns in, 8 out. The cap exists to bound the request, so it must
+    // drop the OLDEST — those are the ones the follow-up is least likely
+    // to refer to. Taking the first 8 instead would silently discard the
+    // most recent context. Mirrors `slice(-8)` in src/lib/reader-ai.ts.
+    let history: Vec<ChatTurn> = (0..12)
+        .map(|i| ChatTurn {
+            role: if i % 2 == 0 { "user" } else { "assistant" }.into(),
+            content: format!("turn-{i}"),
+        })
+        .collect();
+    let messages = build_qa_messages(
+        &reader_sample_paper(),
+        "latest question",
+        None,
+        None,
+        &history,
+        "en",
+    );
+    assert_eq!(messages.len(), MAX_HISTORY_TURNS + 2); // system + 8 + question
+    assert_eq!(messages[1]["content"], "turn-4");
+    assert_eq!(messages[MAX_HISTORY_TURNS]["content"], "turn-11");
+    assert!(
+        messages[MAX_HISTORY_TURNS + 1]["content"]
+            .as_str()
+            .unwrap()
+            .contains("Question: latest question")
+    );
+}
+
+#[test]
+fn qa_history_shorter_than_the_cap_is_kept_whole() {
+    let history: Vec<ChatTurn> = (0..3)
+        .map(|i| ChatTurn {
+            role: "user".into(),
+            content: format!("turn-{i}"),
+        })
+        .collect();
+    let messages = build_qa_messages(&reader_sample_paper(), "q", None, None, &history, "en");
+    assert_eq!(messages.len(), 5);
+    assert_eq!(messages[1]["content"], "turn-0");
+}
+
+#[test]
+fn qa_history_cap_does_not_panic_on_empty_history() {
+    // `len().saturating_sub` keeps an empty slice from underflowing.
+    let messages = build_qa_messages(&reader_sample_paper(), "q", None, None, &[], "en");
+    assert_eq!(messages.len(), 2);
 }
 
 #[test]

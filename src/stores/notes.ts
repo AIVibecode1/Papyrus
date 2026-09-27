@@ -43,6 +43,10 @@ interface NotesState {
   /** True while the first disk snapshot is in flight (plan 046): marks
    * the window where a concurrent upsert/remove must survive the merge. */
   loading: boolean;
+  /** Set when the disk snapshot failed to load. The hub shows this
+   * instead of the empty state, so a storage fault is never mistaken for
+   * "you have no notes". */
+  loadError: string | null;
   /** Ids removed while the snapshot was in flight (tombstones). */
   pendingDeletes: string[];
   /** When set, the hub shows only notes for this paper. */
@@ -116,36 +120,59 @@ export function filteredNotes(state: NotesState): PaperNote[] {
   return filterNotes(state.notes, state.filterPaperId, state.query);
 }
 
+// The outstanding disk read, so concurrent callers join one load instead of
+// racing two (and so a caller that arrives after `loaded` was set
+// optimistically still waits for the real result).
+let loadInFlight: Promise<void> | null = null;
+
 export const useNotesStore = create<NotesState>((set, get) => ({
   notes: [],
   loaded: false,
   loading: false,
+  loadError: null,
   pendingDeletes: [],
   filterPaperId: null,
   query: "",
 
   load: async () => {
-    if (get().loaded) return;
-    // Mark loaded optimistically: any upsert/remove that lands while the
-    // disk snapshot is in flight is local truth and must survive the
-    // merge below (plan 046: a slow list_notes must not clobber a note
-    // saved a moment ago).
-    set({ loaded: true, loading: true });
-    let disk: PaperNote[] = [];
-    if (isTauri()) {
-      try {
-        disk = await invoke<PaperNote[]>("list_notes");
-      } catch {
-        disk = [];
+    if (get().loaded && !get().loading) return;
+    // A read is already outstanding: join it instead of returning early.
+    // `loaded` is set optimistically below, so it cannot double as the
+    // in-flight signal — without this, a second caller (an export during the
+    // initial load) would proceed against a pre-load snapshot and write an
+    // empty notes section.
+    if (loadInFlight) return loadInFlight;
+    loadInFlight = (async () => {
+      // Mark loaded optimistically: any upsert/remove that lands while the
+      // disk snapshot is in flight is local truth and must survive the
+      // merge below (plan 046: a slow list_notes must not clobber a note
+      // saved a moment ago).
+      set({ loaded: true, loading: true, loadError: null });
+      let disk: PaperNote[] = [];
+      let failure: string | null = null;
+      if (isTauri()) {
+        try {
+          disk = await invoke<PaperNote[]>("list_notes");
+        } catch (err) {
+          // Surface the fault: silently treating a failed read as "no
+          // notes" would tell the user their saved work is gone.
+          failure = err instanceof Error ? err.message : String(err);
+        }
+      } else {
+        disk = loadBrowserNotes();
       }
-    } else {
-      disk = loadBrowserNotes();
+      set((s) => ({
+        notes: mergeNotes(disk, s.notes, s.pendingDeletes),
+        loading: false,
+        loadError: failure,
+        pendingDeletes: [],
+      }));
+    })();
+    try {
+      await loadInFlight;
+    } finally {
+      loadInFlight = null;
     }
-    set((s) => ({
-      notes: mergeNotes(disk, s.notes, s.pendingDeletes),
-      loading: false,
-      pendingDeletes: [],
-    }));
   },
 
   upsert: async (input) => {
@@ -158,16 +185,25 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       updatedAt: now,
     };
     // Optimistic apply; the Rust command is the source of truth on disk.
+    const before = get().notes;
     set((s) => {
       const notes = s.notes.some((n) => n.id === note.id)
         ? s.notes.map((n) => (n.id === note.id ? note : n))
         : [...s.notes, note];
       return { notes };
     });
-    if (isTauri()) {
-      await invoke("upsert_note", { note });
-    } else {
-      saveBrowserNotes(get().notes);
+    try {
+      if (isTauri()) {
+        await invoke("upsert_note", { note });
+      } else {
+        saveBrowserNotes(get().notes);
+      }
+    } catch (err) {
+      // Roll back. Without this the note stays on screen and in
+      // `notes` while nothing was written, so the user's next save looks
+      // like it worked and the note silently disappears on reload.
+      set({ notes: before });
+      throw err;
     }
   },
 
@@ -191,24 +227,35 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   importNotes: async (notes) => {
     if (notes.length === 0) return;
     // Same id -> the newer updatedAt wins; incoming unknown ids are added.
-    const merged = [...get().notes];
+    const byId = new Map(get().notes.map((n) => [n.id, n]));
+    // Only the notes the batch actually changes are replayed to the
+    // backend. Sending the whole merged set made a no-op re-import rewrite
+    // every note on disk.
+    const winners: PaperNote[] = [];
     for (const incoming of notes) {
-      const idx = merged.findIndex((n) => n.id === incoming.id);
-      if (idx === -1) {
-        merged.push(incoming);
-      } else if (incoming.updatedAt > merged[idx].updatedAt) {
-        merged[idx] = incoming;
-      }
+      const local = byId.get(incoming.id);
+      if (local && local.updatedAt >= incoming.updatedAt) continue;
+      byId.set(incoming.id, incoming);
+      winners.push(incoming);
     }
-    set({ notes: merged });
-    if (isTauri()) {
-      // The file lives in Rust; replay the winning notes through the
-      // same command the UI uses (bounded by export size).
-      for (const note of merged) {
-        await invoke("upsert_note", { note });
+    if (winners.length === 0) return;
+
+    const before = get().notes;
+    set({ notes: [...byId.values()] });
+    try {
+      if (isTauri()) {
+        // One batched command: a single load-modify-save on disk, rather
+        // than an awaited upsert per note (each of which re-read and
+        // re-wrote the whole file).
+        await invoke("import_notes", { notes: winners });
+      } else {
+        saveBrowserNotes(get().notes);
       }
-    } else {
-      saveBrowserNotes(merged);
+    } catch (err) {
+      // Nothing reached disk, so restore the pre-import list rather than
+      // showing notes that will vanish on next launch.
+      set({ notes: before });
+      throw err;
     }
   },
 }));

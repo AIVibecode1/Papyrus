@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Markdown } from "@/components/markdown/markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { redactSecrets, truncateError } from "@/lib/provider-errors";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/stores/reader";
 
@@ -81,7 +82,11 @@ export function AskPanel({
                   )}
                   {m.role === "assistant" && m.status === "error" && m.error && (
                     <div className="mt-2 flex flex-col items-start gap-1.5">
-                      <p className="text-xs text-destructive">{m.error}</p>
+                      <p className="text-xs text-destructive">
+                        {/* Defense in depth: the backend redacts, but a key
+                            echoed back by a gateway must never render. */}
+                        {truncateError(redactSecrets(m.error))}
+                      </p>
                       {/* Errors are direction: one click re-asks
                           the same question (retryAsk). */}
                       <Button

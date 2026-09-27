@@ -3,6 +3,7 @@
 //! never gets a filesystem API, and notes never leave the device unless
 //! the user exports them.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
@@ -17,6 +18,11 @@ const MAX_NOTE_BYTES: usize = 50 * 1024;
 /// File cap: 2 MiB of notes total (atomic rewrite, so a hard bound keeps
 /// every save fast and bounded).
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
+/// Upper bound on one import batch. `MAX_FILE_BYTES` with the smallest
+/// realistic note (~200 B) allows a few thousand; this is the round number
+/// well inside that, so the command rejects nonsense input before doing
+/// any work rather than after.
+const MAX_IMPORT_NOTES: usize = 5_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,7 +58,7 @@ struct NotesFile {
 /// directory (tests cannot construct an AppHandle — same pattern as
 /// citations.rs).
 pub(crate) fn notes_path(app: Option<&tauri::AppHandle>) -> PathBuf {
-    if let Ok(dir) = std::env::var("PAPYRUS_NOTES_DIR") {
+    if let Some(dir) = crate::test_hooks::test_env("PAPYRUS_NOTES_DIR") {
         return PathBuf::from(dir).join(NOTES_FILE);
     }
     let dir = app
@@ -149,6 +155,85 @@ pub fn upsert_note(app: tauri::AppHandle, note: PaperNote) -> Result<PaperNote, 
     Ok(note)
 }
 
+/// Merges an import batch into the stored notes, resolving same-id entries
+/// by newer `updated_at`. Returns the merged list and how many notes the
+/// batch actually changed. Pure, so it is tested without an AppHandle.
+fn merge_import(current: Vec<PaperNote>, incoming: Vec<PaperNote>) -> (Vec<PaperNote>, usize) {
+    // Deduplicate the batch first, keeping the newest per id. A HashMap
+    // index keeps this linear: the old linear scan made the merge
+    // quadratic, which is the very cost this command exists to remove.
+    let mut winners: HashMap<String, PaperNote> = HashMap::with_capacity(incoming.len());
+    for note in incoming {
+        match winners.get(&note.id) {
+            Some(existing) if existing.updated_at > note.updated_at => {}
+            _ => {
+                winners.insert(note.id.clone(), note);
+            }
+        }
+    }
+
+    // Merge into the stored list through the same index. `order` keeps the
+    // existing notes in their original on-disk order (a rewrite must not
+    // reshuffle the user's library) and appends genuinely new ids.
+    // Keys are owned Strings: a `&str` borrowed from `current` cannot be
+    // held while the vector is being mutated.
+    let mut index: HashMap<String, usize> = HashMap::with_capacity(current.len() + winners.len());
+    let mut order: Vec<PaperNote> = Vec::with_capacity(current.len() + winners.len());
+    for note in current {
+        if index.contains_key(&note.id) {
+            continue; // unreachable duplicate already on disk
+        }
+        index.insert(note.id.clone(), order.len());
+        order.push(note);
+    }
+
+    let mut applied = 0usize;
+    for note in winners.into_values() {
+        match index.get(&note.id) {
+            Some(&at) => {
+                if note.updated_at >= order[at].updated_at {
+                    order[at] = note;
+                    applied += 1;
+                }
+            }
+            None => {
+                index.insert(note.id.clone(), order.len());
+                order.push(note);
+                applied += 1;
+            }
+        }
+    }
+    (order, applied)
+}
+
+/// Applies a whole import in one load-modify-save cycle.
+///
+/// The webview used to replay every note through `upsert_note`, one
+/// awaited IPC call per note. Each of those re-reads and re-writes the
+/// entire notes file under the lock, so restoring a 500-note backup cost
+/// 500 parses plus 500 atomic writes of a file that never stopped growing
+/// (quadratic in the note count, and seconds of UI jank). Same-id notes
+/// resolve by newer `updated_at`, matching the webview's merge rule.
+#[tauri::command]
+pub fn import_notes(app: tauri::AppHandle, notes: Vec<PaperNote>) -> Result<usize, String> {
+    // Bound the batch before doing any work, and validate everything up
+    // front so a bad entry cannot leave a half-applied import on disk.
+    if notes.len() > MAX_IMPORT_NOTES {
+        return Err(format!(
+            "Import is too large (max {MAX_IMPORT_NOTES} notes)"
+        ));
+    }
+    for note in &notes {
+        validate_note(note)?;
+    }
+
+    let _guard = notes_lock().lock().unwrap_or_else(|p| p.into_inner());
+    let path = notes_path(Some(&app));
+    let (merged, applied) = merge_import(load_notes(&path), notes);
+    save_notes(&path, &merged)?;
+    Ok(applied)
+}
+
 #[tauri::command]
 pub fn delete_note(app: tauri::AppHandle, id: String) -> Result<(), String> {
     if id.trim().is_empty() || id.len() > 128 {
@@ -198,6 +283,79 @@ mod tests {
             updated_at: "2026-08-01T10:00:00Z".into(),
             tags: vec![],
         }
+    }
+
+    /// A sample note stamped at a given `updated_at`, for merge tests.
+    fn note_at(id: &str, updated_at: &str) -> PaperNote {
+        PaperNote {
+            updated_at: updated_at.to_string(),
+            body: format!("body-{id}"),
+            ..sample_note(id)
+        }
+    }
+
+    #[test]
+    fn import_merge_adds_unknown_ids() {
+        let (merged, applied) = merge_import(vec![sample_note("a")], vec![sample_note("b")]);
+        assert_eq!(applied, 1);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].id, "a", "existing order is preserved");
+        assert_eq!(merged[1].id, "b");
+    }
+
+    #[test]
+    fn import_merge_takes_the_newer_copy_of_a_shared_id() {
+        let (merged, applied) = merge_import(
+            vec![note_at("a", "2026-01-01T00:00:00Z")],
+            vec![note_at("a", "2026-02-01T00:00:00Z")],
+        );
+        assert_eq!(applied, 1);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].body, "body-a");
+        assert_eq!(merged[0].updated_at, "2026-02-01T00:00:00Z");
+    }
+
+    #[test]
+    fn import_merge_ignores_an_older_copy_of_a_shared_id() {
+        // A re-import of an old backup must not clobber newer local edits.
+        let (merged, applied) = merge_import(
+            vec![note_at("a", "2026-02-01T00:00:00Z")],
+            vec![note_at("a", "2026-01-01T00:00:00Z")],
+        );
+        assert_eq!(applied, 0, "nothing changed");
+        assert_eq!(merged[0].updated_at, "2026-02-01T00:00:00Z");
+    }
+
+    #[test]
+    fn import_merge_keeps_the_newest_duplicate_inside_one_batch() {
+        // A file that lists the same id twice must land one note, the
+        // newer one.
+        let (merged, applied) = merge_import(
+            vec![],
+            vec![
+                note_at("a", "2026-01-01T00:00:00Z"),
+                note_at("a", "2026-03-01T00:00:00Z"),
+                note_at("a", "2026-02-01T00:00:00Z"),
+            ],
+        );
+        assert_eq!(merged.len(), 1);
+        assert_eq!(applied, 1);
+        assert_eq!(merged[0].updated_at, "2026-03-01T00:00:00Z");
+    }
+
+    #[test]
+    fn import_merge_on_empty_library_adds_everything() {
+        let incoming: Vec<PaperNote> = (0..500).map(|i| sample_note(&format!("n{i}"))).collect();
+        let (merged, applied) = merge_import(vec![], incoming);
+        assert_eq!(merged.len(), 500);
+        assert_eq!(applied, 500);
+    }
+
+    #[test]
+    fn import_merge_does_not_duplicate_stored_ids() {
+        // Defensive: a pre-existing duplicate on disk collapses to one.
+        let (merged, _) = merge_import(vec![sample_note("a"), sample_note("a")], vec![]);
+        assert_eq!(merged.len(), 1);
     }
 
     #[test]

@@ -30,6 +30,18 @@ describe("redactTokens", () => {
     expect(redactTokens("The sk-8 model")).toBe("The sk-8 model");
   });
 
+  it("still masks a real key that follows a short sk- shaped run", () => {
+    // Regression: a short "sk-8" earlier in the body once aborted the
+    // whole scan on the Rust side, so a real key echoed after it reached
+    // the UI. The 32-char fallback cannot cover it — real keys are
+    // routinely shorter than that.
+    const secret = "sk-ABCDEFGHIJKLMNOP";
+    expect(redactTokens(`model sk-8 rejected; credential ${secret}`)).not.toContain(
+      "ABCDEFGHIJKLMNOP",
+    );
+    expect(redactTokens(`sk-8 ${secret}`)).not.toContain("ABCDEFGHIJKLMNOP");
+  });
+
   it("masks prefixless long keys (mirrors the Rust fallback)", () => {
     const body = "401 invalid api_key: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f";
     const out = redactTokens(body);

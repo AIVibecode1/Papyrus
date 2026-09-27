@@ -12,6 +12,9 @@ interface StatePanelProps {
   tone?: "default" | "destructive" | "dashed";
   /** Quiet empty-state look (muted title, muted icon). */
   muted?: boolean;
+  /** Loading state: announces itself to assistive tech and exposes
+   * `aria-busy` so the spinner is not read as static decoration. */
+  busy?: boolean;
 }
 
 /** One shared pattern for empty / error / loading-adjacent states: a
@@ -24,6 +27,7 @@ export function StatePanel({
   action,
   tone = "default",
   muted = false,
+  busy = false,
 }: StatePanelProps) {
   const frame =
     tone === "destructive"
@@ -33,8 +37,19 @@ export function StatePanel({
         : "border-border";
   return (
     <Card className={frame}>
-      <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-        <div className={muted ? "text-muted-foreground" : undefined}>{icon}</div>
+      <CardContent
+        // A loading panel that only swaps in silently leaves a screen
+        // reader user with no idea work is in progress. `role="status"`
+        // implies aria-live="polite", so the transition into and out of
+        // this state is announced without stealing focus.
+        role={busy ? "status" : undefined}
+        aria-busy={busy || undefined}
+        className="flex flex-col items-center gap-3 py-12 text-center"
+      >
+        {/* The spinner is decorative; the title carries the message. */}
+        <div className={cn(muted && "text-muted-foreground")} aria-hidden={busy || undefined}>
+          {icon}
+        </div>
         <p className={cn("text-sm font-medium", muted && "text-muted-foreground")}>{title}</p>
         {description && <p className="max-w-md text-xs text-muted-foreground">{description}</p>}
         {action && <div className="mt-1">{action}</div>}

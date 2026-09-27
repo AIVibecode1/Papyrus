@@ -17,7 +17,7 @@ const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 3
 /// Where the disk cache lives. Test hook: PAPYRUS_CACHE_DIR overrides the
 /// app data directory (tests cannot construct an AppHandle).
 pub(crate) fn cache_path(app: Option<&tauri::AppHandle>) -> PathBuf {
-    if let Ok(dir) = std::env::var("PAPYRUS_CACHE_DIR") {
+    if let Some(dir) = crate::test_hooks::test_env("PAPYRUS_CACHE_DIR") {
         return PathBuf::from(dir).join(CACHE_FILE_NAME);
     }
     let dir = app
@@ -28,7 +28,7 @@ pub(crate) fn cache_path(app: Option<&tauri::AppHandle>) -> PathBuf {
 
 /// Test hook: PAPYRUS_CACHE_TTL_SECS overrides the freshness window.
 pub(crate) fn cache_ttl() -> std::time::Duration {
-    if let Ok(secs) = std::env::var("PAPYRUS_CACHE_TTL_SECS")
+    if let Some(secs) = crate::test_hooks::test_env("PAPYRUS_CACHE_TTL_SECS")
         && let Ok(secs) = secs.parse::<u64>()
     {
         return std::time::Duration::from_secs(secs);
@@ -103,6 +103,18 @@ static CITATION_CACHE: Mutex<Option<HashMap<String, (u32, i64)>>> = Mutex::new(N
 
 pub(crate) fn cache() -> &'static Mutex<Option<HashMap<String, (u32, i64)>>> {
     &CITATION_CACHE
+}
+
+/// Drops the in-memory session cache. The "Clear cache and saved data"
+/// action deletes the on-disk file; without this the same counts kept being
+/// served from memory until the app restarted, so the button did not do what
+/// it said.
+pub(crate) fn clear_memory_cache() -> Result<(), String> {
+    let mut guard = CITATION_CACHE
+        .lock()
+        .map_err(|_| "Citation cache lock is poisoned".to_string())?;
+    *guard = None;
+    Ok(())
 }
 
 pub(crate) fn now_secs() -> i64 {

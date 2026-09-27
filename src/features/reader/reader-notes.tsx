@@ -1,4 +1,12 @@
-import { Highlighter, Loader2, MessageSquareText, NotebookPen, Plus, Trash2 } from "lucide-react";
+import {
+  AlertCircle,
+  Highlighter,
+  Loader2,
+  MessageSquareText,
+  NotebookPen,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Markdown } from "@/components/markdown/markdown";
@@ -117,6 +125,7 @@ export function ReaderNotes({
   const remove = useNotesStore((s) => s.remove);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const paperNotes = useMemo(() => notesForPaperList(notes, paper.id), [notes, paper.id]);
@@ -125,6 +134,7 @@ export function ReaderNotes({
     const body = draft.trim();
     if (!body) return;
     setSaving(true);
+    setSaveError(false);
     try {
       await upsert({
         paperId: paper.id,
@@ -133,6 +143,11 @@ export function ReaderNotes({
         body,
       });
       setDraft("");
+    } catch {
+      // The store already rolled the optimistic note back, so the list is
+      // correct again. Keep the draft: the user's words are the only copy
+      // left, and clearing them would lose the note with no explanation.
+      setSaveError(true);
     } finally {
       setSaving(false);
     }
@@ -184,6 +199,12 @@ export function ReaderNotes({
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
             {t("notes.save")}
           </Button>
+          {saveError && (
+            <p role="alert" className="flex items-start gap-1.5 text-xs text-destructive">
+              <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              {t("notes.saveError")}
+            </p>
+          )}
         </div>
       </div>
     </div>

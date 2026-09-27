@@ -10,7 +10,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Test hooks: let the unit tests point at local mock servers.
 pub(crate) fn arxiv_url() -> String {
-    std::env::var("PAPYRUS_ARXIV_URL").unwrap_or_else(|_| ARXIV_API.to_string())
+    crate::test_hooks::test_env("PAPYRUS_ARXIV_URL").unwrap_or_else(|| ARXIV_API.to_string())
 }
 
 /// Builds the arXiv API query URL for a category browse, a free-text
@@ -401,7 +401,9 @@ pub fn parse_feed(xml: &str) -> Result<Vec<Paper>, String> {
             .filter_map(|c| c.attribute("term").map(str::to_string))
             .collect();
 
-        if title.is_empty() && summary.is_empty() {
+        // An entry with no <id> is malformed: it would surface as a paper
+        // the user cannot open ("Invalid paper id"). Skip it with the rest.
+        if id.is_empty() || (title.is_empty() && summary.is_empty()) {
             continue; // skip malformed entries
         }
 

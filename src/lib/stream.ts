@@ -55,6 +55,12 @@ export function createStreamBuffer<TState>(
     const buf = pending;
     pending = [];
     if (buf.length === 0) return;
+    // Note: `isCurrent` is deliberately NOT re-checked here. Text already
+    // accepted by `push` belongs to the user and must be committed even
+    // if the run was superseded in the meantime. Deciding whether a late
+    // flush may still touch a slot is the caller's business — the stores
+    // guard their own `apply` with a generation check, which is where
+    // "Stop then Regenerate reuses this index" is actually resolved.
     set((s) => opts.apply(s, buf.join("")));
   };
 
