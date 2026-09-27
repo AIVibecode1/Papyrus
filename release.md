@@ -62,7 +62,11 @@ ESLint, Prettier, strict typecheck, release-integrity checker.
   per entry, re-reading and re-writing the whole file each time (up to
   200 calls). Both are now single batched commands with an entry cap,
   up-front validation and a newer-wins merge.
-- Improved: nine `PAPYRUS_*` test overrides are now compiled out of
+- Fixed: rustls 0.23.43 -> 0.23.45 for RUSTSEC-2026-0285, where TLS 1.3
+  handshake messages could be accepted across encryption level
+  boundaries. It arrived transitively via hyper-rustls; `cargo audit`
+  is now clean.
+- Fixed: nine `PAPYRUS_*` test overrides are now compiled out of
   release builds. Three of them chose where the user's notes, history
   and exports are written, and four redirected every outbound API call;
   anything able to set environment variables for the process could have
