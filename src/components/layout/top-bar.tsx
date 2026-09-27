@@ -36,7 +36,7 @@ export function TopBar() {
                 onClick={() => i18n.changeLanguage(lang.code)}
                 className={cn(
                   "rounded px-2.5 py-1 text-xs font-semibold transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring",
+                  "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:border-ring",
                   i18n.language === lang.code
                     ? "border bg-background text-foreground"
                     : "text-muted-foreground hover:text-foreground",

@@ -38,8 +38,15 @@ export function ReaderHeader({
         <ArrowLeft className="size-4 rtl:rotate-180" />
       </Button>
       <div className="min-w-0 flex-1">
-        <h1 dir="ltr" className="truncate text-sm font-semibold tracking-tight">
-          {title}
+        {/* `dir` goes on the inner span, not the block. A Latin paper title
+            does need LTR, but putting it on the block also flips the
+            block's own `text-align: start` to the left — so in an Arabic
+            header the title hugged the far left with ~900px of dead space
+            to its right, while the back button sat on the right. Isolating
+            just the text keeps the title LTR and the block aligned to the
+            reading start edge. */}
+        <h1 className="truncate text-sm font-semibold tracking-tight">
+          <span dir="ltr">{title}</span>
         </h1>
       </div>
       {busy && (

@@ -46,6 +46,7 @@ import { extractTextFromPdf } from "@/lib/pdf-text";
 import { stopExplanation } from "@/lib/ai";
 import { streamAsk, streamSectionExplanation, streamSynthesis } from "@/lib/reader-ai";
 import { useReaderStore } from "@/stores/reader";
+import { CHAT_STORAGE_KEY } from "@/stores/reader-persist";
 import type { ChatMessage } from "@/stores/reader";
 
 const paper: Paper = {
@@ -124,6 +125,42 @@ describe("reader store", () => {
 
     await useReaderStore.getState().ensureExtracted();
     expect(extractTextFromPdf).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reuse ids from a chat restored in an earlier session", async () => {
+    // `messageId` is module scope, so it survived the app restart while the
+    // restored chat brought its old ids back from localStorage. Asking a
+    // question then allocated id 1 against a transcript that already had
+    // one, and the streamed answer was written into the OLD assistant
+    // bubble while the new one spun forever.
+    localStorage.setItem(
+      CHAT_STORAGE_KEY,
+      JSON.stringify({
+        [paper.id]: [
+          { id: 1, role: "user", text: "old question", status: "done" },
+          { id: 2, role: "assistant", text: "old answer", status: "done" },
+        ],
+      }),
+    );
+
+    await useReaderStore.getState().open(paper);
+    const restored = useReaderStore.getState().chat;
+    expect(restored.map((m) => m.id)).toEqual([1, 2]);
+
+    vi.mocked(streamAsk).mockImplementation(chunkStream(["fresh ", "answer"]));
+    await useReaderStore.getState().ask("a new question", provider, "en");
+
+    const chat = useReaderStore.getState().chat;
+    // Four distinct ids: nothing was overwritten.
+    expect(new Set(chat.map((m) => m.id)).size).toBe(4);
+    // The old messages are untouched...
+    expect(chat[0].text).toBe("old question");
+    expect(chat[1].text).toBe("old answer");
+    // ...and the new pair resolved rather than loading forever.
+    expect(chat[2].text).toBe("a new question");
+    expect(chat[3].text).toBe("fresh answer");
+    expect(chat[3].status).toBe("done");
+    expect(chat.some((m: ChatMessage) => m.status === "loading")).toBe(false);
   });
 
   it("extraction failure is reported by ensureExtracted, not by open", async () => {

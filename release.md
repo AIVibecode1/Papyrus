@@ -19,6 +19,88 @@ Rules:
 
 ---
 
+## v1.1.12 - 2026-09-27
+
+Status: in progress; installers not yet built.
+Built from: `main` (unreleased)
+Quality gates: pending — run `pnpm run typecheck`, `pnpm run lint`,
+`pnpm run format:check`, `pnpm run test`, `pnpm run test:dev` and
+`cargo test` before tagging.
+
+- Fixed: PDF text extraction collapsed every page into one
+  whitespace-normalized line, so no heading was ever detectable. The
+  Mentor walkthrough silently degraded to cutting the paper at arbitrary
+  character counts, and Ask was grounded in text that never existed as
+  written. Extraction now reconstructs the page from pdf.js item
+  geometry: lines grouped by baseline, two-column papers read in column
+  order, full-width headings kept whole, hyphenated line wraps rejoined,
+  and ligatures and curly punctuation folded to ASCII. Verified on a
+  real 15-page two-column arXiv paper: 1 line / 1 section became 9
+  blocks / 12 sections with a correct outline.
+- Fixed: a title page's author grid was read as two columns, which
+  reordered the byline and repeated shared affiliations. Column
+  detection now requires both sides to span at least a quarter of the
+  page height; author grids, pull quotes and indented lists fall back to
+  positional order.
+- Fixed: page furniture consumed the capped section budget. The arXiv
+  licence stamp, the byline and author emails each took a slot, so the
+  walkthrough ran out before Training, Results and Conclusion. Bare
+  page numbers, standalone emails and the arXiv attribution notice are
+  now stripped.
+- Fixed: Ctrl/Cmd+C in the reader hijacked the clipboard whenever
+  anything was selected, so copying from the AI panel, a note or a
+  citation copied the PDF selection instead. The shortcut now yields to
+  a deliberate DOM selection and still handles the PDF text layer.
+- Fixed: a slow "load more" page from the previous search could land in
+  the feed after the query was cleared. Clearing the search now goes
+  through the same reset that drops stale field switches.
+- Fixed: a destructive confirmation in Settings autofocused the
+  destructive button, so a held Enter key could wipe reading history or
+  cached data unread. Cancel takes focus, Escape dismisses, and focus
+  returns to the button that opened the prompt.
+- Fixed: opening a note whose paper could not be resolved did nothing,
+  with no message. Notes now report the failure inline in the UI
+  language.
+- Security: a stored API key could be sent to a host chosen by the
+  caller. The key is only readable by Rust, but the base URL arrived
+  from the webview on every call, so a compromised webview could name a
+  real provider id and have the backend send that key elsewhere as a
+  bearer token. The key is now bound to its base URL at save time, in
+  app data the webview cannot write, and every call resolves the URL
+  through that binding. Custom base URLs are unchanged for users.
+- Fixed: every day label showed the wrong day in western-offset
+  timezones. `formatDay` appended `T00:00:00Z` but `Intl.DateTimeFormat`
+  renders in the machine's timezone, so in America/New_York — where UTC
+  midnight is 20:00 the previous day — `2026-07-31` printed as "Jul 30".
+  A calendar day is now formatted pinned to UTC, so the label always
+  equals the stored key.
+- Fixed: reopening a paper with a saved chat transcript corrupted it.
+  Message ids come from a module-scope counter that kept counting from 1
+  across sessions, while the restored chat brought its old ids back from
+  storage. A new question allocated ids that already existed, so the
+  answer was written into an old assistant bubble, the new one spun
+  forever, and the corruption was persisted. New ids now start past the
+  highest id already in the chat.
+- Fixed: focus rings were invisible on inputs, textareas, selects,
+  badges, the search-clear button, the top bar, the sidebar and today's
+  picks. At half alpha they measured 2.08:1-2.76:1, under the 3:1 that
+  WCAG 1.4.11 requires. All eight now use the solid ring, and a new
+  inventory test fails on any reduced-alpha ring.
+- Fixed: in Arabic both chat roles rendered on the right, because
+  `self-start` resolves to the right in RTL and the user's `rtl:self-start`
+  did too. The assistant now uses `rtl:self-end`.
+- Fixed: the paper title hugged the far left of an Arabic reader header.
+  `dir="ltr"` belonged on an inner span, not on the heading block, which
+  was also flipping the block's own text alignment.
+- Fixed: a corrupt saved-providers blob was a silent dead end. The store
+  correctly refused writes so the unreadable data was not overwritten,
+  but no component read the error, so adding a provider closed the form
+  and no card appeared. Settings now explains the situation and offers a
+  confirmed way to start a fresh list; API keys in the keychain are not
+  touched.
+
+---
+
 ## v1.1.11 - 2026-09-27
 
 Status: tagged; CI builds the installers onto the draft GitHub release.

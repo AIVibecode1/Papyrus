@@ -57,13 +57,19 @@ export function AskPanel({
                   key={m.id}
                   className={cn(
                     "max-w-[95%] rounded-lg p-3",
-                    // The user's question sits on the reading
-                    // start side: right in LTR, and right again
-                    // in RTL (self-end would flip it to the
-                    // left in Arabic).
+                    // The two roles must resolve to OPPOSITE edges in both
+                    // directions. `self-start`/`self-end` are logical: in a
+                    // column flex container the cross axis is horizontal and
+                    // follows `direction`, so in RTL `self-start` is the
+                    // right and `self-end` the left. The user is pinned to
+                    // the right in both (self-end in LTR, rtl:self-start in
+                    // Arabic); the assistant therefore needs
+                    // rtl:self-end, not a bare self-start — a bare one
+                    // resolved to the right too, stacking both roles on the
+                    // same side of an Arabic transcript.
                     m.role === "user"
                       ? "self-end bg-primary/10 rtl:self-start"
-                      : "self-start border bg-card",
+                      : "self-start border bg-card rtl:self-end",
                   )}
                 >
                   {m.role === "assistant" && m.text.length === 0 && m.status === "loading" && (

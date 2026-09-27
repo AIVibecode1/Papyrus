@@ -512,4 +512,42 @@ describe("papers store", () => {
     );
     await Promise.resolve();
   });
+
+  it("clearSearch drops a loadMore page still in flight for the old query", async () => {
+    // Page 2 of the search is in flight when the user clears the query.
+    usePapersStore.setState({ query: "attention", papers: [aiPaper] });
+    let resolveMore!: (result: FetchPapersResult) => void;
+    vi.mocked(fetchPapers).mockImplementationOnce(
+      () => new Promise<FetchPapersResult>((resolve) => (resolveMore = resolve)),
+    );
+
+    const more = usePapersStore.getState().loadMore();
+    usePapersStore.getState().clearSearch();
+    resolveMore({ papers: [lgPaper], fallbackNote: null });
+    await more;
+    await Promise.resolve();
+
+    // The stale search result must not reappear in the restored feed.
+    expect(usePapersStore.getState().papers.map((p) => p.id)).not.toContain("lg1");
+  });
+
+  it("clearSearch drops a citation batch still in flight for the old query", async () => {
+    usePapersStore.setState({ query: "attention", papers: [aiPaper] });
+    let resolveCitations!: (value: { counts: Record<string, number>; reachable: boolean }) => void;
+    vi.mocked(fetchCitations).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveCitations = resolve)) as never,
+    );
+
+    usePapersStore.getState().loadCitations(["ai1"]);
+    usePapersStore.getState().clearSearch();
+    resolveCitations({ counts: { ai1: 99 }, reachable: false });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Old list's counts must not land in the cleared, never-queried map,
+    // and must not report the citation source unreachable for it.
+    expect(usePapersStore.getState().citations).toEqual({});
+    expect(usePapersStore.getState().citationsReachable).toBe(true);
+    expect(usePapersStore.getState().citationsLoading).toBe(false);
+  });
 });

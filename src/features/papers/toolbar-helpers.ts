@@ -1,8 +1,8 @@
 import type { TFunction } from "i18next";
-import { formatUiDate } from "@/lib/dates";
+import { formatCalendarDay } from "@/lib/dates";
 
 export function formatDay(date: string, language: string): string {
-  return formatUiDate(`${date}T00:00:00Z`, language, { month: "short", day: "numeric" });
+  return formatCalendarDay(date, language, { month: "short", day: "numeric" });
 }
 
 /** Inclusive years label for the status line (e.g. "2010–2016"). */

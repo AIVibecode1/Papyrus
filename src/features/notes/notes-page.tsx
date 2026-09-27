@@ -27,6 +27,7 @@ export function NotesPage() {
   const favorites = useFavoritesStore((s) => s.byId);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
 
   const visible = useMemo(
     () => filterNotes(notes, filterPaperId, query),
@@ -45,12 +46,23 @@ export function NotesPage() {
 
   const handleOpen = async (note: PaperNote) => {
     setOpeningId(note.id);
+    setOpenError(null);
     try {
       const paper = favorites[note.paperId] ?? (await resolvePaper(note.paperId));
       if (paper) {
         await openReader(paper);
         setView("reader");
+        return;
       }
+      // A dead end must say so. S2 ids cannot be resolved through arXiv
+      // and an unfavorited arXiv paper can be gone from the feed, so
+      // resolvePaper returning null is routine, not exceptional — the
+      // button used to do nothing at all, which reads as a broken app.
+      setOpenError(t("notes.openPaperUnavailable"));
+    } catch (err) {
+      setOpenError(
+        t("notes.openPaperUnavailable") + (err instanceof Error ? ` (${err.message})` : ""),
+      );
     } finally {
       setOpeningId(null);
     }
@@ -91,6 +103,16 @@ export function NotesPage() {
           className="ps-8"
         />
       </div>
+
+      {openError && (
+        <p
+          role="alert"
+          className="mt-3 flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          {openError}
+        </p>
+      )}
 
       <div className="mt-4 flex flex-col gap-3">
         {!loaded ? (

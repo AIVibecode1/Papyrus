@@ -98,7 +98,7 @@ export function PapersSearchField({
           onClick={onClear}
           aria-label={t("papers.clearSearch")}
           title={t("papers.clearSearch")}
-          className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
         >
           <X className="size-3.5" />
         </button>

@@ -42,6 +42,9 @@ interface SettingsState {
    * persisting the empty in-memory list would destroy it. */
   loadError: string | null;
   load: () => void;
+  /** Discards an unreadable provider blob and starts a fresh list. Only the
+   * user may call this: it is the one action that can destroy the old blob. */
+  discardUnreadableProviders: () => void;
   addProvider: (p: ProviderConfig) => void;
   updateProvider: (p: ProviderConfig) => void;
   removeProvider: (id: string) => void;
@@ -83,6 +86,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }
   },
 
+  discardUnreadableProviders: () => {
+    // The user chose to start over. API keys are NOT touched: they live in
+    // the OS keychain under their own ids, so a provider can be re-added
+    // and re-pointed at its existing key.
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_KEY);
+    set({ providers: [], activeProviderId: null, loaded: true, loadError: null });
+  },
+
   addProvider: (p) =>
     set((s) => {
       // Refuse to persist over an unreadable blob. The user's providers are
@@ -121,7 +133,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   saveKey: async (providerId, key) => {
     if (isTauri()) {
-      await invoke("save_api_key", { providerId, key });
+      // The backend binds the key to this base URL, so the stored key is
+      // only ever sent to the host the user saved it for — a caller
+      // cannot later point a real provider id at a host of its choosing.
+      const provider = get().providers.find((p) => p.id === providerId);
+      await invoke("save_api_key", {
+        providerId,
+        key,
+        baseUrl: provider?.baseUrl ?? null,
+      });
     } else {
       setBrowserKey(providerId, key);
     }

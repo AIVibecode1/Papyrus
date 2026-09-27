@@ -38,6 +38,16 @@ export function useCopySelection() {
       if (typing) return;
       const selection = useReaderStore.getState().selection;
       if (!selection) return;
+      // A non-collapsed DOM selection is a deliberate user action — the
+      // AI panel, the note body, a citation. The browser's own copy would
+      // take that text; hijacking the event here would silently put the
+      // PDF quote on the clipboard instead, with no undo. The PDF text
+      // layer is exactly the case that is NOT a DOM selection, which is
+      // why the quote still needs this shortcut.
+      const dom = window.getSelection();
+      if (dom && !dom.isCollapsed && (dom.toString().trim().length > 0 || dom.rangeCount > 0)) {
+        return;
+      }
       e.preventDefault();
       void copySelection();
     };

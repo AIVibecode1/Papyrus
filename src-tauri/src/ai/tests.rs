@@ -239,6 +239,7 @@ fn run_failover(providers: &[ProviderConfig], cancel: &AtomicBool) -> Result<Str
         .unwrap()
         .block_on(explain_with_failover(
             cancel,
+            None,
             providers,
             &sample_paper(),
             "en",
@@ -314,6 +315,7 @@ fn failover_does_not_retry_after_first_chunk() {
         .unwrap()
         .block_on(explain_with_failover(
             &cancel,
+            None,
             &providers,
             &sample_paper(),
             "en",

@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderConfig } from "@/lib/types";
 
-const { isTauriMock, browserKeys } = vi.hoisted(() => ({
+const { isTauriMock, browserKeys, invokeMock } = vi.hoisted(() => ({
   isTauriMock: vi.fn(() => false),
   browserKeys: new Map<string, string>(),
+  invokeMock: vi.fn(async () => undefined),
 }));
+
+// The Tauri bridge is mocked rather than stubbed: ESM exports are not
+// configurable, so vi.spyOn cannot replace `invoke` after import.
+vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
 // isTauri() is mocked false so the browser path runs; the in-memory browser
 // key store lives here in the mock (mirrors @/lib/ai's browserKeys map).
@@ -57,6 +62,7 @@ describe("settings store", () => {
   beforeEach(() => {
     localStorageMock.clear();
     browserKeys.clear();
+    invokeMock.mockClear();
     useSettingsStore.setState({
       providers: [],
       activeProviderId: null,
@@ -132,6 +138,36 @@ describe("settings store", () => {
   it("saveKey then hasKey is true (browser path)", async () => {
     await useSettingsStore.getState().saveKey(provider.id, "sk-test");
     expect(await useSettingsStore.getState().hasKey(provider.id)).toBe(true);
+  });
+
+  it("binds the key to the provider's base URL on the Tauri path", async () => {
+    // The key lives in the OS keychain and only Rust can read it, so the
+    // backend records which host it may be sent to. If saveKey did not
+    // pass the base URL, a stored key could later be redirected to a
+    // host of a caller's choosing.
+    isTauriMock.mockReturnValue(true);
+    useSettingsStore.setState({ providers: [provider] });
+    await useSettingsStore.getState().saveKey(provider.id, "sk-secret");
+
+    expect(invokeMock).toHaveBeenCalledWith("save_api_key", {
+      providerId: "prov1",
+      key: "sk-secret",
+      baseUrl: "https://example.com/v1",
+    });
+    isTauriMock.mockReturnValue(false);
+  });
+
+  it("binds to null when the provider id is not in the store", async () => {
+    isTauriMock.mockReturnValue(true);
+    useSettingsStore.setState({ providers: [] });
+    await useSettingsStore.getState().saveKey("ghost", "sk-x");
+
+    expect(invokeMock).toHaveBeenCalledWith("save_api_key", {
+      providerId: "ghost",
+      key: "sk-x",
+      baseUrl: null,
+    });
+    isTauriMock.mockReturnValue(false);
   });
 
   it("deleteKey makes hasKey false", async () => {

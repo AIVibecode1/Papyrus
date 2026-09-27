@@ -95,6 +95,7 @@
     "loadError": "Could not load notes.",
     "saveError": "Could not save the note. Your text is still here — try again.",
     "openPaper": "Open paper",
+    "openPaperUnavailable": "Could not open this paper. It may no longer be available from the source it came from. Favoriting it while you still have it open lets you reach it from here later.",
     "page": "Page {{page}}",
     "deleted": "Note deleted",
     "askAbout": "Ask about this note"
@@ -202,6 +203,9 @@
   "settings": {
     "title": "Settings",
     "back": "Back to papers",
+    "providersUnreadable": "Saved providers could not be read",
+    "providersUnreadableHint": "Papyrus has paused provider changes so the unreadable data is not overwritten. Your API keys are still safe in the OS keychain. Start a fresh list to add providers again.",
+    "providersDiscard": "Start a fresh list",
     "securityNote": "API keys are stored in your OS keychain (Windows Credential Manager / macOS Keychain). Papyrus only sends them to the provider you configured — never to anyone else.",
     "providers": "AI Providers",
     "addProvider": "Add provider",

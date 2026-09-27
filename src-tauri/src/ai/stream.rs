@@ -51,6 +51,28 @@ async fn read_capped(response: reqwest::Response) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
+/// The chat URL actually used for `provider`.
+///
+/// The key for a provider lives in the OS keychain and is only ever read
+/// here, in Rust. The base URL, however, rides in with every call from the
+/// webview. Trusting it would let a compromised webview name a real
+/// provider id, point `baseUrl` at a host it controls, and have the
+/// backend send that provider's key there as a bearer token.
+///
+/// So the host is pinned at save time (see `provider_urls`): the URL the
+/// user saved with their key wins, and a caller asking for a different
+/// one is refused rather than obeyed. A provider with no binding (an
+/// install that predates this, or one mid-add) still validates normally.
+pub(crate) fn resolve_chat_url(
+    app: Option<&tauri::AppHandle>,
+    provider: &ProviderConfig,
+) -> Result<String, String> {
+    match super::provider_urls::bound_url(app, &provider.id) {
+        Some(bound) => Ok(bound),
+        None => build_chat_url(&provider.base_url),
+    }
+}
+
 /// Normalizes a user-provided base URL into a full chat-completions URL.
 ///
 /// HTTPS is required for any remote host; plaintext `http://` is only
@@ -345,6 +367,7 @@ pub(crate) fn validate_provider(provider: &ProviderConfig) -> Result<(), String>
 /// text is already on screen.
 pub(crate) async fn explain_with_failover(
     cancel_flag: &AtomicBool,
+    app: Option<&tauri::AppHandle>,
     providers: &[ProviderConfig],
     paper: &Paper,
     language: &str,
@@ -371,7 +394,7 @@ pub(crate) async fn explain_with_failover(
                 continue;
             }
         };
-        let url = match build_chat_url(&provider.base_url) {
+        let url = match resolve_chat_url(app, provider) {
             Ok(u) => u,
             Err(e) => {
                 failures.push(format!("{}: {e}", provider.name));
@@ -421,13 +444,14 @@ pub(crate) async fn explain_with_failover(
 /// cancellation flag and timeout of the main explain command.
 pub(crate) async fn stream_messages(
     cancel_flag: &AtomicBool,
+    app: Option<&tauri::AppHandle>,
     provider: &ProviderConfig,
     messages: Vec<Value>,
     on_chunk: Channel<String>,
 ) -> Result<(), String> {
     validate_provider(provider)?;
     let key = load_key(provider)?;
-    let url = build_chat_url(&provider.base_url)?;
+    let url = resolve_chat_url(app, provider)?;
     let client = shared_client();
     let body = json!({
         "model": provider.model,

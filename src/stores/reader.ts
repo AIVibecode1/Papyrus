@@ -62,6 +62,30 @@ interface ReaderState {
 
 let messageId = 1;
 
+/**
+ * The largest numeric id in a chat, or 0 when it holds none.
+ *
+ * Chat ids come from a module-scope counter but are persisted with the
+ * transcript, so a restored chat carries ids the current session has never
+ * seen. Anything that allocates a new id has to start past the highest one
+ * already in the chat, or `findIndex(m => m.id === ...)` will match an
+ * older message and write into it. Non-numeric or missing ids are ignored
+ * rather than trusted: `NaN` would poison the running maximum.
+ */
+function highestChatId(chat: { id?: number }[]): number {
+  let highest = 0;
+  for (const message of chat) {
+    if (
+      typeof message.id === "number" &&
+      Number.isSafeInteger(message.id) &&
+      message.id > highest
+    ) {
+      highest = message.id;
+    }
+  }
+  return highest;
+}
+
 export const useReaderStore = create<ReaderState>((set, get) => {
   // Generation counters: bumping one invalidates in-flight chunks from
   // a superseded run (same pattern as the explanation store).
@@ -406,6 +430,15 @@ export const useReaderStore = create<ReaderState>((set, get) => {
       const gen = ++chatGen;
       // Both messages get real counter ids: deriving the assistant id as
       // id + 1 would collide with the next question's id.
+      //
+      // The counter must also start past every id already in the chat. A
+      // restored transcript brings its own numeric ids back from storage,
+      // and `messageId` is module scope — it kept counting from 1 across
+      // sessions, so asking a question in a reopened paper allocated ids
+      // that already existed. The next `findIndex(m => m.id === assistantId)`
+      // then wrote the streamed answer into an OLD assistant bubble, left
+      // the new one spinning forever, and persisted the corruption.
+      messageId = Math.max(messageId, highestChatId(get().chat) + 1);
       const id = messageId++;
       const assistantId = messageId++;
       const selectionSnapshot = selection;

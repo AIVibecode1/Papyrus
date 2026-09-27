@@ -176,9 +176,12 @@ export const usePapersStore = create<PapersState>((set, get) => {
 
     clearSearch: () => {
       if (!get().query && get().searchField === "all") return;
-      set({ query: "", searchField: "all", papers: [], citations: {}, error: null });
       writeSearchField("all");
-      void get().refresh();
+      // Same scope change as a category switch: it must invalidate the
+      // in-flight loadMore and citation batch the *search* started, or a
+      // page that lands after the clear is appended to the restored feed
+      // and the old list's counts land in the cleared map.
+      resetList({ query: "", searchField: "all" });
     },
 
     clearFallbackNote: () => set({ fallbackNote: null }),

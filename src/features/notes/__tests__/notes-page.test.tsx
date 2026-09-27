@@ -92,6 +92,21 @@ describe("NotesPage", () => {
     expect(useNotesStore.getState().notes).toEqual([]);
   });
 
+  it("explains why a paper could not be opened instead of doing nothing", async () => {
+    // An unfavorited Semantic Scholar paper can never be resolved (arXiv
+    // has no such id), so the Open button had no reachable target. The
+    // dead end must be visible, not silent.
+    useNotesStore.setState({
+      notes: [makeNote({ paperId: "s2:abc", paperTitle: "A paper from Scholar" })],
+      loaded: true,
+    });
+    render(<NotesPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open paper" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Could not open this paper/);
+  });
+
   it("keeps quotes LTR and chrome logical inside the RTL layout", () => {
     useNotesStore.setState({
       notes: [makeNote({ kind: "highlight", quote: "we call it attention", body: "" })],

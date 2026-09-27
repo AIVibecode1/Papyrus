@@ -8,10 +8,11 @@ use crate::ai::keychain::{KEYRING_SERVICE, delete_key, get_key, load_key, set_ke
 use crate::ai::prompts::{
     ChatTurn, build_qa_messages, build_section_messages, build_synthesis_messages,
 };
+use crate::ai::provider_urls;
 use crate::ai::registry::{cancel_operation, register_operation, unregister_operation};
 use crate::ai::stream::{
-    TEST_TIMEOUT, build_chat_url, explain_with_failover, stream_chat, stream_messages,
-    validate_provider,
+    TEST_TIMEOUT, build_chat_url, explain_with_failover, resolve_chat_url, stream_chat,
+    stream_messages, validate_provider,
 };
 use crate::papers::{Paper, shared_client};
 
@@ -24,6 +25,7 @@ use crate::papers::{Paper, shared_client};
 // The argument list is the IPC contract between the frontend and Rust.
 #[allow(clippy::too_many_arguments)]
 pub async fn explain_paper(
+    app: tauri::AppHandle,
     operation_id: String,
     providers: Vec<ProviderConfig>,
     paper: Paper,
@@ -31,10 +33,17 @@ pub async fn explain_paper(
     on_chunk: Channel<String>,
 ) -> Result<String, String> {
     let flag = register_operation(&operation_id);
-    let result = explain_with_failover(&flag, &providers, &paper, &language, &mut |c| {
-        let _ = on_chunk.send(c.to_string());
-    })
-    .await;
+    let result =
+        explain_with_failover(&flag, Some(&app), &providers, &paper, &language, &mut |c| {
+            if on_chunk.send(c.to_string()).is_err() {
+                // The webview is gone (window closed). Cancel rather than
+                // keep streaming into the void for the rest of the timeout,
+                // burning a connection and provider tokens for output nobody
+                // will ever read.
+                cancel_operation(&operation_id);
+            }
+        })
+        .await;
     unregister_operation(&operation_id);
     result
 }
@@ -45,10 +54,13 @@ pub async fn explain_paper(
 /// text is already on screen.
 /// Sends a minimal request to verify a provider configuration.
 #[tauri::command]
-pub async fn test_provider(provider: ProviderConfig) -> Result<String, String> {
+pub async fn test_provider(
+    app: tauri::AppHandle,
+    provider: ProviderConfig,
+) -> Result<String, String> {
     validate_provider(&provider)?;
     let key = load_key(&provider)?;
-    let url = build_chat_url(&provider.base_url)?;
+    let url = resolve_chat_url(Some(&app), &provider)?;
     let client = shared_client();
 
     let body = json!({
@@ -88,6 +100,7 @@ pub fn stop_explaining(operation_id: String) {
 // The argument list is the IPC contract between the frontend and Rust.
 #[allow(clippy::too_many_arguments)]
 pub async fn explain_section(
+    app: tauri::AppHandle,
     operation_id: String,
     provider: ProviderConfig,
     paper: Paper,
@@ -105,7 +118,7 @@ pub async fn explain_section(
         &language,
     );
     let flag = register_operation(&operation_id);
-    let result = stream_messages(&flag, &provider, messages, on_chunk).await;
+    let result = stream_messages(&flag, Some(&app), &provider, messages, on_chunk).await;
     unregister_operation(&operation_id);
     result
 }
@@ -114,6 +127,7 @@ pub async fn explain_section(
 /// Final synthesis after all sections were walked through.
 #[tauri::command]
 pub async fn explain_synthesis(
+    app: tauri::AppHandle,
     operation_id: String,
     provider: ProviderConfig,
     paper: Paper,
@@ -123,7 +137,7 @@ pub async fn explain_synthesis(
 ) -> Result<(), String> {
     let messages = build_synthesis_messages(&paper, &sections_text, &language);
     let flag = register_operation(&operation_id);
-    let result = stream_messages(&flag, &provider, messages, on_chunk).await;
+    let result = stream_messages(&flag, Some(&app), &provider, messages, on_chunk).await;
     unregister_operation(&operation_id);
     result
 }
@@ -138,6 +152,7 @@ pub async fn explain_synthesis(
 // of the fields the webview must send.
 #[allow(clippy::too_many_arguments)]
 pub async fn ask_about_paper(
+    app: tauri::AppHandle,
     operation_id: String,
     provider: ProviderConfig,
     paper: Paper,
@@ -157,20 +172,37 @@ pub async fn ask_about_paper(
         &language,
     );
     let flag = register_operation(&operation_id);
-    let result = stream_messages(&flag, &provider, messages, on_chunk).await;
+    let result = stream_messages(&flag, Some(&app), &provider, messages, on_chunk).await;
     unregister_operation(&operation_id);
     result
 }
 
 /// Saves an API key to the OS keychain (Windows Credential Manager / macOS Keychain).
-/// Saves an API key to the OS keychain (Windows Credential Manager / macOS Keychain).
+///
+/// `base_url` is recorded alongside the key (see `provider_urls`): from then
+/// on the backend sends that key only to the host the user saved it for, so
+/// a compromised webview cannot redirect a stored key to a host of its
+/// choosing by passing a different `baseUrl` on a later call. Omitting it
+/// (`None`) leaves any existing binding untouched.
 #[tauri::command]
-pub async fn save_api_key(provider_id: String, key: String) -> Result<(), String> {
+pub async fn save_api_key(
+    app: tauri::AppHandle,
+    provider_id: String,
+    key: String,
+    base_url: Option<String>,
+) -> Result<(), String> {
     if provider_id.is_empty() || provider_id.len() > 64 {
         return Err("Invalid provider id".into());
     }
     if key.trim().is_empty() {
         return Err("API key cannot be empty".into());
+    }
+    if let Some(base) = base_url.as_deref() {
+        // Validate BEFORE the key is stored, so an unusable URL is
+        // rejected while the user can still see why, and never leaves a
+        // key bound to a host that cannot serve it.
+        let chat_url = build_chat_url(base)?;
+        provider_urls::save_binding(Some(&app), &provider_id, &chat_url)?;
     }
     set_key(KEYRING_SERVICE, &provider_id, key.trim())
 }
@@ -178,7 +210,8 @@ pub async fn save_api_key(provider_id: String, key: String) -> Result<(), String
 /// Removes a stored API key from the OS keychain.
 /// Removes a stored API key from the OS keychain.
 #[tauri::command]
-pub async fn delete_api_key(provider_id: String) -> Result<(), String> {
+pub async fn delete_api_key(app: tauri::AppHandle, provider_id: String) -> Result<(), String> {
+    provider_urls::delete_binding(Some(&app), &provider_id);
     delete_key(KEYRING_SERVICE, &provider_id)
 }
 

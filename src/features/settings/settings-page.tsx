@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Plus, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,8 +28,16 @@ export function SettingsPage() {
   const { theme, setThemeTo, arabicFont, setArabicFontTo } = useTheme();
   const source = usePapersStore((s) => s.source);
   const setSource = usePapersStore((s) => s.setSource);
-  const { providers, activeProviderId, removeProvider, setActiveProvider, deleteKey, hasKey } =
-    useSettingsStore();
+  const {
+    providers,
+    activeProviderId,
+    removeProvider,
+    setActiveProvider,
+    deleteKey,
+    hasKey,
+    loadError,
+    discardUnreadableProviders,
+  } = useSettingsStore();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -38,6 +46,8 @@ export function SettingsPage() {
   const [initialPreset, setInitialPreset] = useState<string | undefined>(undefined);
   const [keyStates, setKeyStates] = useState<Record<string, boolean>>({});
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  /** Two-step confirm before discarding an unreadable provider blob. */
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const refreshKeyStates = () => {
     for (const p of providers) {
@@ -100,6 +110,47 @@ export function SettingsPage() {
         </Button>
         <h1 className="text-xl font-semibold">{t("settings.title")}</h1>
       </div>
+
+      {loadError && (
+        <div
+          role="alert"
+          className="mt-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm"
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">{t("settings.providersUnreadable")}</p>
+              <p className="mt-1 text-muted-foreground">{t("settings.providersUnreadableHint")}</p>
+              {confirmDiscard ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      discardUnreadableProviders();
+                      setConfirmDiscard(false);
+                    }}
+                  >
+                    {t("settings.providersDiscard")}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmDiscard(false)}>
+                    {t("common.cancel")}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setConfirmDiscard(true)}
+                >
+                  {t("settings.providersDiscard")}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
         <ShieldCheck className="size-4 shrink-0" />

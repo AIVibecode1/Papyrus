@@ -10,6 +10,7 @@ use serde_json::json;
 pub(crate) mod commands;
 mod keychain;
 mod prompts;
+pub(crate) mod provider_urls;
 mod registry;
 mod stream;
 

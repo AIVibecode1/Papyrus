@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Clock, Download, Loader2, Trash2, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
@@ -26,6 +26,51 @@ export function DataSection() {
   const [confirmHistoryClear, setConfirmHistoryClear] = useState(false);
   const [clearingHistory, setClearingHistory] = useState(false);
   const [historyMessage, setHistoryMessage] = useState<string | null>(null);
+
+  // Focus handling for the two destructive confirmations. The cancel
+  // button is the focus target (never the wipe), focus returns to the
+  // trigger when the prompt closes, and Escape abandons it — the same
+  // contract a dialog has, without pretending to be one.
+  const clearTriggerRef = useRef<HTMLButtonElement>(null);
+  const clearCancelRef = useRef<HTMLButtonElement>(null);
+  const historyTriggerRef = useRef<HTMLButtonElement>(null);
+  const historyCancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (confirmClear) clearCancelRef.current?.focus();
+  }, [confirmClear]);
+
+  useEffect(() => {
+    if (confirmHistoryClear) historyCancelRef.current?.focus();
+  }, [confirmHistoryClear]);
+
+  useEffect(() => {
+    if (!confirmClear && !confirmHistoryClear) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      if (confirmClear) {
+        setConfirmClear(false);
+        clearTriggerRef.current?.focus();
+      }
+      if (confirmHistoryClear) {
+        setConfirmHistoryClear(false);
+        historyTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [confirmClear, confirmHistoryClear]);
+
+  const dismissClear = () => {
+    setConfirmClear(false);
+    clearTriggerRef.current?.focus();
+  };
+
+  const dismissHistoryClear = () => {
+    setConfirmHistoryClear(false);
+    historyTriggerRef.current?.focus();
+  };
 
   const handleImportFile = async (file: File | undefined) => {
     if (!file) return;
@@ -151,6 +196,7 @@ export function DataSection() {
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">{t("settings.clearDataHint")}</p>
           <Button
+            ref={clearTriggerRef}
             size="sm"
             variant="outline"
             className="shrink-0 text-destructive"
@@ -167,7 +213,6 @@ export function DataSection() {
               <Button
                 variant="destructive"
                 size="sm"
-                autoFocus
                 onClick={() => void handleClear()}
                 disabled={clearing}
               >
@@ -178,10 +223,16 @@ export function DataSection() {
                 )}
                 {clearing ? t("settings.clearing") : t("settings.clearConfirm")}
               </Button>
+              {/* Focus lands on Cancel, never on the destructive button.
+                  The keyboard user who just pressed Enter to open this
+                  prompt is still on Enter: autofocusing the wipe made a
+                  reflexive second Enter delete every note, favorite and
+                  highlight. */}
               <Button
+                ref={clearCancelRef}
                 variant="ghost"
                 size="sm"
-                onClick={() => setConfirmClear(false)}
+                onClick={dismissClear}
                 disabled={clearing}
               >
                 {t("settings.cancel")}
@@ -202,6 +253,7 @@ export function DataSection() {
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">{t("settings.clearHistoryHint")}</p>
           <Button
+            ref={historyTriggerRef}
             size="sm"
             variant="outline"
             className="shrink-0 text-destructive"
@@ -218,7 +270,6 @@ export function DataSection() {
               <Button
                 variant="destructive"
                 size="sm"
-                autoFocus
                 onClick={() => void handleClearHistory()}
                 disabled={clearingHistory}
               >
@@ -229,10 +280,12 @@ export function DataSection() {
                 )}
                 {clearingHistory ? t("settings.clearing") : t("settings.clearConfirm")}
               </Button>
+              {/* Same rule as the big clear: Cancel takes the focus. */}
               <Button
+                ref={historyCancelRef}
                 variant="ghost"
                 size="sm"
-                onClick={() => setConfirmHistoryClear(false)}
+                onClick={dismissHistoryClear}
                 disabled={clearingHistory}
               >
                 {t("settings.cancel")}

@@ -27,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(async () => {}),
   providers: [] as ProviderConfig[],
   activeProviderId: null as string | null,
+  loadError: null as string | null,
+  discardUnreadableProviders: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
@@ -51,6 +53,8 @@ vi.mock("@/stores/settings", () => ({
     setActiveProvider: mocks.setActiveProvider,
     deleteKey: mocks.deleteKey,
     hasKey: mocks.hasKey,
+    loadError: mocks.loadError,
+    discardUnreadableProviders: mocks.discardUnreadableProviders,
   }),
 }));
 vi.mock("@/lib/export", () => ({
@@ -70,6 +74,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn(); // Radix Select in jsdom
   mocks.providers = [];
   mocks.activeProviderId = null;
+  mocks.loadError = null;
 });
 
 describe("settings page", () => {
@@ -159,6 +164,47 @@ describe("settings page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clear cache and saved data" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(localStorage.getItem("papyrus-favorites")).not.toBeNull();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("surfaces an unreadable provider blob instead of silently refusing writes", async () => {
+    // The store refuses writes so the unreadable blob is not destroyed.
+    // If nothing renders that state, the user clicks "Add provider", the
+    // form closes, and no card ever appears — a silent dead end.
+    mocks.loadError = "Unexpected token o";
+    render(<SettingsPage />);
+    expect(await screen.findByText("Saved providers could not be read")).toBeInTheDocument();
+  });
+
+  it("starts a fresh provider list only after an explicit confirmation", async () => {
+    mocks.loadError = "Unexpected token o";
+    render(<SettingsPage />);
+    const start = await screen.findByRole("button", { name: "Start a fresh list" });
+    fireEvent.click(start);
+    // The first click only reveals the destructive confirm.
+    expect(mocks.discardUnreadableProviders).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Start a fresh list" }));
+    expect(mocks.discardUnreadableProviders).toHaveBeenCalledTimes(1);
+  });
+
+  it("never autofocuses a destructive confirm, so Enter cannot wipe by reflex", () => {
+    render(<SettingsPage />);
+    // The keyboard user who just pressed Enter on "Clear everything" is
+    // still holding Enter when the confirmation appears. Focus must land
+    // on Cancel (or the trigger), never on the button that destroys data.
+    fireEvent.click(screen.getByRole("button", { name: "Clear cache and saved data" }));
+    expect(document.activeElement?.textContent).not.toBe("Clear everything");
+    expect(document.activeElement?.textContent).toBe("Cancel");
+
+    // Escape must abandon the confirmation. The prompt (not the static
+    // hint above the button) is what identifies the open confirmation.
+    fireEvent.click(screen.getByRole("button", { name: "Clear reading history" }));
+    const prompt = screen.getByText(
+      "Removes the list of papers you opened. Favorites and notes are kept.",
+    );
+    expect(prompt).toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    expect(screen.queryByText(prompt.textContent as string)).not.toBeInTheDocument();
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
